@@ -1,0 +1,3119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StockPulse — 股票博主文章分析平台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root {
+  /* Surface */
+  --bg:        #F2F2F5;
+  --surface:   #FFFFFF;
+  --surface-2: #F8F8FA;
+  --sidebar-bg:#18181B;
+  --sidebar-hover: rgba(255,255,255,0.07);
+  --sidebar-active: rgba(255,255,255,0.12);
+
+  /* Ink */
+  --ink:       #18181B;
+  --ink-2:     #52525B;
+  --ink-3:     #A1A1AA;
+  --ink-inv:   #FFFFFF;
+
+  /* Accent palette — shared chroma/lightness, vary hue */
+  --red:       #DC2626;
+  --red-h:     #B91C1C;
+  --red-s:     rgba(220,38,38,0.08);
+  --green:     #059669;
+  --green-s:   rgba(5,150,105,0.08);
+  --amber:     #D97706;
+  --amber-s:   rgba(217,119,6,0.08);
+  --blue:      #2563EB;
+  --blue-s:    rgba(37,99,235,0.08);
+
+  /* Border */
+  --border:    rgba(0,0,0,0.07);
+  --border-2:  rgba(0,0,0,0.12);
+
+  /* Shadow */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 20px rgba(0,0,0,0.09);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.14);
+
+  /* Radius */
+  --r-xs: 6px;
+  --r-sm: 10px;
+  --r:    14px;
+  --r-lg: 20px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --t:    0.18s;
+  --t-md: 0.28s;
+
+  /* Sidebar */
+  --sidebar-w: 228px;
+}
+
+/* ============================================================
+   RESET
+   ============================================================ */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; overflow:hidden; }
+body {
+  font-family: 'Outfit', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background: var(--bg); color: var(--ink);
+  font-size: 14px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   APP SHELL
+   ============================================================ */
+.app {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ============================================================
+   SIDEBAR
+   ============================================================ */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+  z-index: 10;
+}
+
+.sidebar-logo {
+  padding: 22px 20px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
+}
+.sidebar-logo .brand {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.5px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sidebar-logo .brand-icon {
+  width: 30px; height: 30px;
+  background: var(--red);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.sidebar-logo .brand-icon svg { width:16px; height:16px; }
+.sidebar-logo .tagline {
+  font-size: 11px;
+  color: rgba(255,255,255,0.35);
+  margin-top: 3px;
+  letter-spacing: 0.2px;
+}
+
+.sidebar-nav {
+  padding: 12px 10px;
+  flex: 1;
+  overflow-y: auto;
+}
+.sidebar-nav::-webkit-scrollbar { display:none; }
+
+.nav-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.25);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  padding: 10px 10px 6px;
+  margin-top: 4px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease);
+  color: rgba(255,255,255,0.55);
+  font-size: 13.5px;
+  font-weight: 500;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  position: relative;
+  user-select: none;
+  margin-bottom: 2px;
+}
+.nav-item svg { width:17px; height:17px; flex-shrink:0; opacity:0.8; }
+.nav-item:hover { background: var(--sidebar-hover); color: rgba(255,255,255,0.85); }
+.nav-item.active {
+  background: var(--sidebar-active);
+  color: #fff;
+  font-weight: 600;
+}
+.nav-item.active svg { opacity:1; }
+.nav-item .nav-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--red);
+  color: #fff;
+  border-radius: 20px;
+  padding: 2px 7px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.sidebar-footer {
+  padding: 16px 18px;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  flex-shrink: 0;
+}
+.sidebar-footer .status-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: rgba(255,255,255,0.35);
+}
+.status-dot-sidebar {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+}
+.status-dot-sidebar.online { background: #34D399; box-shadow: 0 0 6px rgba(52,211,153,0.5); }
+
+/* ============================================================
+   MAIN CONTENT
+   ============================================================ */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.topbar {
+  height: 58px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  gap: 16px;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-xs);
+}
+.topbar-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  color: var(--ink);
+}
+.topbar-subtitle {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.topbar-sep { flex:1; }
+.topbar-action {
+  font-size: 12px;
+  color: var(--ink-2);
+  padding: 6px 12px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--border-2);
+  cursor: pointer;
+  background: none;
+  font-family: inherit;
+  transition: all var(--t) var(--ease);
+  display: flex; align-items: center; gap: 6px;
+}
+.topbar-action:hover { background: var(--bg); }
+
+.content-wrap {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px;
+}
+.content-wrap::-webkit-scrollbar { width:6px; }
+.content-wrap::-webkit-scrollbar-track { background: transparent; }
+.content-wrap::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius:3px; }
+
+/* ============================================================
+   VIEWS
+   ============================================================ */
+.view { display: none; animation: viewIn var(--t-md) var(--ease); }
+.view.active { display: block; }
+@keyframes viewIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+.card {
+  background: var(--surface);
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
+  margin-bottom: 16px;
+  overflow: hidden;
+  transition: box-shadow var(--t) var(--ease);
+}
+.card:hover { box-shadow: var(--shadow-sm); }
+
+.card-header {
+  padding: 20px 24px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.card-title svg { width:15px; height:15px; color: var(--ink-3); }
+.card-body { padding: 20px 24px; }
+.card-body + .card-body { padding-top: 0; }
+
+/* ============================================================
+   FORMS
+   ============================================================ */
+.form-label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-sm);
+  font-size: 13.5px;
+  font-family: inherit;
+  background: var(--surface-2);
+  color: var(--ink);
+  transition: all var(--t) var(--ease);
+  outline: none;
+}
+.form-input:focus {
+  border-color: var(--red);
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--red-s);
+}
+.form-input::placeholder { color: var(--ink-3); }
+textarea.form-input {
+  resize: vertical;
+  min-height: 120px;
+  line-height: 1.7;
+}
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.form-group { margin-bottom: 14px; }
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  border-radius: var(--r-sm);
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  transition: all var(--t) var(--ease);
+  letter-spacing: -0.1px;
+  white-space: nowrap;
+}
+.btn:active { transform: translateY(1px); }
+.btn svg { width: 15px; height: 15px; }
+.btn-primary { background: var(--ink); color: #fff; }
+.btn-primary:hover { background: #27272A; }
+.btn-primary:disabled { background: var(--ink-3); cursor: not-allowed; transform: none; }
+.btn-red { background: var(--red); color: #fff; }
+.btn-red:hover { background: var(--red-h); }
+.btn-green { background: var(--green); color: #fff; }
+.btn-green:hover { background: #047857; }
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-2);
+  border: 1px solid var(--border-2);
+}
+.btn-ghost:hover { background: var(--bg); color: var(--ink); border-color: var(--border-2); }
+.btn-sm { padding: 6px 13px; font-size: 12.5px; border-radius: var(--r-xs); }
+.btn-icon {
+  padding: 8px;
+  border-radius: var(--r-xs);
+  background: transparent;
+  border: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all var(--t) var(--ease);
+  display: flex; align-items: center; justify-content: center;
+}
+.btn-icon:hover { background: var(--bg); color: var(--ink-2); }
+.btn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* ============================================================
+   INFO BANNERS
+   ============================================================ */
+.info-banner {
+  display: flex;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.info-banner svg { width:15px; height:15px; flex-shrink:0; margin-top:2px; }
+.info-amber { background: var(--amber-s); color: #92400E; border: 1px solid rgba(217,119,6,0.2); }
+.info-blue  { background: var(--blue-s);  color: #1E40AF; border: 1px solid rgba(37,99,235,0.15); }
+.info-green { background: var(--green-s); color: #065F46; border: 1px solid rgba(5,150,105,0.15); }
+
+/* ============================================================
+   MODE SWITCH
+   ============================================================ */
+.seg-control {
+  display: inline-flex;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-sm);
+  padding: 3px;
+  gap: 2px;
+  margin-bottom: 20px;
+}
+.seg-btn {
+  padding: 8px 20px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--t) var(--ease);
+}
+.seg-btn.active {
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--shadow-xs);
+}
+.mode-panel { display: none; }
+.mode-panel.active { display: block; animation: viewIn 0.2s var(--ease); }
+
+/* ============================================================
+   PROGRESS FLOW (3-step)
+   ============================================================ */
+.flow-steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 24px;
+  max-width: 480px;
+}
+.flow-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  position: relative;
+}
+.flow-step-num {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 2px solid var(--border-2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700;
+  color: var(--ink-3);
+  flex-shrink: 0;
+  transition: all var(--t-md) var(--ease);
+}
+.flow-step-label { font-size: 12px; color: var(--ink-3); font-weight: 500; transition: color var(--t-md); }
+.flow-step-connector {
+  height: 1px;
+  flex: 1;
+  background: var(--border-2);
+  margin: 0 8px;
+  flex-shrink: 1;
+  transition: background var(--t-md);
+}
+
+.flow-step.done .flow-step-num {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.flow-step.done .flow-step-label { color: var(--green); }
+.flow-step.done + .flow-step-connector { background: var(--green); }
+.flow-step.active .flow-step-num {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+  box-shadow: 0 0 0 4px var(--red-s);
+}
+.flow-step.active .flow-step-label { color: var(--ink); font-weight: 600; }
+
+/* ============================================================
+   PROGRESS BAR
+   ============================================================ */
+.prog-bar-wrap {
+  width: 100%;
+  height: 5px;
+  background: var(--surface-2);
+  border-radius: 3px;
+  overflow: hidden;
+  margin: 12px 0;
+}
+.prog-bar-fill {
+  height: 100%;
+  background: var(--red);
+  border-radius: 3px;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  width: 0%;
+}
+.prog-bar-fill.green { background: var(--green); }
+
+.prog-status {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+/* ============================================================
+   LOG TERMINAL
+   ============================================================ */
+.log-terminal {
+  background: #111113;
+  border-radius: var(--r-sm);
+  padding: 16px;
+  max-height: 220px;
+  overflow-y: auto;
+  font-family: 'JetBrains Mono', 'SF Mono', monospace;
+  font-size: 11.5px;
+  line-height: 1.9;
+}
+.log-terminal::-webkit-scrollbar { width: 4px; }
+.log-terminal::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius:2px; }
+.log-terminal .log-line { display: block; }
+.log-terminal .t { color: rgba(255,255,255,0.2); margin-right: 8px; }
+.log-terminal .success { color: #34D399; }
+.log-terminal .error   { color: #FB7185; }
+.log-terminal .info    { color: #60A5FA; }
+.log-terminal .warning { color: #FBBF24; }
+.log-terminal .default { color: rgba(255,255,255,0.55); }
+
+/* ============================================================
+   ARTICLE LIST
+   ============================================================ */
+.article-list-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  margin-top: 12px;
+}
+.article-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--t) var(--ease);
+}
+.article-row:last-child { border-bottom: none; }
+.article-row:hover { background: var(--surface-2); }
+.a-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  transition: background var(--t-md);
+}
+.a-dot.pending { background: var(--ink-3); }
+.a-dot.loading { background: var(--amber); animation: pulse 1.2s ease-in-out infinite; }
+.a-dot.success { background: var(--green); }
+.a-dot.failed  { background: var(--red); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.a-info { flex: 1; min-width: 0; }
+.a-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.a-meta  { font-size: 11px; color: var(--ink-3); margin-top: 1px; }
+
+/* ============================================================
+   CHOICE PANEL
+   ============================================================ */
+.choice-panel {
+  display: none;
+  background: linear-gradient(135deg, var(--surface-2) 0%, var(--surface) 100%);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-sm);
+  padding: 24px;
+  text-align: center;
+  margin-top: 16px;
+}
+.choice-panel.active { display: block; animation: viewIn 0.3s var(--ease); }
+.choice-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.choice-sub   { font-size: 12.5px; color: var(--ink-2); margin-bottom: 20px; }
+.choice-btns  { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+.choice-option {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 16px 24px;
+  border: 1.5px solid var(--border-2);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  background: var(--surface);
+  transition: all var(--t) var(--ease);
+  min-width: 140px;
+}
+.choice-option:hover { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-s); }
+.choice-option.highlight { border-color: var(--red); background: var(--red-s); }
+.choice-option-icon {
+  width: 38px; height: 38px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.choice-option-label { font-size: 13px; font-weight: 600; color: var(--ink); }
+.choice-option-desc  { font-size: 11px; color: var(--ink-3); }
+
+/* ============================================================
+   REPORT
+   ============================================================ */
+.report-wrap { display: none; }
+.report-wrap.active { display: block; animation: viewIn 0.3s var(--ease); }
+.report-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.report-body {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 28px 32px;
+  max-height: 520px;
+  overflow-y: auto;
+  line-height: 1.95;
+  font-size: 14px;
+  color: var(--ink);
+}
+.report-body::-webkit-scrollbar { width:5px; }
+.report-body::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius:3px; }
+.report-body h1 { font-size: 22px; font-weight: 700; margin: 0 0 12px; letter-spacing: -0.5px; color: var(--ink); border-bottom: 2px solid var(--red); padding-bottom: 10px; }
+.report-body h2 { font-size: 17px; font-weight: 600; margin: 28px 0 10px; color: var(--ink); letter-spacing: -0.3px; }
+.report-body h3 { font-size: 15px; font-weight: 600; margin: 20px 0 8px; }
+.report-body p  { margin: 10px 0; }
+.report-body hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+.report-body blockquote {
+  border-left: 3px solid var(--red); padding: 12px 16px;
+  color: var(--ink-2); background: var(--red-s);
+  border-radius: 0 var(--r-xs) var(--r-xs) 0; margin: 16px 0;
+}
+.report-body strong { color: var(--red); }
+.report-body img { max-width: 100%; border-radius: var(--r-sm); margin: 16px 0; display: block; }
+
+/* ============================================================
+   EMAIL SECTION
+   ============================================================ */
+.email-row {
+  display: flex; gap: 12px; align-items: flex-end;
+}
+.email-row .form-group { flex: 1; margin-bottom: 0; }
+#emailStatus {
+  font-size: 12.5px;
+  margin-top: 8px;
+  font-weight: 500;
+  display: none;
+}
+
+/* ============================================================
+   BLOGGER GRID
+   ============================================================ */
+.blogger-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.blogger-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 18px;
+  transition: all var(--t) var(--ease);
+  position: relative;
+  cursor: default;
+}
+.blogger-card:hover {
+  border-color: var(--border-2);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+.blogger-card-avatar {
+  width: 48px; height: 48px; border-radius: 14px;
+  background: var(--red-s);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 700; color: var(--red);
+  overflow: hidden; margin-bottom: 12px;
+}
+.blogger-card-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.blogger-card-name { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 2px; }
+.blogger-card-id   { font-size: 11px; color: var(--ink-3); font-family: 'JetBrains Mono', monospace; margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.blogger-card-article { font-size: 12px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 10px; }
+.blogger-card-footer {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.freshness-badge {
+  font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+  letter-spacing: 0.3px; text-transform: uppercase;
+}
+.freshness-badge.fresh  { background: var(--green-s); color: var(--green); }
+.freshness-badge.recent { background: var(--amber-s); color: var(--amber); }
+.freshness-badge.stale  { background: var(--red-s);   color: var(--red); }
+
+/* Refresh spinner on card */
+.blogger-card.refreshing .blogger-card-article::after {
+  content: ' ↻';
+  color: var(--blue);
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+/* ============================================================
+   BLOGGER CHECK LIST (task view)
+   ============================================================ */
+.check-list-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  max-height: 280px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+.check-list-wrap::-webkit-scrollbar { width: 4px; }
+.check-list-wrap::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius:2px; }
+.check-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--t) var(--ease);
+  cursor: pointer;
+}
+.check-row:last-child { border-bottom: none; }
+.check-row:hover { background: var(--surface-2); }
+.check-row input[type="checkbox"] {
+  width: 16px; height: 16px;
+  accent-color: var(--red);
+  cursor: pointer; flex-shrink: 0;
+}
+.check-avatar {
+  width: 34px; height: 34px; border-radius: 10px;
+  background: var(--red-s); color: var(--red);
+  font-weight: 700; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; flex-shrink: 0;
+}
+.check-avatar img { width:100%; height:100%; object-fit:cover; }
+.check-info { flex: 1; min-width: 0; }
+.check-name  { font-size: 13px; font-weight: 600; }
+.check-meta  { font-size: 11px; color: var(--ink-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; display:flex; gap:6px; align-items:center; }
+
+.btn-quick-update {
+  font-size: 10.5px; padding: 1px 7px; border-radius: 4px;
+  border: 1px solid var(--border-2); background: none;
+  color: var(--ink-3); cursor: pointer; font-family: inherit;
+  transition: all var(--t);
+}
+.btn-quick-update:hover { border-color: var(--red); color: var(--red); }
+
+.quick-update-row {
+  display: none; padding: 8px 16px 10px 58px;
+  background: var(--surface-2); border-bottom: 1px solid var(--border);
+  gap: 8px; align-items: center;
+}
+.quick-update-row.open { display: flex; animation: viewIn 0.15s var(--ease); }
+
+/* ============================================================
+   ADD BLOGGER
+   ============================================================ */
+.identify-box {
+  display: flex; gap: 12px; align-items: flex-end;
+  margin-bottom: 16px;
+}
+.identify-box .form-group { flex: 1; margin-bottom: 0; }
+
+.identify-result {
+  display: none;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 16px;
+  margin-bottom: 16px;
+  animation: viewIn 0.2s var(--ease);
+}
+.identify-result.show { display: flex; align-items: center; gap: 14px; }
+
+/* ============================================================
+   CONFIG ACCORDION
+   ============================================================ */
+.config-section {
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.config-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px;
+  cursor: pointer;
+  background: var(--surface);
+  transition: background var(--t) var(--ease);
+  user-select: none;
+}
+.config-section-header:hover { background: var(--surface-2); }
+.config-section-header-left { display: flex; align-items: center; gap: 12px; }
+.config-section-icon {
+  width: 32px; height: 32px; border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+}
+.config-section-title { font-size: 14px; font-weight: 600; }
+.config-section-sub   { font-size: 12px; color: var(--ink-3); margin-top: 1px; }
+.config-chevron { color: var(--ink-3); transition: transform var(--t) var(--ease); }
+.config-section.open .config-chevron { transform: rotate(180deg); }
+.config-section-body {
+  display: none;
+  padding: 20px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  animation: viewIn 0.2s var(--ease);
+}
+.config-section.open .config-section-body { display: block; }
+
+/* ============================================================
+   QR MODAL
+   ============================================================ */
+.modal-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  align-items: center; justify-content: center;
+}
+.modal-overlay.active { display: flex; animation: fadeOverlay 0.2s var(--ease); }
+@keyframes fadeOverlay { from{opacity:0} to{opacity:1} }
+.modal-box {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  width: 380px; max-width: 92vw;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: modalIn 0.25s var(--ease);
+}
+@keyframes modalIn { from{opacity:0;transform:scale(0.95) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-header h3 { font-size: 15px; font-weight: 600; }
+.modal-close {
+  width: 30px; height: 30px; border-radius: 8px;
+  border: none; background: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ink-3); font-size: 20px; transition: all var(--t);
+}
+.modal-close:hover { background: var(--bg); color: var(--ink); }
+.modal-body {
+  padding: 28px 24px;
+  display: flex; flex-direction: column; align-items: center;
+  min-height: 260px; justify-content: center; gap: 12px;
+}
+.modal-body img { width: 210px; height: 210px; border-radius: var(--r-sm); border: 1px solid var(--border); }
+.modal-footer { padding: 0 24px 24px; font-size: 12px; color: var(--ink-3); text-align: center; line-height: 1.7; }
+
+/* ============================================================
+   TOAST SYSTEM
+   ============================================================ */
+.toast-container {
+  position: fixed; bottom: 24px; right: 24px;
+  z-index: 200; display: flex; flex-direction: column; gap: 10px;
+  pointer-events: none;
+}
+.toast {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  background: var(--ink);
+  color: #fff;
+  border-radius: var(--r-sm);
+  font-size: 13px; font-weight: 500;
+  box-shadow: var(--shadow-lg);
+  pointer-events: all;
+  animation: toastIn 0.3s var(--ease);
+  max-width: 320px;
+}
+.toast.success { background: #064E3B; border-left: 3px solid var(--green); }
+.toast.error   { background: #450A0A; border-left: 3px solid var(--red); }
+.toast.info    { background: #1E3A5F; border-left: 3px solid var(--blue); }
+.toast.out     { animation: toastOut 0.25s var(--ease) forwards; }
+@keyframes toastIn  { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+@keyframes toastOut { to{opacity:0;transform:translateY(12px)} }
+
+/* ============================================================
+   MISC
+   ============================================================ */
+.empty-state {
+  text-align: center; padding: 40px 20px;
+  color: var(--ink-3); font-size: 13.5px;
+}
+.empty-state svg { width: 36px; height: 36px; margin: 0 auto 12px; display: block; opacity: 0.35; }
+
+.spinner {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.25);
+  border-top-color: rgba(255,255,255,0.9);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+.spinner.dark {
+  border-color: rgba(0,0,0,0.1);
+  border-top-color: var(--ink-2);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.refresh-bar {
+  display: none; align-items: center; gap: 10px;
+  padding: 10px 14px;
+  background: var(--blue-s);
+  border-radius: var(--r-xs);
+  font-size: 12.5px; color: var(--blue); font-weight: 500;
+  margin-bottom: 16px;
+}
+.refresh-bar.active { display: flex; animation: viewIn 0.2s var(--ease); }
+
+.tag-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+
+/* responsive */
+@media (max-width: 680px) {
+  .sidebar { width: 60px; }
+  .sidebar-logo .brand span, .sidebar-logo .tagline,
+  .nav-item span, .nav-section-label, .sidebar-footer { display: none; }
+  .nav-item { justify-content: center; padding: 12px; }
+  .content-wrap { padding: 20px 16px; }
+  .form-row { grid-template-columns: 1fr; }
+  .blogger-grid { grid-template-columns: 1fr 1fr; }
+  .topbar { padding: 0 16px; }
+}
+
+.scrape-mode-opt { transition: all var(--t) var(--ease); }
+.scrape-mode-opt.active-mode { border-color: var(--blue) !important; background: var(--blue-s); }
+
+.wencai-panel { display: none; }
+.wencai-panel.active { display: block; animation: viewIn var(--t-md) var(--ease); }
+
+.heatmap-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.heatmap-item {
+  padding: 8px 12px; border-radius: var(--r-xs);
+  font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: transform var(--t) var(--ease);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  min-width: 80px;
+}
+.heatmap-item:hover { transform: scale(1.05); }
+.heatmap-item .sector-name { font-size: 12px; }
+.heatmap-item .sector-change { font-size: 14px; font-weight: 700; font-family: var(--mono); }
+
+.data-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 13px; table-layout: auto; }
+.data-table th {
+  padding: 10px 14px; text-align: left; color: var(--ink-3); font-weight: 600;
+  font-size: 12px; letter-spacing: 0.3px;
+  border-bottom: 2px solid var(--border); position: sticky; top: 0; background: var(--surface);
+  white-space: nowrap; vertical-align: middle;
+}
+.data-table td {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  white-space: nowrap; vertical-align: middle;
+}
+.data-table td.wrap, .data-table th.wrap {
+  white-space: normal; max-width: 320px; word-break: break-word; line-height: 1.5;
+}
+.data-table td.num { font-variant-numeric: tabular-nums; text-align: right; }
+.data-table tr:hover td { background: var(--surface-2); }
+.data-table tr.clickable { cursor: pointer; }
+.data-table .mono { font-family: var(--mono); }
+.data-table .up { color: var(--red); }
+.data-table .down { color: var(--green); }
+.data-table .code-link { color: var(--blue); font-family: var(--mono); font-weight: 500; }
+.data-table .name-strong { font-weight: 600; color: var(--ink); }
+/* 调研机构家数徽章 */
+.visit-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 32px; height: 22px; padding: 0 8px;
+  border-radius: 11px; font-size: 12px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: #F1F5F9; color: var(--ink-2);
+}
+.visit-badge.hot { background: #FEE2E2; color: #B91C1C; }
+.visit-badge.warm { background: #FEF3C7; color: #B45309; }
+/* 调研类型 chip */
+.tag-chip {
+  display: inline-block; padding: 2px 8px; margin: 1px 3px 1px 0;
+  border-radius: 4px; font-size: 11px; line-height: 16px;
+  background: var(--blue-s); color: var(--blue);
+  white-space: nowrap;
+}
+.tag-chip.alt { background: #F0FDF4; color: #15803D; }
+</style>
+</head>
+<body>
+
+<!-- ===== TOAST CONTAINER ===== -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ===== QR MODAL ===== -->
+<div class="modal-overlay" id="qrModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>微信扫码登录</h3>
+      <button class="modal-close" onclick="cancelMpLogin()">×</button>
+    </div>
+    <div id="qrBody" class="modal-body">
+      <div style="text-align:center">
+        <span class="spinner dark" style="width:24px;height:24px;border-width:3px;"></span>
+        <p style="margin-top:14px;color:var(--ink-2);font-size:14px;" id="qrStatusText">正在启动浏览器...</p>
+      </div>
+    </div>
+    <div id="qrFooter" class="modal-footer" style="display:none;">
+      打开微信 → 扫一扫 → 对准上方二维码<br>在手机上确认登录即可
+    </div>
+  </div>
+</div>
+
+<!-- ===== APP SHELL ===== -->
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 12L5.5 7.5L8 10L11 5.5L14 9" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span>StockPulse</span>
+      </div>
+      <div class="tagline">微信公众号 · AI 分析 · 邮件推送</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">工作台</div>
+      <button class="nav-item active" data-view="task" onclick="switchView('task', this)">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M10 3v14M3 10h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span>文章收集</span>
+      </button>
+      <button class="nav-item" data-view="bloggers" onclick="switchView('bloggers', this)">
+        <svg viewBox="0 0 20 20" fill="none"><circle cx="8" cy="7" r="3" stroke="currentColor" stroke-width="1.7"/><path d="M2 17c0-3.314 2.686-5 6-5s6 1.686 6 5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M15 9l2 2 3-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>博主管理</span>
+        <span class="nav-badge" id="bloggerCountBadge" style="display:none">0</span>
+      </button>
+      <button class="nav-item" data-view="stock" onclick="switchView('stock', this)">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M3 17V7l4-4 3 5 4-5 3 7v7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>股票查询</span>
+      </button>
+      <button class="nav-item" data-view="wencai" onclick="switchView('wencai', this)">
+        <svg viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/><path d="M14 14l4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <span>条件选股</span>
+      </button>
+      <div class="nav-section-label" style="margin-top:8px;">系统</div>
+      <button class="nav-item" data-view="config" onclick="switchView('config', this)">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" stroke-width="1.7"/><path d="M16.243 10a6.243 6.243 0 01-.09 1.082l1.598 1.248-1.5 2.598-1.935-.694a6.26 6.26 0 01-1.875 1.083l-.33 2.017h-3l-.33-2.017a6.26 6.26 0 01-1.875-1.083l-1.935.694-1.5-2.598 1.598-1.248A6.243 6.243 0 013.757 10c0-.367.031-.727.09-1.082L2.249 7.67l1.5-2.598 1.935.694A6.26 6.26 0 017.559 4.683l.33-2.017h3l.33 2.017a6.26 6.26 0 011.875 1.083l1.935-.694 1.5 2.598-1.598 1.248c.059.355.09.715.09 1.082z" stroke="currentColor" stroke-width="1.7"/></svg>
+        <span>配置设置</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-row">
+        <span class="status-dot-sidebar" id="serverDot"></span>
+        <span id="serverStatus">未连接</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <div class="topbar-title" id="topbarTitle">文章收集</div>
+        <div class="topbar-subtitle" id="topbarSub">从微信公众号抓取文章并生成分析报告</div>
+      </div>
+      <div class="topbar-sep"></div>
+      <button class="topbar-action" onclick="switchView('config', document.querySelector('[data-view=config]'))">
+        <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" stroke-width="1.8"/><path d="M16.243 10a6 6 0 01-.09 1.082l1.598 1.248-1.5 2.598-1.935-.694a6.26 6.26 0 01-1.875 1.083l-.33 2.017h-3l-.33-2.017a6.26 6.26 0 01-1.875-1.083l-1.935.694-1.5-2.598 1.598-1.248A6.243 6.243 0 013.757 10c0-.367.031-.727.09-1.082L2.249 7.67l1.5-2.598 1.935.694A6.26 6.26 0 017.559 4.683l.33-2.017h3l.33 2.017a6.26 6.26 0 011.875 1.083l1.935-.694 1.5 2.598-1.598 1.248c.059.355.09.715.09 1.082z" stroke="currentColor" stroke-width="1.8"/></svg>
+        系统配置
+      </button>
+    </header>
+
+    <div class="content-wrap">
+
+      <!-- ==================== VIEW: TASK ==================== -->
+      <div id="view-task" class="view active">
+
+        <!-- Flow Steps -->
+        <div class="flow-steps" id="flowSteps">
+          <div class="flow-step active" id="step-1">
+            <div class="flow-step-num">1</div>
+            <div class="flow-step-label">收集文章</div>
+          </div>
+          <div class="flow-step-connector"></div>
+          <div class="flow-step" id="step-2">
+            <div class="flow-step-num">2</div>
+            <div class="flow-step-label">生成报告</div>
+          </div>
+          <div class="flow-step-connector"></div>
+          <div class="flow-step" id="step-3">
+            <div class="flow-step-num">3</div>
+            <div class="flow-step-label">发送邮件</div>
+          </div>
+        </div>
+
+        <!-- Card: 收集方式 -->
+        <div class="card" id="collectCard">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 20 20" fill="none"><path d="M10 3.5v13M4.5 9l5.5-5.5L15.5 9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              选择收集方式
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="seg-control">
+              <button class="seg-btn active" data-mode="urls" onclick="switchMode('urls')">粘贴链接</button>
+              <button class="seg-btn" data-mode="bloggers" onclick="switchMode('bloggers')">选择博主</button>
+            </div>
+
+            <!-- Mode A: URLs -->
+            <div id="mode-urls" class="mode-panel active">
+              <div class="info-banner info-amber">
+                <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.6"/><path d="M10 9v4M10 7h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                每行一个微信公众号文章链接，系统将自动抓取内容并分析。
+              </div>
+              <div class="form-group">
+                <label class="form-label">文章链接（每行一个）</label>
+                <textarea id="urlsInput" class="form-input" placeholder="https://mp.weixin.qq.com/s/xxxxx&#10;https://mp.weixin.qq.com/s/yyyyy"></textarea>
+              </div>
+            </div>
+
+            <!-- Mode B: Bloggers -->
+            <div id="mode-bloggers" class="mode-panel">
+              <div class="info-banner info-amber">
+                <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.6"/><path d="M10 9v4M10 7h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                <span>勾选博主后将抓取其关联文章。标记红色的博主文章已过期，建议先更新链接。<span id="staleWarning" style="font-weight:600;margin-left:4px;"></span></span>
+              </div>
+              <div class="check-list-wrap" id="bloggerCheckList">
+                <div class="empty-state">
+                  <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M4 20c0-4 3.582-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                  暂无博主，请先到「博主管理」添加
+                </div>
+              </div>
+              <div class="btn-row" style="margin-bottom:16px;">
+                <button class="btn btn-ghost btn-sm" onclick="toggleAllBloggers()">全选 / 取消全选</button>
+              </div>
+              <div class="form-group">
+                <label class="form-label">爬取模式</label>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;padding:6px 12px;border:1px solid var(--border);border-radius:var(--r-xs);"
+                         id="scrapeModeLatest" class="scrape-mode-opt">
+                    <input type="radio" name="scrapeMode" value="latest" onchange="onScrapeModeChange('latest')" style="accent-color:var(--blue);">
+                    最新一篇
+                  </label>
+                  <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;padding:6px 12px;border:1px solid var(--border);border-radius:var(--r-xs);"
+                         id="scrapeModeLatestN" class="scrape-mode-opt active-mode" style="border-color:var(--blue);background:var(--blue-s);">
+                    <input type="radio" name="scrapeMode" value="latest_n" checked onchange="onScrapeModeChange('latest_n')" style="accent-color:var(--blue);">
+                    最新 <input type="number" id="scrapeCount" value="5" min="1" max="20"
+                           style="width:48px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;font-size:13px;text-align:center;"
+                           onchange="onScrapeCountChange()" onclick="event.stopPropagation()"> 篇
+                  </label>
+                  <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;padding:6px 12px;border:1px solid var(--border);border-radius:var(--r-xs);"
+                         id="scrapeModePeriod" class="scrape-mode-opt">
+                    <input type="radio" name="scrapeMode" value="period" onchange="onScrapeModeChange('period')" style="accent-color:var(--blue);">
+                    时间段
+                    <select id="scrapePeriod" style="padding:2px 6px;border:1px solid var(--border);border-radius:4px;font-size:13px;" onchange="onScrapePeriodChange()" onclick="event.stopPropagation()">
+                      <option value="today">今天</option>
+                      <option value="last_3_days">最近3天</option>
+                      <option value="last_week" selected>最近一周</option>
+                      <option value="last_month">最近一月</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+              <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">补充文章链接（可选）</label>
+                <textarea id="extraUrlsInput" class="form-input" style="min-height:70px;" placeholder="可在此补充任意文章链接，与勾选博主文章一起抓取"></textarea>
+              </div>
+            </div>
+
+            <div style="margin-top:16px; display:flex; gap:10px; align-items:center;">
+              <button class="btn btn-primary" id="startBtn" onclick="startTask()">
+                <svg viewBox="0 0 20 20" fill="none"><polygon points="6,4 16,10 6,16" fill="currentColor"/></svg>
+                开始收集
+              </button>
+              <span id="startHint" style="font-size:12px;color:var(--ink-3);"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card: 进度 -->
+        <div class="card" id="progressPanel" style="display:none;">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="10" width="3" height="7" rx="1" fill="currentColor"/><rect x="8.5" y="6" width="3" height="11" rx="1" fill="currentColor"/><rect x="14" y="3" width="3" height="14" rx="1" fill="currentColor"/></svg>
+              执行进度
+            </div>
+            <div class="prog-status" id="phaseStatus">准备中...</div>
+          </div>
+          <div class="card-body">
+            <div class="prog-bar-wrap">
+              <div class="prog-bar-fill" id="progressBar"></div>
+            </div>
+            <div class="article-list-wrap" id="articleListWrap" style="display:none;">
+              <ul id="articleList" style="list-style:none;"></ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Choice Panel -->
+        <div class="choice-panel" id="choicePanel">
+          <div class="choice-title" id="choiceText">文章收集完成</div>
+          <div class="choice-sub">请选择报告生成方式</div>
+          <div class="choice-btns">
+            <div class="choice-option" onclick="continueTask(false)">
+              <div class="choice-option-icon" style="background:var(--amber-s);">📋</div>
+              <div class="choice-option-label">仅汇总整合</div>
+              <div class="choice-option-desc">文章内容拼接输出</div>
+            </div>
+            <div class="choice-option highlight" onclick="continueAnalyze()">
+              <div class="choice-option-icon" style="background:var(--green-s);">🤖</div>
+              <div class="choice-option-label">AI 智能分析</div>
+              <div class="choice-option-desc" id="personaSummary">三视角并行 · 价值 + 成长 + 趋势</div>
+            </div>
+          </div>
+          <!-- Persona 多选区：勾选哪些投资视角参与 AI 分析 -->
+          <div id="personaPicker" style="margin-top:14px;padding:12px 14px;background:var(--surface-2);border-radius:10px;">
+            <div style="font-size:12px;color:var(--ink-3);margin-bottom:8px;font-weight:600;">投资视角（点击 AI 智能分析时生效，可多选）</div>
+            <div id="personaList" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+          </div>
+        </div>
+
+        <!-- Card: 日志 -->
+        <div class="card" id="logCard" style="display:none;">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="4" width="14" height="2" rx="1" fill="currentColor"/><rect x="3" y="9" width="10" height="2" rx="1" fill="currentColor"/><rect x="3" y="14" width="12" height="2" rx="1" fill="currentColor"/></svg>
+              运行日志
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="log-terminal" id="logArea"></div>
+          </div>
+        </div>
+
+        <!-- Report Section -->
+        <div class="report-wrap" id="reportPreview">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <svg viewBox="0 0 20 20" fill="none"><path d="M4 4h12v12H4V4z" stroke="currentColor" stroke-width="1.6"/><path d="M7 8h6M7 11h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                分析报告
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="report-toolbar">
+                <button class="btn btn-red btn-sm" onclick="downloadReport('html')">
+                  <svg viewBox="0 0 16 16" fill="none"><path d="M8 10.5V2.5M5 8l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M3 13.5h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                  下载 HTML
+                </button>
+                <button class="btn btn-ghost btn-sm" onclick="downloadReport('txt')">下载 TXT</button>
+                <button class="btn btn-ghost btn-sm" onclick="copyReport()">复制文本</button>
+              </div>
+              <div class="report-body" id="reportContent"></div>
+            </div>
+          </div>
+
+          <!-- Email Card -->
+          <div class="card" id="emailPanel">
+            <div class="card-header">
+              <div class="card-title">
+                <svg viewBox="0 0 20 20" fill="none"><rect x="2" y="5" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M2 8l8 5 8-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                发送到邮箱
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="info-banner info-green" style="margin-bottom:12px;">
+                <svg viewBox="0 0 20 20" fill="none"><path d="M4 10l4.5 4.5L16 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                报告已生成！如需邮件发送，填写收件地址即可。支持多个邮箱，逗号/换行分隔。
+              </div>
+              <div class="email-row">
+                <div class="form-group">
+                  <label class="form-label">收件邮箱</label>
+                  <input type="text" id="toEmails" class="form-input" placeholder="user1@example.com, user2@example.com">
+                </div>
+                <button class="btn btn-green" id="sendEmailBtn" onclick="sendReportEmail()">
+                  <svg viewBox="0 0 20 20" fill="none"><path d="M17 3L3 9.5l5 2 2 5 2.5-4L17 3z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  发送
+                </button>
+              </div>
+              <div id="emailStatus"></div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /view-task -->
+
+
+      <!-- ==================== VIEW: BLOGGERS ==================== -->
+      <div id="view-bloggers" class="view">
+
+        <!-- Add blogger -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 20 20" fill="none"><circle cx="9" cy="8" r="3.5" stroke="currentColor" stroke-width="1.6"/><path d="M3 18c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M15 4v6M12 7h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+              添加博主
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="info-banner info-blue">
+              <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.6"/><path d="M10 9v4M10 7h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              粘贴该博主的任意一篇微信文章链接，系统自动识别博主身份并添加。
+            </div>
+            <div class="identify-box">
+              <div class="form-group">
+                <label class="form-label">博主文章链接</label>
+                <input type="text" id="identifyUrl" class="form-input" placeholder="https://mp.weixin.qq.com/s/xxx">
+              </div>
+              <button class="btn btn-red" id="identifyBtn" onclick="identifyBlogger()">识别并添加</button>
+            </div>
+            <div class="identify-result" id="identifyResult">
+              <div class="check-avatar" id="previewAvatar" style="width:44px;height:44px;border-radius:12px;font-size:18px;"></div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-weight:600;font-size:14px;" id="previewName"></div>
+                <div style="font-size:12px;color:var(--ink-3);font-family:'JetBrains Mono',monospace;" id="previewBiz"></div>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="confirmAddBlogger()">确认添加</button>
+              <button class="btn btn-ghost btn-sm" onclick="cancelIdentify()">取消</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Blogger list -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="6" height="6" rx="2" stroke="currentColor" stroke-width="1.6"/><rect x="11" y="3" width="6" height="6" rx="2" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="11" width="6" height="6" rx="2" stroke="currentColor" stroke-width="1.6"/><rect x="11" y="11" width="6" height="6" rx="2" stroke="currentColor" stroke-width="1.6"/></svg>
+              已保存的博主
+              <span id="bloggerCountLabel" style="font-size:12px;color:var(--ink-3);font-weight:400;margin-left:4px;"></span>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="autoRefreshBloggers()">
+              <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M17 10a7 7 0 11-2.05-4.95M17 4v6h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              刷新
+            </button>
+          </div>
+          <div class="card-body">
+            <div class="refresh-bar" id="refreshBar">
+              <span class="spinner dark"></span>
+              <span id="refreshBarText">正在刷新...</span>
+            </div>
+            <div id="bloggerManageList">
+              <div class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M4 20c0-4 3.582-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                暂无博主，请在上方添加
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /view-bloggers -->
+
+
+      <!-- ==================== VIEW: STOCK ==================== -->
+      <div id="view-stock" class="view">
+
+        <!-- 搜索卡片 -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-header-left">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/><path d="M14 14l4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              <span>股票搜索</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div style="display:flex;gap:8px;margin-bottom:12px;">
+              <input id="stockSearchInput" class="input" placeholder="输入股票代码或名称，如 600519 或 贵州茅台" style="flex:1;" onkeydown="if(event.key==='Enter')searchStock()">
+              <button class="btn btn-primary btn-sm" onclick="searchStock()">搜索</button>
+            </div>
+            <div id="stockSearchResults"></div>
+          </div>
+        </div>
+
+        <!-- 个股详情区（选中后展示） -->
+        <div id="stockDetailArea" style="display:none;">
+
+          <!-- 行情 + K线 -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-header-left">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M3 17V7l4-4 3 5 4-5 3 7v7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span id="quoteStockTitle">实时行情</span>
+              </div>
+              <button class="btn btn-ghost btn-sm" onclick="refreshQuote()">
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M17 10a7 7 0 11-2.05-4.95M17 4v6h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                刷新
+              </button>
+            </div>
+            <div class="card-body" id="stockQuoteBody"></div>
+          </div>
+
+          <!-- K线图 -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-header-left">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 10V14M10 7V14M13 9V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                <span>K线走势</span>
+              </div>
+              <div style="display:flex;gap:4px;" id="klinePeriodBtns">
+                <button class="btn btn-ghost btn-sm active" onclick="switchKlinePeriod('day',this)">日K</button>
+                <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('week',this)">周K</button>
+                <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('month',this)">月K</button>
+              </div>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div id="klineChart" style="width:100%;height:360px;"></div>
+            </div>
+          </div>
+
+          <!-- 公司简介 + 财务指标 并排（同高，长内容滚动） -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+            <!-- 公司简介 -->
+            <div class="card" style="display:flex;flex-direction:column;max-height:520px;">
+              <div class="card-header" style="flex-shrink:0;">
+                <div class="card-header-left">
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 6h6M7 9h6M7 12h4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                  <span>公司简介</span>
+                </div>
+              </div>
+              <div class="card-body" id="stockProfileBody" style="flex:1;overflow-y:auto;min-height:0;">
+                <div class="empty-state">加载中...</div>
+              </div>
+            </div>
+
+            <!-- 财务指标 -->
+            <div class="card" style="display:flex;flex-direction:column;max-height:520px;">
+              <div class="card-header" style="flex-shrink:0;">
+                <div class="card-header-left">
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M3 17h14M5 13h2v4H5zM9 9h2v8H9zM13 5h2v12h-2z" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span>财务指标</span>
+                </div>
+              </div>
+              <div class="card-body" id="stockFinancialBody" style="flex:1;overflow:auto;min-height:0;">
+                <div class="empty-state">加载中...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 十大流通股东 + 资金流向 并排（同高，长内容滚动） -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+            <!-- 十大流通股东 -->
+            <div class="card" style="display:flex;flex-direction:column;max-height:520px;">
+              <div class="card-header">
+                <div class="card-header-left">
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="7" r="3.5" stroke="currentColor" stroke-width="1.4"/><path d="M3 18c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                  <span>十大流通股东</span>
+                </div>
+              </div>
+              <div class="card-body" id="stockHoldersBody" style="flex:1;overflow:auto;min-height:0;">
+                <div class="empty-state">加载中...</div>
+              </div>
+            </div>
+
+            <!-- 资金流向 -->
+            <div class="card" style="display:flex;flex-direction:column;max-height:520px;">
+              <div class="card-header">
+                <div class="card-header-left">
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M10 2v16M6 6l4-4 4 4M14 14l-4 4-4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <span>资金流向</span>
+                </div>
+              </div>
+              <div class="card-body" id="stockFlowBody" style="flex:1;overflow:auto;min-height:0;">
+                <div class="empty-state">加载中...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 个股新闻（全宽） -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-header-left">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><rect x="2" y="3" width="16" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M6 7h8M6 10h5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                <span>个股新闻</span>
+              </div>
+            </div>
+            <div class="card-body" id="stockNewsBody" style="max-height:400px;overflow-y:auto;">
+              <div class="empty-state">加载中...</div>
+            </div>
+          </div>
+
+          <!-- 机构调研 -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-header-left">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="7" r="3.5" stroke="currentColor" stroke-width="1.4"/><path d="M3 18c0-3.5 3-6 7-6s7 2.5 7 6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                <span>机构调研</span>
+              </div>
+            </div>
+            <div class="card-body" id="stockVisitsBody" style="max-height:400px;overflow-y:auto;">
+              <div class="empty-state">选择股票后加载</div>
+            </div>
+          </div>
+
+        </div><!-- /stockDetailArea -->
+
+      </div><!-- /view-stock -->
+
+      <!-- ==================== VIEW: WENCAI ==================== -->
+      <div id="view-wencai" class="view">
+
+        <div style="display:flex;gap:4px;margin-bottom:20px;">
+          <button class="btn btn-ghost btn-sm active" id="wencaiTabQuery" onclick="switchWencaiTab('query')">条件选股</button>
+          <button class="btn btn-ghost btn-sm" id="wencaiTabSectors" onclick="switchWencaiTab('sectors')">板块扫描</button>
+          <button class="btn btn-ghost btn-sm" id="wencaiTabVisits" onclick="switchWencaiTab('visits')">机构调研</button>
+        </div>
+
+        <!-- Tab 1: 条件选股 -->
+        <div id="wencai-panel-query" class="wencai-panel active">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/><path d="M14 14l4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                自然语言选股
+              </div>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;gap:8px;">
+                <input id="wencaiQueryInput" class="input" placeholder="输入选股条件，如：市盈率小于20，净利润大于1亿，市值大于100亿"
+                       style="flex:1;" onkeydown="if(event.key==='Enter')wencaiSearch()">
+                <button class="btn btn-primary" onclick="wencaiSearch()">查询</button>
+              </div>
+              <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--ink-3);">
+                <span>快捷:</span>
+                <a href="#" onclick="wencaiQuick('今日涨停的股票');return false;" style="color:var(--blue);cursor:pointer;text-decoration:none;">今日涨停</a>
+                <a href="#" onclick="wencaiQuick('MACD金叉，成交量放大');return false;" style="color:var(--blue);cursor:pointer;text-decoration:none;">MACD金叉</a>
+                <a href="#" onclick="wencaiQuick('净资产收益率大于15%，股息率大于3%');return false;" style="color:var(--blue);cursor:pointer;text-decoration:none;">高ROE高股息</a>
+                <a href="#" onclick="wencaiQuick('2024年营收增长大于30%');return false;" style="color:var(--blue);cursor:pointer;text-decoration:none;">高增长</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M3 4h14M6 10h8M8 16h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                结构化筛选
+              </div>
+            </div>
+            <div class="card-body">
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
+                <div>
+                  <label style="font-size:11px;color:var(--ink-3);display:block;margin-bottom:3px;">行业板块</label>
+                  <select id="wencaiIndustry" class="input" style="padding:6px 10px;">
+                    <option value="">不限</option>
+                    <option value="银行">银行</option>
+                    <option value="证券">证券</option>
+                    <option value="保险">保险</option>
+                    <option value="白酒">白酒</option>
+                    <option value="医药">医药</option>
+                    <option value="半导体">半导体</option>
+                    <option value="新能源车">新能源车</option>
+                    <option value="光伏">光伏</option>
+                    <option value="人工智能">人工智能</option>
+                    <option value="消费电子">消费电子</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--ink-3);display:block;margin-bottom:3px;">市盈率上限</label>
+                  <input id="wencaiMaxPE" class="input" type="number" placeholder="如 20" style="padding:6px 10px;">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--ink-3);display:block;margin-bottom:3px;">市值下限(亿)</label>
+                  <input id="wencaiMinMC" class="input" type="number" placeholder="如 100" style="padding:6px 10px;">
+                </div>
+                <div>
+                  <label style="font-size:11px;color:var(--ink-3);display:block;margin-bottom:3px;">涨跌幅下限(%)</label>
+                  <input id="wencaiMinChange" class="input" type="number" placeholder="如 3" style="padding:6px 10px;">
+                </div>
+              </div>
+              <div style="margin-top:12px;">
+                <button class="btn btn-primary btn-sm" onclick="wencaiStructuredSearch()">应用筛选</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="wencaiResultCard" style="display:none;">
+            <div class="card-header">
+              <div class="card-title" id="wencaiResultTitle">查询结果</div>
+            </div>
+            <div class="card-body" style="overflow-x:auto;padding:0;">
+              <div id="wencaiResultBody" style="max-height:500px;overflow-y:auto;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: 板块扫描 -->
+        <div id="wencai-panel-sectors" class="wencai-panel">
+          <div class="card" id="sectorListCard">
+            <div class="card-header">
+              <div class="card-title">行业板块</div>
+              <button class="btn btn-ghost btn-sm" onclick="loadSectorHeatmap()">刷新</button>
+            </div>
+            <div class="card-body" id="sectorHeatmapBody">
+              <div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top:16px;">
+            <div class="card-header">
+              <div class="card-title">成分股查询</div>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;gap:8px;">
+                <input id="sectorNameInput" class="input" placeholder="输入行业或概念名称，如 半导体、人工智能" style="flex:1;"
+                       onkeydown="if(event.key==='Enter')loadSectorStocks()">
+                <button class="btn btn-primary" onclick="loadSectorStocks()">查询</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="sectorResultCard" style="display:none;">
+            <div class="card-header">
+              <div class="card-title" id="sectorResultTitle">成分股</div>
+            </div>
+            <div class="card-body" style="overflow-x:auto;padding:0;">
+              <div id="sectorResultBody" style="max-height:500px;overflow-y:auto;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: 机构调研 -->
+        <div id="wencai-panel-visits" class="wencai-panel">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">机构调研扫描</div>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;gap:8px;margin-bottom:8px;">
+                <input id="visitsQueryInput" class="input" placeholder="筛选条件，如：近一月有机构调研，股价上涨"
+                       style="flex:1;" onkeydown="if(event.key==='Enter')wencaiVisitsSearch()">
+                <button class="btn btn-primary" onclick="wencaiVisitsSearch()">扫描</button>
+              </div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--ink-3);">
+                <span>快捷:</span>
+                <a href="#" onclick="wencaiVisitsQuick('机构调研家数大于5家');return false;" style="color:var(--blue);cursor:pointer;text-decoration:none;">热门调研股</a>
+                <a href="#" onclick="wencaiVisitsQuick('近一周有机构调研，股价上涨');return false;" style="color:var(--blue);cursor:pointer;text-decoration:none;">近一周调研上涨</a>
+                <a href="#" onclick="wencaiVisitsQuick('机构调研，市值小于500亿，市盈率小于30');return false;" style="color:var(--blue);cursor:pointer;text-decoration:none;">中小市值低估调研</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="visitsResultCard" style="display:none;">
+            <div class="card-body" style="overflow-x:auto;padding:0;">
+              <div id="visitsResultBody" style="max-height:500px;overflow-y:auto;"></div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /view-wencai -->
+
+      <!-- ==================== VIEW: CONFIG ==================== -->
+      <div id="view-config" class="view">
+
+        <!-- Email -->
+        <div class="config-section open" id="cfg-email">
+          <div class="config-section-header" onclick="toggleConfigSection('cfg-email')">
+            <div class="config-section-header-left">
+              <div class="config-section-icon" style="background:var(--blue-s);">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><rect x="2" y="5" width="16" height="12" rx="2" stroke="#2563EB" stroke-width="1.6"/><path d="M2 8l8 5 8-5" stroke="#2563EB" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </div>
+              <div>
+                <div class="config-section-title">邮箱 SMTP</div>
+                <div class="config-section-sub">配置发件服务器用于推送报告</div>
+              </div>
+            </div>
+            <svg class="config-chevron" width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </div>
+          <div class="config-section-body">
+            <div class="info-banner info-amber" style="margin-bottom:16px;">
+              <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.6"/><path d="M10 9v4M10 7h.01" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              推荐使用QQ/163邮箱授权码（非登录密码）。QQ邮箱: smtp.qq.com:465 | 163邮箱: smtp.163.com:465
+            </div>
+            <div class="form-row">
+              <div><label class="form-label">SMTP 服务器</label><input type="text" id="cfgSmtpServer" class="form-input" placeholder="smtp.qq.com"></div>
+              <div><label class="form-label">端口</label><input type="number" id="cfgSmtpPort" class="form-input" value="465"></div>
+            </div>
+            <div class="form-row">
+              <div><label class="form-label">发件邮箱</label><input type="email" id="cfgSenderEmail" class="form-input" placeholder="xxx@qq.com"></div>
+              <div><label class="form-label">授权码</label><input type="password" id="cfgSenderPassword" class="form-input" placeholder="邮箱授权码"></div>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);cursor:pointer;">
+              <input type="checkbox" id="cfgUseSSL" checked style="accent-color:var(--red);">
+              使用 SSL 加密
+            </label>
+          </div>
+        </div>
+
+        <!-- WeChat Auth -->
+        <div class="config-section open" id="cfg-wechat">
+          <div class="config-section-header" onclick="toggleConfigSection('cfg-wechat')">
+            <div class="config-section-header-left">
+              <div class="config-section-icon" style="background:var(--green-s);">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M7.5 9.5C7.5 7.015 9.515 5 12 5c2.485 0 4.5 2.015 4.5 4.5 0 1.38-.62 2.614-1.6 3.454L15 16h-3l-.2-2.14C10.17 13.55 9 11.5 9 9.5" stroke="#059669" stroke-width="1.6" stroke-linecap="round"/><circle cx="11" cy="9" r="1" fill="#059669"/><circle cx="14" cy="9" r="1" fill="#059669"/></svg>
+              </div>
+              <div>
+                <div class="config-section-title">公众号授权</div>
+                <div class="config-section-sub">扫码登录，自动获取最新文章</div>
+              </div>
+            </div>
+            <svg class="config-chevron" width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </div>
+          <div class="config-section-body">
+            <div class="info-banner info-green" style="margin-bottom:16px;">
+              <svg viewBox="0 0 20 20" fill="none"><path d="M4 10l4.5 4.5L16 6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              推荐方式：点击扫码登录，用微信扫描后自动完成授权，有效期约 4-8 小时。
+            </div>
+            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:16px;">
+              <button class="btn btn-red" id="mpLoginBtn" onclick="startMpLogin()">
+                <svg viewBox="0 0 20 20" fill="none" width="15" height="15"><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><rect x="5.5" y="5.5" width="4" height="4" rx="0.5" fill="currentColor"/><rect x="10.5" y="5.5" width="4" height="4" rx="0.5" fill="currentColor"/><rect x="5.5" y="10.5" width="4" height="4" rx="0.5" fill="currentColor"/><rect x="10.5" y="10.5" width="4" height="4" rx="0.5" fill="currentColor"/></svg>
+                扫码登录公众号后台
+              </button>
+              <span id="mpStatus" style="font-size:12.5px;font-weight:600;color:var(--ink-3);"></span>
+            </div>
+            <details>
+              <summary style="cursor:pointer;font-size:12.5px;color:var(--ink-3);user-select:none;outline:none;">手动输入 Token / Cookie（备用）</summary>
+              <div style="margin-top:12px;">
+                <div class="form-group">
+                  <label class="form-label">TOKEN（地址栏数字）</label>
+                  <input type="text" id="cfgMpToken" class="form-input" placeholder="例: 1234567890" style="font-family:'JetBrains Mono',monospace;">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">公众号后台 COOKIE</label>
+                  <textarea id="cfgMpCookie" class="form-input" style="min-height:60px;font-size:12px;font-family:'JetBrains Mono',monospace;" placeholder="粘贴 mp.weixin.qq.com 的完整 Cookie..."></textarea>
+                </div>
+                <button class="btn btn-ghost btn-sm" onclick="testMpCredentials()">测试凭证</button>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <!-- WeChat Cookie (backup) -->
+        <div class="config-section" id="cfg-cookie">
+          <div class="config-section-header" onclick="toggleConfigSection('cfg-cookie')">
+            <div class="config-section-header-left">
+              <div class="config-section-icon" style="background:var(--amber-s);">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M9 12H5a2 2 0 01-2-2V7a2 2 0 012-2h10a2 2 0 012 2v3a2 2 0 01-2 2h-4" stroke="#D97706" stroke-width="1.6"/><path d="M9 12v5M6 17h6" stroke="#D97706" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </div>
+              <div>
+                <div class="config-section-title">微信读者端 Cookie <span style="font-size:11px;background:var(--amber-s);color:var(--amber);padding:2px 7px;border-radius:20px;margin-left:6px;font-weight:600;">备用</span></div>
+                <div class="config-section-sub">无公众号时可用，有效期仅 1-2 小时</div>
+              </div>
+            </div>
+            <svg class="config-chevron" width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </div>
+          <div class="config-section-body">
+            <div class="form-group">
+              <label class="form-label">微信 COOKIE</label>
+              <textarea id="cfgWxCookie" class="form-input" style="min-height:60px;font-size:12px;font-family:'JetBrains Mono',monospace;" placeholder="粘贴完整的 Cookie 字符串..."></textarea>
+            </div>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <button class="btn btn-ghost btn-sm" onclick="testWxCookie()">测试有效性</button>
+              <span id="cookieStatus" style="font-size:12.5px;font-weight:600;color:var(--ink-3);"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI -->
+        <div class="config-section" id="cfg-ai">
+          <div class="config-section-header" onclick="toggleConfigSection('cfg-ai')">
+            <div class="config-section-header-left">
+              <div class="config-section-icon" style="background:var(--red-s);">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="3" stroke="#DC2626" stroke-width="1.6"/><path d="M10 3v2M10 15v2M3 10h2M15 10h2M5.636 5.636l1.414 1.414M12.95 12.95l1.414 1.414M5.636 14.364l1.414-1.414M12.95 7.05l1.414-1.414" stroke="#DC2626" stroke-width="1.6" stroke-linecap="round"/></svg>
+              </div>
+              <div>
+                <div class="config-section-title">AI 分析配置 <span style="font-size:11px;background:var(--surface-2);color:var(--ink-3);padding:2px 7px;border-radius:20px;margin-left:6px;font-weight:600;">可选</span></div>
+                <div class="config-section-sub">支持 OpenAI / DeepSeek / 通义千问等</div>
+              </div>
+            </div>
+            <svg class="config-chevron" width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          </div>
+          <div class="config-section-body">
+            <div class="form-group"><label class="form-label">API Key</label><input type="password" id="cfgAiKey" class="form-input" placeholder="sk-xxxx"></div>
+            <div class="form-row">
+              <div><label class="form-label">Base URL</label><input type="text" id="cfgAiBaseUrl" class="form-input" placeholder="https://api.openai.com/v1"></div>
+              <div><label class="form-label">模型名称</label><input type="text" id="cfgAiModel" class="form-input" placeholder="gpt-4o-mini"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Save buttons -->
+        <div class="btn-row" style="margin-top:8px;">
+          <button class="btn btn-primary" onclick="saveConfig()">
+            <svg viewBox="0 0 20 20" fill="none" width="15" height="15"><path d="M4 14V6a2 2 0 012-2h6l4 4v6a2 2 0 01-2 2H6a2 2 0 01-2-2z" stroke="currentColor" stroke-width="1.6"/><rect x="7" y="12" width="6" height="4" rx="1" fill="currentColor" fill-opacity="0.3"/><rect x="7" y="4" width="5" height="3" rx="0.5" fill="currentColor" fill-opacity="0.3"/></svg>
+            保存配置
+          </button>
+          <button class="btn btn-ghost" onclick="loadConfig()">刷新配置</button>
+        </div>
+
+      </div><!-- /view-config -->
+
+    </div><!-- /content-wrap -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<script>
+/* ============================================================
+   TOAST SYSTEM
+   ============================================================ */
+function showToast(message, type = 'info', duration = 3500) {
+  const container = document.getElementById('toastContainer');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  const icons = { success: '✓', error: '✕', info: 'ℹ' };
+  toast.innerHTML = `<span>${icons[type] || ''}</span><span>${message}</span>`;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add('out');
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
+/* ============================================================
+   VIEW SWITCHING
+   ============================================================ */
+const topbarMeta = {
+  task:     { title: '文章收集', sub: '从微信公众号抓取文章并生成分析报告' },
+  bloggers: { title: '博主管理', sub: '添加、删除、刷新你关注的股票博主' },
+  config:   { title: '配置设置', sub: '邮箱 SMTP · 公众号授权 · AI API' },
+  stock:    { title: '股票查询', sub: '搜索A股股票 · 查看实时行情' },
+  wencai:   { title: '条件选股', sub: '自然语言选股 · 板块扫描 · 机构调研' },
+};
+
+function switchView(view, el) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('view-' + view).classList.add('active');
+  const m = topbarMeta[view];
+  if (m) {
+    document.getElementById('topbarTitle').textContent = m.title;
+    document.getElementById('topbarSub').textContent = m.sub;
+  }
+  if (view === 'task') refreshBloggerCheckList();
+  if (view === 'bloggers') { loadBloggers(); }
+}
+
+/* ============================================================
+   CONFIG ACCORDION
+   ============================================================ */
+function toggleConfigSection(id) {
+  document.getElementById(id).classList.toggle('open');
+}
+
+/* ============================================================
+   MODE SWITCH
+   ============================================================ */
+function switchMode(mode) {
+  document.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  document.getElementById('mode-urls').classList.toggle('active', mode === 'urls');
+  document.getElementById('mode-bloggers').classList.toggle('active', mode === 'bloggers');
+  if (mode === 'bloggers') refreshBloggerCheckList();
+}
+function getActiveMode() {
+  return document.querySelector('.seg-btn.active').dataset.mode;
+}
+
+let _scrapeMode = 'latest_n';
+let _scrapeCount = 5;
+let _scrapePeriod = 'last_week';
+
+function onScrapeModeChange(mode) {
+  _scrapeMode = mode;
+  document.querySelectorAll('.scrape-mode-opt').forEach(el => {
+    el.classList.toggle('active-mode', el.querySelector(`input[value="${mode}"]`) !== null);
+  });
+}
+
+function onScrapeCountChange() {
+  const v = parseInt(document.getElementById('scrapeCount').value) || 5;
+  _scrapeCount = Math.max(1, Math.min(20, v));
+  document.getElementById('scrapeCount').value = _scrapeCount;
+}
+
+function onScrapePeriodChange() {
+  _scrapePeriod = document.getElementById('scrapePeriod').value;
+}
+
+/* ============================================================
+   FLOW STEPS
+   ============================================================ */
+function setFlowStep(n) {
+  // n = 1,2,3 = active; previous ones = done
+  for (let i = 1; i <= 3; i++) {
+    const el = document.getElementById('step-' + i);
+    el.classList.remove('active', 'done');
+    if (i < n) el.classList.add('done');
+    else if (i === n) el.classList.add('active');
+  }
+}
+
+/* ============================================================
+   CONFIG
+   ============================================================ */
+async function loadConfig() {
+  try {
+    const cfg = await (await fetch('/api/config')).json();
+    document.getElementById('cfgSmtpServer').value = cfg.smtp_server || '';
+    document.getElementById('cfgSmtpPort').value = cfg.smtp_port || 465;
+    document.getElementById('cfgSenderEmail').value = cfg.sender_email || '';
+    document.getElementById('cfgSenderPassword').value = '';
+    document.getElementById('cfgSenderPassword').placeholder = cfg.sender_password ? '已保存 (留空不修改)' : '邮箱授权码';
+    document.getElementById('cfgUseSSL').checked = cfg.use_ssl !== false;
+    document.getElementById('cfgAiKey').value = '';
+    document.getElementById('cfgAiKey').placeholder = cfg.ai_api_key ? '已保存 (留空不修改)' : 'sk-xxxx';
+    document.getElementById('cfgAiBaseUrl').value = cfg.ai_base_url || '';
+    document.getElementById('cfgAiModel').value = cfg.ai_model || '';
+    document.getElementById('cfgMpToken').value = cfg.mp_token || '';
+    document.getElementById('cfgMpCookie').value = '';
+    document.getElementById('cfgMpCookie').placeholder = cfg.mp_cookie ? '已保存 (留空不修改)' : '粘贴 mp.weixin.qq.com 完整 Cookie...';
+    const mpStatus = document.getElementById('mpStatus');
+    mpStatus.textContent = cfg.mp_cookie ? '✓ 已授权' : '未授权';
+    mpStatus.style.color = cfg.mp_cookie ? 'var(--green)' : 'var(--ink-3)';
+    document.getElementById('cfgWxCookie').value = '';
+    document.getElementById('cfgWxCookie').placeholder = cfg.wechat_cookie ? '已保存 (留空不修改)' : '粘贴完整 Cookie 字符串...';
+    const cookieStatus = document.getElementById('cookieStatus');
+    cookieStatus.textContent = cfg.wechat_cookie ? '✓ 已配置' : '未配置';
+    cookieStatus.style.color = cfg.wechat_cookie ? 'var(--green)' : 'var(--ink-3)';
+    // Update sidebar status
+    document.getElementById('serverDot').classList.add('online');
+    document.getElementById('serverStatus').textContent = '已连接';
+    // 检测登录状态
+    checkMpLoginStatus();
+  } catch(e) {
+    document.getElementById('serverStatus').textContent = '未连接';
+  }
+}
+
+async function checkMpLoginStatus() {
+  try {
+    const res = await fetch('/api/config/mp-login-status');
+    const data = await res.json();
+    const statusEl = document.getElementById('mpStatus');
+    if (!data.logged_in) {
+      statusEl.textContent = '⚠ ' + data.message;
+      statusEl.style.color = 'var(--red)';
+      statusEl.style.fontWeight = '700';
+      showLoginWarning(data.message);
+    } else {
+      statusEl.textContent = '✓ 已授权';
+      statusEl.style.color = 'var(--green)';
+      statusEl.style.fontWeight = '600';
+      // 登录状态正常，移除警告 banner
+      const oldBanner = document.getElementById('loginWarningBanner');
+      if (oldBanner) oldBanner.remove();
+    }
+  } catch (e) {
+    console.error('登录状态检测失败', e);
+  }
+}
+
+function showLoginWarning(message) {
+  let warnEl = document.getElementById('loginWarningBanner');
+  if (!warnEl) {
+    warnEl = document.createElement('div');
+    warnEl.id = 'loginWarningBanner';
+    warnEl.style.cssText = 'position:fixed;top:0;left:0;right:0;background:var(--red);color:white;padding:12px 20px;text-align:center;font-weight:600;z-index:9999;display:flex;align-items:center;justify-content:center;gap:12px;';
+    document.body.prepend(warnEl);
+  }
+  warnEl.innerHTML = '⚠ ' + message + ' <button onclick="startMpLogin()" style="background:white;color:var(--red);border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:700;margin-left:12px;">立即登录</button>';
+}
+
+async function saveConfig() {
+  const body = {
+    smtp_server: document.getElementById('cfgSmtpServer').value,
+    smtp_port: parseInt(document.getElementById('cfgSmtpPort').value) || 465,
+    sender_email: document.getElementById('cfgSenderEmail').value,
+    sender_password: document.getElementById('cfgSenderPassword').value || '__KEEP__',
+    use_ssl: document.getElementById('cfgUseSSL').checked,
+    ai_api_key: document.getElementById('cfgAiKey').value || '__KEEP__',
+    ai_base_url: document.getElementById('cfgAiBaseUrl').value || 'https://api.openai.com/v1',
+    ai_model: document.getElementById('cfgAiModel').value || 'gpt-4o-mini',
+    wechat_cookie: document.getElementById('cfgWxCookie').value || '__KEEP__',
+    mp_cookie: document.getElementById('cfgMpCookie').value || '__KEEP__',
+    mp_token: document.getElementById('cfgMpToken').value || '__KEEP__',
+  };
+  try {
+    const data = await (await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })).json();
+    showToast(data.success ? '配置已保存' : '保存失败', data.success ? 'success' : 'error');
+  } catch(e) { showToast('保存失败: ' + e.message, 'error'); }
+}
+
+/* ============================================================
+   BLOGGER MANAGEMENT
+   ============================================================ */
+let bloggerList = [];
+let pendingBloggerInfo = null;
+
+async function loadBloggers() {
+  try {
+    const data = await (await fetch('/api/blogger/list')).json();
+    bloggerList = data.bloggers || [];
+    renderBloggerManageList();
+    refreshBloggerCheckList();
+    updateBloggerBadge();
+  } catch(e) { console.error(e); }
+}
+
+function updateBloggerBadge() {
+  const badge = document.getElementById('bloggerCountBadge');
+  if (bloggerList.length > 0) {
+    badge.style.display = '';
+    badge.textContent = bloggerList.length;
+  } else {
+    badge.style.display = 'none';
+  }
+  const label = document.getElementById('bloggerCountLabel');
+  if (label) label.textContent = bloggerList.length ? `共 ${bloggerList.length} 位` : '';
+}
+
+function renderBloggerManageList() {
+  const el = document.getElementById('bloggerManageList');
+  if (bloggerList.length === 0) {
+    el.innerHTML = `<div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M4 20c0-4 3.582-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      暂无博主，请在上方添加
+    </div>`;
+    return;
+  }
+  el.innerHTML = `<div class="blogger-grid">` + bloggerList.map(b => {
+    const fresh = getFreshnessBadge(b.article_time);
+    return `
+    <div class="blogger-card" id="blogger-card-${b.id}">
+      <div class="blogger-card-avatar">
+        ${b.avatar ? `<img src="${b.avatar}" onerror="this.parentElement.innerHTML='${b.name[0]}'">` : b.name[0]}
+      </div>
+      <div class="blogger-card-name">${b.name}</div>
+      <div class="blogger-card-id">${b.user_name || b.biz || '—'}</div>
+      <div class="blogger-card-article" title="${b.article_title || '暂无文章'}">
+        ${b.article_title || '<span style="color:var(--ink-3);">暂无文章信息</span>'}
+      </div>
+      <div class="blogger-card-footer">
+        ${fresh}
+        <button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:transparent;" onclick="removeBlogger('${b.id}')">删除</button>
+      </div>
+    </div>`;
+  }).join('') + `</div>`;
+}
+
+function getFreshnessBadge(dateStr) {
+  if (!dateStr) return '<span class="freshness-badge stale">未知</span>';
+  try {
+    const d = new Date(dateStr.replace(/-/g, '/'));
+    if (isNaN(d.getTime())) return '<span class="freshness-badge stale">未知</span>';
+    const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+    if (days <= 1) return `<span class="freshness-badge fresh">今天</span>`;
+    if (days <= 3) return `<span class="freshness-badge fresh">${days}天前</span>`;
+    if (days <= 7) return `<span class="freshness-badge recent">${days}天前</span>`;
+    return `<span class="freshness-badge stale">${days}天前</span>`;
+  } catch { return '<span class="freshness-badge stale">未知</span>'; }
+}
+
+function refreshBloggerCheckList() {
+  const el = document.getElementById('bloggerCheckList');
+  if (bloggerList.length === 0) {
+    el.innerHTML = `<div class="empty-state" style="padding:24px 16px;">
+      暂无博主，请先到「博主管理」添加
+    </div>`;
+    document.getElementById('staleWarning').textContent = '';
+    return;
+  }
+  let staleCount = 0;
+  el.innerHTML = bloggerList.map(b => {
+    const isStale = isArticleStale(b.article_time);
+    if (isStale) staleCount++;
+    const fresh = getFreshnessBadge(b.article_time);
+    const title = b.article_title || '暂无文章';
+    return `
+    <div class="check-row" onclick="event.target.tagName!=='INPUT'&&event.target.tagName!=='BUTTON'&&document.querySelector('#check-${b.id}').click()">
+      <input type="checkbox" id="check-${b.id}" value="${b.id}" class="blogger-checkbox">
+      <div class="check-avatar">
+        ${b.avatar ? `<img src="${b.avatar}" onerror="this.parentElement.innerHTML='${b.name[0]}'">` : b.name[0]}
+      </div>
+      <div class="check-info">
+        <div class="check-name">${b.name}</div>
+        <div class="check-meta">
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;" title="${title}">${title}</span>
+          ${fresh}
+          <button class="btn-quick-update" onclick="event.stopPropagation();showQuickUpdate('${b.id}')">更新</button>
+        </div>
+      </div>
+    </div>
+    <div class="quick-update-row" id="quick-update-${b.id}">
+      <input type="text" class="form-input quick-url-input" placeholder="粘贴该博主最新文章链接" style="font-size:12px;padding:7px 11px;">
+      <button class="btn btn-red btn-sm" onclick="doQuickUpdate('${b.id}')">确认</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('quick-update-${b.id}').classList.remove('open')">取消</button>
+    </div>`;
+  }).join('');
+
+  const warn = document.getElementById('staleWarning');
+  warn.textContent = staleCount > 0 ? `${staleCount} 位博主过期` : '';
+}
+
+function isArticleStale(dateStr) {
+  if (!dateStr) return true;
+  try {
+    const d = new Date(dateStr.replace(/-/g, '/'));
+    return isNaN(d.getTime()) || (Date.now() - d.getTime()) > 2 * 86400000;
+  } catch { return true; }
+}
+
+function showQuickUpdate(id) {
+  const row = document.getElementById('quick-update-' + id);
+  row.classList.toggle('open');
+}
+
+async function doQuickUpdate(id) {
+  const row = document.getElementById('quick-update-' + id);
+  const input = row.querySelector('.quick-url-input');
+  const url = input.value.trim();
+  if (!url) return;
+  const btn = row.querySelector('.btn-red');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const data = await (await fetch('/api/blogger/' + id + '/url', {
+      method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ url }),
+    })).json();
+    if (data.success && data.blogger) {
+      const idx = bloggerList.findIndex(b => b.id === id);
+      if (idx >= 0) bloggerList[idx] = data.blogger;
+      refreshBloggerCheckList(); renderBloggerManageList();
+      showToast(`已更新「${data.blogger.name}」的文章链接`, 'success');
+    } else { showToast(data.error || '更新失败', 'error'); }
+  } catch(e) { showToast('更新失败: ' + e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '确认'; }
+}
+
+function toggleAllBloggers() {
+  const boxes = document.querySelectorAll('.blogger-checkbox');
+  const allChecked = Array.from(boxes).every(c => c.checked);
+  boxes.forEach(c => c.checked = !allChecked);
+}
+
+async function identifyBlogger() {
+  const url = document.getElementById('identifyUrl').value.trim();
+  if (!url) { showToast('请输入链接', 'error'); return; }
+  const btn = document.getElementById('identifyBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 识别中...';
+  document.getElementById('identifyResult').classList.remove('show');
+  try {
+    const data = await (await fetch('/api/blogger/identify', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url }),
+    })).json();
+    if (data.success) {
+      pendingBloggerInfo = data;
+      document.getElementById('previewName').textContent = data.name;
+      document.getElementById('previewBiz').textContent = data.user_name || data.biz || '';
+      const avatarEl = document.getElementById('previewAvatar');
+      avatarEl.innerHTML = data.avatar ? `<img src="${data.avatar}" onerror="this.parentElement.textContent='${data.name[0]}'">` : data.name[0];
+      document.getElementById('identifyResult').classList.add('show');
+    } else { showToast('识别失败: ' + (data.error || '未知错误'), 'error'); }
+  } catch(e) { showToast('请求失败: ' + e.message, 'error'); }
+  finally { btn.disabled = false; btn.innerHTML = '识别并添加'; }
+}
+
+async function confirmAddBlogger() {
+  if (!pendingBloggerInfo) return;
+  try {
+    const data = await (await fetch('/api/blogger/add', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(pendingBloggerInfo),
+    })).json();
+    showToast(data.message || '已添加', 'success');
+    cancelIdentify();
+    document.getElementById('identifyUrl').value = '';
+    await loadBloggers();
+  } catch(e) { showToast('添加失败: ' + e.message, 'error'); }
+}
+
+function cancelIdentify() {
+  pendingBloggerInfo = null;
+  document.getElementById('identifyResult').classList.remove('show');
+}
+
+let isRefreshing = false;
+async function autoRefreshBloggers() {
+  if (isRefreshing || bloggerList.length === 0) return;
+  isRefreshing = true;
+  const bar = document.getElementById('refreshBar');
+  bar.classList.add('active');
+  document.getElementById('refreshBarText').textContent = `正在刷新 ${bloggerList.length} 位博主...`;
+  try {
+    const data = await (await fetch('/api/blogger/refresh', { method: 'POST' })).json();
+    if (data.success && data.bloggers) {
+      bloggerList = data.bloggers;
+      renderBloggerManageList(); refreshBloggerCheckList(); updateBloggerBadge();
+      if (data.login_required) {
+        showLoginWarning('您的公众号登录已失效，请重新登录以继续获取最新文章');
+        showToast('部分博主刷新失败，请重新登录公众号后台', 'error');
+      } else {
+        // 登录正常，移除可能残留的警告 banner
+        const oldBanner = document.getElementById('loginWarningBanner');
+        if (oldBanner) oldBanner.remove();
+        showToast('博主文章状态已刷新', 'success');
+      }
+    } else { showToast('刷新失败', 'error'); }
+  } catch(e) { showToast('刷新失败: ' + e.message, 'error'); }
+  finally {
+    bar.classList.remove('active');
+    isRefreshing = false;
+  }
+}
+
+async function removeBlogger(id) {
+  if (!confirm('确定删除该博主？')) return;
+  try {
+    await fetch(`/api/blogger/${id}`, { method: 'DELETE' });
+    showToast('已删除博主', 'success');
+    await loadBloggers();
+  } catch(e) { showToast('删除失败', 'error'); }
+}
+
+/* ============================================================
+   TASK EXECUTION
+   ============================================================ */
+let ws = null;
+let currentReport = '';
+
+function addLog(message, type = '') {
+  const logArea = document.getElementById('logArea');
+  const line = document.createElement('span');
+  line.className = 'log-line';
+  const t = document.createElement('span');
+  t.className = 't';
+  t.textContent = new Date().toLocaleTimeString();
+  const msg = document.createElement('span');
+  msg.className = type || 'default';
+  msg.textContent = ' ' + message;
+  line.appendChild(t); line.appendChild(msg);
+  logArea.appendChild(line);
+  logArea.appendChild(document.createTextNode('\n'));
+  logArea.scrollTop = logArea.scrollHeight;
+}
+
+function startTask() {
+  const mode = getActiveMode();
+  let payload = { mode };
+  if (mode === 'urls') {
+    const urlsText = document.getElementById('urlsInput').value.trim();
+    if (!urlsText) { showToast('请输入至少一个文章链接', 'error'); return; }
+    payload.urls = urlsText.split('\n').map(u => u.trim()).filter(u => u);
+  } else {
+    const checked = Array.from(document.querySelectorAll('.blogger-checkbox:checked')).map(c => c.value);
+    const extraText = document.getElementById('extraUrlsInput').value.trim();
+    const extraUrls = extraText ? extraText.split('\n').map(u => u.trim()).filter(u => u) : [];
+    if (checked.length === 0 && extraUrls.length === 0) { showToast('请选择至少一个博主或输入链接', 'error'); return; }
+    payload.blogger_ids = checked; payload.extra_urls = extraUrls;
+    payload.scrape_mode = _scrapeMode;
+    payload.scrape_count = _scrapeCount;
+    payload.scrape_period = _scrapePeriod;
+  }
+
+  // Reset UI
+  const btn = document.getElementById('startBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> 执行中...';
+  document.getElementById('progressPanel').style.display = 'block';
+  document.getElementById('logCard').style.display = 'block';
+  document.getElementById('articleList').innerHTML = '';
+  document.getElementById('articleListWrap').style.display = 'none';
+  document.getElementById('logArea').innerHTML = '';
+  document.getElementById('progressBar').style.width = '0%';
+  document.getElementById('progressBar').classList.remove('green');
+  document.getElementById('reportPreview').classList.remove('active');
+  document.getElementById('choicePanel').classList.remove('active');
+  setFlowStep(1);
+
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${protocol}//${location.host}/ws/task`);
+  ws.onopen = () => { addLog('已连接服务器，开始执行任务...', 'info'); ws.send(JSON.stringify(payload)); };
+  ws.onmessage = (e) => handleWsMessage(JSON.parse(e.data));
+  ws.onerror = () => { addLog('WebSocket 连接异常', 'error'); finish(); };
+  ws.onclose = () => { addLog('连接已关闭', 'info'); };
+}
+
+function handleWsMessage(msg) {
+  switch (msg.type) {
+    case 'phase':
+      document.getElementById('phaseStatus').textContent = msg.message;
+      addLog(msg.message, 'info');
+      if (msg.phase === 'analyze') setFlowStep(2);
+      break;
+    case 'log':
+      addLog(msg.message, msg.level || 'info');
+      break;
+    case 'progress': {
+      const pct = Math.round((msg.current / msg.total) * 100);
+      document.getElementById('progressBar').style.width = pct + '%';
+      const wrap = document.getElementById('articleListWrap');
+      wrap.style.display = 'block';
+      const listEl = document.getElementById('articleList');
+      let curEl = document.getElementById(`article-${msg.current}`);
+      if (!curEl) {
+        const li = document.createElement('li');
+        li.className = 'article-row'; li.id = `article-${msg.current}`;
+        li.innerHTML = `<span class="a-dot loading"></span><div class="a-info"><div class="a-title">${msg.message}</div><div class="a-meta">正在抓取...</div></div>`;
+        listEl.appendChild(li);
+        li.scrollIntoView && (listEl.parentElement.scrollTop = listEl.parentElement.scrollHeight);
+      } else {
+        curEl.querySelector('.a-dot').className = 'a-dot loading';
+        curEl.querySelector('.a-meta').textContent = '正在抓取...';
+      }
+      addLog(msg.message, 'info');
+      break;
+    }
+    case 'article_done': {
+      const el = document.getElementById(`article-${msg.current}`);
+      if (el) {
+        const dot = el.querySelector('.a-dot');
+        const meta = el.querySelector('.a-meta');
+        const title = el.querySelector('.a-title');
+        if (msg.status === 'success') {
+          dot.className = 'a-dot success'; title.textContent = msg.title; meta.textContent = `作者: ${msg.author}`;
+          addLog(`[${msg.current}/${msg.total}] ${msg.title}`, 'success');
+        } else {
+          dot.className = 'a-dot failed'; meta.textContent = `失败: ${msg.error || ''}`;
+          addLog(`[${msg.current}/${msg.total}] 失败: ${msg.error}`, 'error');
+        }
+      }
+      break;
+    }
+    case 'articles_collected':
+      document.getElementById('progressBar').style.width = '100%';
+      document.getElementById('choiceText').textContent = `成功收集 ${msg.count}/${msg.total} 篇文章`;
+      document.getElementById('choicePanel').classList.add('active');
+      document.getElementById('phaseStatus').textContent = '等待选择输出方式...';
+      addLog(msg.message, 'success');
+      break;
+    case 'report':
+      currentReport = msg.report;
+      document.getElementById('reportPreview').classList.add('active');
+      document.getElementById('reportContent').innerHTML = renderMarkdown(msg.report);
+      document.getElementById('progressBar').classList.add('green');
+      document.getElementById('progressBar').style.width = '100%';
+      document.getElementById('phaseStatus').textContent = '报告已生成';
+      addLog('报告已生成，可预览、下载或发送邮件', 'success');
+      setFlowStep(3);
+      finish();
+      showToast('报告生成完成！', 'success');
+      break;
+    case 'email_sent':
+      addLog(msg.message, 'success');
+      showEmailStatus(msg.message, 'success');
+      showToast(msg.message, 'success');
+      break;
+    case 'done':
+      addLog(msg.message, 'success'); finish(); break;
+    case 'email_error':
+      addLog(msg.message, 'warning'); showEmailStatus(msg.message, 'error'); showToast(msg.message, 'error'); break;
+    case 'error':
+      addLog(msg.message, 'error');
+      document.getElementById('phaseStatus').textContent = '出错: ' + msg.message;
+      showToast(msg.message, 'error'); finish(); break;
+  }
+}
+
+function continueTask(analyze, personas) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) { showToast('连接已断开，请重新开始', 'error'); return; }
+  document.getElementById('choicePanel').classList.remove('active');
+  setFlowStep(2);
+  const payload = { analyze };
+  if (analyze && Array.isArray(personas) && personas.length) payload.personas = personas;
+  ws.send(JSON.stringify(payload));
+}
+
+// 点击"AI 智能分析"时收集勾选的视角再发出
+function continueAnalyze() {
+  const checked = Array.from(document.querySelectorAll('#personaList input[type=checkbox]:checked'))
+    .map(el => el.value);
+  if (!checked.length) {
+    showToast('请至少勾选一个投资视角', 'error');
+    return;
+  }
+  continueTask(true, checked);
+}
+
+// 启动时拉取人格列表，渲染为多选 chips
+async function loadPersonas() {
+  try {
+    const res = await fetch('/api/agents/personas');
+    const data = await res.json();
+    const list = document.getElementById('personaList');
+    if (!list) return;
+    list.innerHTML = (data.personas || []).map(p => `
+      <label style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--surface-1);border-radius:18px;cursor:pointer;font-size:12px;border:1px solid rgba(0,0,0,0.06);">
+        <input type="checkbox" value="${p.id}" checked style="margin:0;">
+        <span>${p.icon} ${p.name}</span>
+        <span style="color:var(--ink-3);font-size:11px;">— ${p.tagline}</span>
+      </label>
+    `).join('');
+  } catch (e) {
+    console.warn('persona list load failed', e);
+  }
+}
+loadPersonas();
+
+function finish() {
+  const btn = document.getElementById('startBtn');
+  btn.disabled = false;
+  btn.innerHTML = `<svg viewBox="0 0 20 20" fill="none" width="15" height="15"><polygon points="6,4 16,10 6,16" fill="currentColor"/></svg> 开始收集`;
+}
+
+/* ============================================================
+   MARKDOWN RENDERER
+   ============================================================ */
+function renderMarkdown(text) {
+  let html = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" referrerpolicy="no-referrer">')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/^---$/gm, '<hr>')
+    .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/\n\n+/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+  return '<p>' + html + '</p>';
+}
+
+/* ============================================================
+   REPORT ACTIONS
+   ============================================================ */
+function downloadReport(format) {
+  if (!currentReport) { showToast('暂无报告内容', 'error'); return; }
+  const dateStr = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  if (format === 'html') {
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>股票分析报告 ${dateStr}</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{font-family:Outfit,'PingFang SC',sans-serif;max-width:760px;margin:0 auto;padding:36px 24px;line-height:1.9;color:#18181B;}
+h1{font-size:22px;border-bottom:2px solid #DC2626;padding-bottom:10px;margin-bottom:16px;}h2{font-size:18px;margin-top:28px;}
+hr{border:none;border-top:1px solid rgba(0,0,0,0.08);margin:24px 0;}
+blockquote{border-left:3px solid #DC2626;padding:12px 16px;background:rgba(220,38,38,0.06);border-radius:0 6px 6px 0;margin:16px 0;}
+strong{color:#DC2626;}img{max-width:100%;border-radius:10px;display:block;margin:16px 0;}</style>
+</head><body>${renderMarkdown(currentReport)}</body></html>`;
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `股票分析报告_${dateStr}.html`; a.click(); URL.revokeObjectURL(a.href);
+  } else {
+    const blob = new Blob([currentReport], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `股票分析报告_${dateStr}.txt`; a.click(); URL.revokeObjectURL(a.href);
+  }
+}
+
+function copyReport() {
+  if (!currentReport) { showToast('暂无报告内容', 'error'); return; }
+  navigator.clipboard.writeText(currentReport)
+    .then(() => showToast('报告内容已复制到剪贴板', 'success'))
+    .catch(() => { const ta = document.createElement('textarea'); ta.value = currentReport; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); showToast('已复制', 'success'); });
+}
+
+function sendReportEmail() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) { showToast('连接已断开', 'error'); return; }
+  const input = document.getElementById('toEmails').value.trim();
+  if (!input) { showToast('请输入收件邮箱', 'error'); return; }
+  const emails = input.split(/[,;，；\n]+/).map(e => e.trim()).filter(e => e);
+  const btn = document.getElementById('sendEmailBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 发送中...';
+  ws.send(JSON.stringify({ action: 'send_email', emails }));
+  setTimeout(() => { btn.disabled = false; btn.innerHTML = `<svg viewBox="0 0 20 20" fill="none" width="15" height="15"><path d="M17 3L3 9.5l5 2 2 5 2.5-4L17 3z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg> 发送`; }, 15000);
+}
+
+function showEmailStatus(message, type) {
+  const el = document.getElementById('emailStatus');
+  el.style.display = 'block';
+  el.style.color = type === 'success' ? 'var(--green)' : 'var(--red)';
+  el.textContent = message;
+  const btn = document.getElementById('sendEmailBtn');
+  btn.disabled = false;
+  btn.innerHTML = `<svg viewBox="0 0 20 20" fill="none" width="15" height="15"><path d="M17 3L3 9.5l5 2 2 5 2.5-4L17 3z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg> 发送`;
+}
+
+/* ============================================================
+   QR CODE LOGIN
+   ============================================================ */
+let mpLoginWs = null;
+
+function startMpLogin() {
+  const modal = document.getElementById('qrModal');
+  const body = document.getElementById('qrBody');
+  const footer = document.getElementById('qrFooter');
+  body.innerHTML = `<div style="text-align:center"><span class="spinner dark" style="width:24px;height:24px;border-width:3px;"></span><p style="margin-top:14px;color:var(--ink-2);font-size:14px;" id="qrStatusText">正在启动浏览器...</p></div>`;
+  footer.style.display = 'none';
+  modal.classList.add('active');
+
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  mpLoginWs = new WebSocket(`${protocol}//${location.host}/ws/mp-login`);
+  mpLoginWs.onmessage = (e) => handleMpLoginMessage(JSON.parse(e.data));
+  mpLoginWs.onerror = () => { body.innerHTML = `<p style="color:var(--red);font-size:14px;">连接失败，请重试</p>`; };
+  mpLoginWs.onclose = () => { mpLoginWs = null; };
+}
+
+function handleMpLoginMessage(msg) {
+  const body = document.getElementById('qrBody');
+  const footer = document.getElementById('qrFooter');
+  switch (msg.type) {
+    case 'status': { const s = document.getElementById('qrStatusText'); if(s) s.textContent = msg.message; break; }
+    case 'qrcode':
+      body.innerHTML = `<img src="${msg.image}" alt="扫码登录"><p style="font-size:13px;color:var(--ink-2);margin-top:8px;font-weight:500;" id="qrScanStatus">${msg.message}</p>`;
+      footer.style.display = 'block'; break;
+    case 'waiting': { const s = document.getElementById('qrScanStatus'); if(s && !s.dataset.scanned) s.textContent = msg.message; break; }
+    case 'scanned': { const s = document.getElementById('qrScanStatus'); if(s){s.textContent=msg.message;s.style.color='var(--green)';s.dataset.scanned='1';} break; }
+    case 'success':
+      body.innerHTML = `<div style="text-align:center;"><div style="font-size:48px;margin-bottom:12px;">✅</div><p style="color:var(--green);font-size:15px;font-weight:600;">${msg.message}</p><p style="color:var(--ink-3);font-size:12px;margin-top:8px;">Token: ${msg.token} | Cookie长度: ${msg.cookie_len}</p></div>`;
+      footer.style.display = 'none';
+      document.getElementById('mpStatus').textContent = '✓ 已授权';
+      document.getElementById('mpStatus').style.color = 'var(--green)';
+      document.getElementById('mpStatus').style.fontWeight = '600';
+      // 移除登录警告 banner
+      const warnBanner = document.getElementById('loginWarningBanner');
+      if (warnBanner) warnBanner.remove();
+      loadConfig();
+      setTimeout(() => { document.getElementById('qrModal').classList.remove('active'); }, 2500);
+      break;
+    case 'error':
+      body.innerHTML = `<div style="text-align:center;"><p style="color:var(--red);font-size:14px;">${msg.message}</p><button class="btn btn-red btn-sm" onclick="cancelMpLogin();startMpLogin();" style="margin-top:16px;">重试</button></div>`;
+      footer.style.display = 'none'; break;
+    case 'cancelled': document.getElementById('qrModal').classList.remove('active'); break;
+  }
+}
+
+function cancelMpLogin() {
+  if (mpLoginWs && mpLoginWs.readyState === WebSocket.OPEN) { mpLoginWs.send(JSON.stringify({action:'cancel'})); mpLoginWs.close(); }
+  mpLoginWs = null;
+  document.getElementById('qrModal').classList.remove('active');
+}
+
+async function testMpCredentials() {
+  const newCookie = document.getElementById('cfgMpCookie').value.trim();
+  const newToken = document.getElementById('cfgMpToken').value.trim();
+  if (newCookie || newToken) await saveConfig();
+  const statusEl = document.getElementById('mpStatus');
+  statusEl.textContent = '测试中...'; statusEl.style.color = 'var(--ink-2)';
+  try {
+    const data = await (await fetch('/api/config/test-mp', {method:'POST'})).json();
+    statusEl.textContent = data.success ? '✓ ' + data.message : data.message;
+    statusEl.style.color = data.success ? 'var(--green)' : 'var(--red)';
+    showToast(data.message, data.success ? 'success' : 'error');
+  } catch(e) { statusEl.textContent = '测试失败'; statusEl.style.color = 'var(--red)'; }
+}
+
+async function testWxCookie() {
+  const newCookie = document.getElementById('cfgWxCookie').value.trim();
+  if (newCookie) await saveConfig();
+  const statusEl = document.getElementById('cookieStatus');
+  statusEl.textContent = '测试中...'; statusEl.style.color = 'var(--ink-2)';
+  try {
+    const data = await (await fetch('/api/config/test-cookie', {method:'POST'})).json();
+    statusEl.textContent = data.success ? '✓ 有效' : '✕ ' + data.message;
+    statusEl.style.color = data.success ? 'var(--green)' : 'var(--red)';
+    showToast(data.message, data.success ? 'success' : 'error');
+  } catch(e) { statusEl.textContent = '测试失败'; statusEl.style.color = 'var(--red)'; }
+}
+
+/* ============================================================
+   STOCK — 搜索、行情、K线、公司简介、财务、资金流向、新闻
+   ============================================================ */
+let _stockCode = '';
+let _stockName = '';
+let _klineChart = null;
+let _klineSeries = null;
+let _klineVolSeries = null;
+
+/* --- 搜索 --- */
+async function searchStock() {
+  const keyword = document.getElementById('stockSearchInput').value.trim();
+  if (!keyword) { showToast('请输入搜索关键词', 'warning'); return; }
+  const el = document.getElementById('stockSearchResults');
+  el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span> 搜索中...</div>';
+  try {
+    const json = await (await fetch('/api/stock/search?keyword=' + encodeURIComponent(keyword))).json();
+    if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">' + (json.error || '未找到匹配的股票') + '</div>'; return; }
+    el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
+      + '<thead><tr style="border-bottom:1px solid var(--border);color:var(--ink-3);text-align:left;">'
+      + '<th style="padding:6px 8px;">代码</th><th style="padding:6px 8px;">名称</th><th style="padding:6px 8px;">板块</th><th style="padding:6px 8px;"></th></tr></thead>'
+      + '<tbody>' + json.data.map(s =>
+        `<tr style="border-bottom:1px solid var(--border);cursor:pointer;" onclick="selectStock('${s.code}','${s.name}')">`
+        + `<td style="padding:6px 8px;font-family:var(--mono);">${s.code}</td>`
+        + `<td style="padding:6px 8px;font-weight:500;">${s.name}</td>`
+        + `<td style="padding:6px 8px;color:var(--ink-3);">${s.market || ''}</td>`
+        + `<td style="padding:6px 8px;"><button class="btn btn-primary btn-sm">查看详情</button></td></tr>`
+      ).join('') + '</tbody></table>';
+  } catch (e) { el.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>'; }
+}
+
+/* --- 选中股票 → 加载全部面板 --- */
+async function selectStock(code, name) {
+  _stockCode = code; _stockName = name;
+  document.getElementById('stockDetailArea').style.display = '';
+  document.getElementById('quoteStockTitle').textContent = name + ' (' + code + ')';
+  // 并行加载所有面板
+  refreshQuote();
+  loadKline('day');
+  loadProfile();
+  loadFinancial();
+  loadMoneyFlow();
+  loadShareholders();
+  loadStockNews();
+  loadVisits();
+}
+
+/* --- 行情 --- */
+async function refreshQuote() {
+  if (!_stockCode) return;
+  const body = document.getElementById('stockQuoteBody');
+  body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
+  try {
+    const json = await (await fetch('/api/stock/quote/' + _stockCode)).json();
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '获取行情失败') + '</div>'; return; }
+    const d = json.data;
+    const price = d['最新价'] ?? '-', change = d['涨跌额'] ?? 0, pct = d['涨跌幅'] ?? 0;
+    const up = parseFloat(change) >= 0, c = up ? 'var(--red)' : 'var(--green)', arr = up ? '▲' : '▼';
+    body.innerHTML =
+      `<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px;">`
+      + `<span style="font-size:28px;font-weight:700;color:${c};">${price}</span>`
+      + `<span style="font-size:14px;color:${c};">${arr} ${change} (${pct}%)</span></div>`
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px 14px;">'
+      + _qi('今开',d['今开'])+_qi('昨收',d['昨收'])+_qi('最高',d['最高'])+_qi('最低',d['最低'])
+      + _qi('成交量',_fn(d['成交量'],'手'))+_qi('成交额',_fn(d['成交额'],'万'))
+      + _qi('换手率',_pct(d['换手率']))+_qi('振幅',_pct(d['振幅']))
+      + _qi('市盈率',d['市盈率'])+_qi('市净率',d['市净率'])
+      + _qi('总市值',d['总市值']!=null?d['总市值']+'亿':'-')
+      + _qi('流通市值',d['流通市值']!=null?d['流通市值']+'亿':'-')
+      + '</div>';
+  } catch (e) { body.innerHTML = '<div class="empty-state">请求失败</div>'; }
+}
+function _qi(l,v){return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span style="color:var(--ink-3);font-size:12px;">${l}</span><span style="font-size:13px;font-family:var(--mono);">${v??'-'}</span></div>`;}
+function _fn(n,u){if(n==null)return'-';const v=parseFloat(n);if(isNaN(v))return String(n);const s=u||'';if(v>=1e8)return(v/1e8).toFixed(2)+'亿'+s;if(v>=1e4)return(v/1e4).toFixed(2)+'万'+s;return v.toLocaleString()+s;}
+function _pct(v){return v!=null?v+'%':'-';}
+
+/* --- K线图 --- */
+async function loadKline(period) {
+  if (!_stockCode) return;
+  const container = document.getElementById('klineChart');
+  try {
+    const json = await (await fetch(`/api/stock/kline/${_stockCode}?period=${period}&count=365`)).json();
+    if (!json.success || !json.data?.length) { container.innerHTML = '<div class="empty-state" style="padding:40px;">暂无K线数据</div>'; return; }
+
+    // 清空旧图
+    container.innerHTML = '';
+    _klineChart = LightweightCharts.createChart(container, {
+      width: container.clientWidth, height: 360,
+      layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
+      grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+      crosshair: { mode: 0 },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { borderVisible: false, timeVisible: false },
+    });
+
+    _klineSeries = _klineChart.addCandlestickSeries({
+      upColor: '#ef4444', downColor: '#22c55e',
+      borderUpColor: '#ef4444', borderDownColor: '#22c55e',
+      wickUpColor: '#ef4444', wickDownColor: '#22c55e',
+    });
+    _klineSeries.setData(json.data.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
+
+    _klineVolSeries = _klineChart.addHistogramSeries({
+      priceFormat: { type: 'volume' },
+      priceScaleId: 'vol',
+    });
+    _klineChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+    _klineVolSeries.setData(json.data.map(k => ({ time: k.date, value: k.volume, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
+
+    const ts = _klineChart.timeScale();
+    ts.fitContent();
+    // 仅锁定右边界，左侧可自由滑动查看历史
+    ts.applyOptions({
+      rightOffset: 5,
+      minBarSpacing: 2,
+      fixRightEdge: true,
+    });
+
+    // 响应式
+    new ResizeObserver(() => { if (_klineChart) _klineChart.applyOptions({ width: container.clientWidth }); }).observe(container);
+  } catch (e) { container.innerHTML = '<div class="empty-state" style="padding:40px;">K线加载失败</div>'; }
+}
+
+function switchKlinePeriod(period, btn) {
+  document.querySelectorAll('#klinePeriodBtns .btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadKline(period);
+}
+
+/* --- 公司简介 --- */
+async function loadProfile() {
+  const el = document.getElementById('stockProfileBody');
+  el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
+  try {
+    const json = await (await fetch('/api/stock/profile/' + _stockCode)).json();
+    if (!json.success) { el.innerHTML = '<div class="empty-state">' + (json.error||'加载失败') + '</div>'; return; }
+    const d = json.data;
+    const rows = [
+      ['公司名称', d['公司名称']], ['所属行业', d['所属行业']], ['上市日期', d['上市日期']],
+      ['法人代表', d['法人代表']], ['注册资金', d['注册资金']], ['官方网站', d['官方网站']],
+    ].filter(r => r[1]);
+    el.innerHTML = '<div style="font-size:13px;">'
+      + rows.map(r => _qi(r[0], r[1])).join('')
+      + (d['主营业务'] ? `<div style="margin-top:10px;"><div style="color:var(--ink-3);font-size:12px;margin-bottom:4px;">主营业务</div><div style="font-size:12px;line-height:1.6;color:var(--ink-2);">${d['主营业务']}</div></div>` : '')
+      + '</div>';
+  } catch (e) { el.innerHTML = '<div class="empty-state">加载失败</div>'; }
+}
+
+/* --- 财务指标 --- */
+async function loadFinancial() {
+  const el = document.getElementById('stockFinancialBody');
+  el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
+  try {
+    const [json, rulesJson] = await Promise.all([
+      fetch('/api/stock/financial/' + _stockCode).then(r => r.json()),
+      fetch('/api/stock/financial-rules').then(r => r.json()),
+    ]);
+    if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">' + (json.error||'暂无数据') + '</div>'; return; }
+    const cols = ['报告期','营业总收入','净利润','净利润同比增长率','基本每股收益','销售毛利率','净资产收益率','资产负债率'];
+    const showCols = cols.filter(c => json.data[0][c] !== undefined);
+    const shortLabel = {'营业总收入':'营收','净利润同比增长率':'净利润增速','基本每股收益':'EPS','净资产收益率':'ROE','销售毛利率':'毛利率','资产负债率':'负债率'};
+
+    /* ── 从 financial_rules.json 构建规则索引 ── */
+    const colorMap = { red:'rgba(239,68,68,0.10)', green:'rgba(34,197,94,0.10)', orange:'rgba(245,158,11,0.10)' };
+    const rulesByField = {};
+    (rulesJson.rules || []).forEach(g => { rulesByField[g.field] = g.rules; });
+
+    function checkRule(col, raw) {
+      const v = parseFloat(raw);
+      if (isNaN(v)) return null;
+      const fieldRules = rulesByField[col];
+      if (!fieldRules) return null;
+      for (const r of fieldRules) {
+        let hit = false;
+        if (r.op === '>'  && v > r.value) hit = true;
+        if (r.op === '<'  && v < r.value) hit = true;
+        if (r.op === 'abs>' && Math.abs(v) > r.value) hit = true;
+        if (hit) return { bg: colorMap[r.color] || colorMap.orange, icon: r.icon || '●', tip: r.tip || '' };
+      }
+      return null;
+    }
+
+    el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
+      + '<thead><tr style="border-bottom:1px solid var(--border);color:var(--ink-3);">'
+      + showCols.map(c => `<th style="padding:5px 6px;text-align:right;font-weight:500;">${shortLabel[c]||c}</th>`).join('') + '</tr></thead>'
+      + '<tbody>' + json.data.map(r => '<tr style="border-bottom:1px solid var(--border);">'
+        + showCols.map(c => {
+          if (c === '报告期') return `<td style="padding:5px 6px;text-align:right;font-family:var(--mono);">${r[c]??'-'}</td>`;
+          const a = checkRule(c, r[c]);
+          const bg = a ? `background:${a.bg};` : '';
+          const icon = a ? ` <span title="${a.tip}" style="cursor:help;">${a.icon}</span>` : '';
+          return `<td style="padding:5px 6px;text-align:right;font-family:var(--mono);${bg}">${r[c]??'-'}${icon}</td>`;
+        }).join('') + '</tr>'
+      ).join('') + '</tbody></table>';
+  } catch (e) { el.innerHTML = '<div class="empty-state">加载失败</div>'; }
+}
+
+/* --- 资金流向 --- */
+async function loadMoneyFlow() {
+  const el = document.getElementById('stockFlowBody');
+  el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
+  try {
+    const json = await (await fetch('/api/stock/flow/' + _stockCode)).json();
+    if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">' + (json.error||'暂无数据') + '</div>'; return; }
+    const cols = ['日期','收盘价','涨跌幅','主力净流入-净额','主力净流入-净占比'];
+    const label = {'主力净流入-净额':'主力净额','主力净流入-净占比':'主力占比'};
+    const colorCols = new Set(['涨跌幅','主力净流入-净额','主力净流入-净占比']);
+    el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
+      + '<thead><tr style="border-bottom:1px solid var(--border);color:var(--ink-3);">'
+      + cols.map(c => `<th style="padding:5px 6px;text-align:right;font-weight:500;">${label[c]||c}</th>`).join('') + '</tr></thead>'
+      + '<tbody>' + json.data.slice(0,10).map(r => '<tr style="border-bottom:1px solid var(--border);">'
+        + cols.map(c => {
+          let v = r[c] ?? '-';
+          let style = 'padding:5px 6px;text-align:right;font-family:var(--mono);';
+          if (colorCols.has(c) && v != null && v !== '-') {
+            const neg = String(v).startsWith('-');
+            style += neg ? 'color:var(--green);' : 'color:var(--red);';
+            if (c === '涨跌幅') v = v + '%';
+            if (c === '主力净流入-净占比') v = v + '%';
+          }
+          return `<td style="${style}">${v}</td>`;
+        }).join('') + '</tr>'
+      ).join('') + '</tbody></table>';
+  } catch (e) { el.innerHTML = '<div class="empty-state">加载失败</div>'; }
+}
+
+/* --- 十大流通股东 --- */
+async function loadShareholders() {
+  const el = document.getElementById('stockHoldersBody');
+  el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
+  try {
+    const json = await (await fetch('/api/stock/shareholders/' + _stockCode)).json();
+    if (!json.success) { el.innerHTML = '<div class="empty-state">' + (json.error||'暂无数据') + '</div>'; return; }
+    const d = json.data;
+    el.innerHTML = `<div style="font-size:11px;color:var(--ink-3);margin-bottom:8px;">截止日期: ${d.date}</div>`
+      + '<table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
+      + '<thead><tr style="border-bottom:1px solid var(--border);color:var(--ink-3);">'
+      + '<th style="padding:5px 4px;text-align:left;font-weight:500;">#</th>'
+      + '<th style="padding:5px 4px;text-align:left;font-weight:500;">股东名称</th>'
+      + '<th style="padding:5px 4px;text-align:right;font-weight:500;">持股数</th>'
+      + '<th style="padding:5px 4px;text-align:right;font-weight:500;">占比%</th>'
+      + '<th style="padding:5px 4px;text-align:right;font-weight:500;">性质</th></tr></thead>'
+      + '<tbody>' + d.holders.map(h => '<tr style="border-bottom:1px solid var(--border);">'
+        + `<td style="padding:5px 4px;color:var(--ink-3);">${h.rank}</td>`
+        + `<td style="padding:5px 4px;">${h.name}</td>`
+        + `<td style="padding:5px 4px;text-align:right;font-family:var(--mono);">${_fn(h.shares,'')}</td>`
+        + `<td style="padding:5px 4px;text-align:right;font-family:var(--mono);">${h.ratio ?? '-'}</td>`
+        + `<td style="padding:5px 4px;text-align:right;color:var(--ink-3);">${h.type ?? '-'}</td></tr>`
+      ).join('') + '</tbody></table>';
+  } catch (e) { el.innerHTML = '<div class="empty-state">加载失败</div>'; }
+}
+
+/* --- 个股新闻 --- */
+async function loadStockNews() {
+  const el = document.getElementById('stockNewsBody');
+  el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
+  try {
+    const json = await (await fetch('/api/stock/news/' + _stockCode)).json();
+    if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">暂无新闻</div>'; return; }
+    el.innerHTML = json.data.map(n =>
+      `<div style="padding:10px 0;border-bottom:1px solid var(--border);">`
+      + `<a href="${n.url||'#'}" target="_blank" style="font-size:13px;font-weight:500;color:var(--ink-1);text-decoration:none;line-height:1.5;">${n.title||'无标题'}</a>`
+      + `<div style="display:flex;gap:8px;margin-top:4px;font-size:11px;color:var(--ink-3);">`
+      + `<span>${n.source||''}</span><span>${n.time||''}</span></div>`
+      + (n.summary ? `<div style="font-size:12px;color:var(--ink-3);margin-top:4px;line-height:1.5;">${n.summary}</div>` : '')
+      + `</div>`
+    ).join('');
+  } catch (e) { el.innerHTML = '<div class="empty-state">加载失败</div>'; }
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+loadConfig();
+loadBloggers();
+
+/* ============================================================
+   WENCAI
+   ============================================================ */
+let _wencaiTab = 'query';
+
+function switchWencaiTab(tab) {
+  _wencaiTab = tab;
+  ['query', 'sectors', 'visits'].forEach(t => {
+    const panel = document.getElementById('wencai-panel-' + t);
+    if (panel) panel.classList.toggle('active', t === tab);
+    const btn = document.getElementById('wencaiTab' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (btn) btn.classList.toggle('active', t === tab);
+  });
+  // 自动加载数据，用户无需手动操作
+  if (tab === 'sectors' && !_sectorsLoaded) {
+    loadSectorHeatmap();
+  }
+  if (tab === 'visits' && !_visitsLoaded) {
+    wencaiVisitsSearch();  // 默认查询：近一月机构调研
+  }
+}
+let _sectorsLoaded = false;
+let _visitsLoaded = false;
+
+async function wencaiSearch() {
+  const query = document.getElementById('wencaiQueryInput').value.trim();
+  if (!query) { showToast('请输入选股条件', 'warning'); return; }
+  await _doWencaiQuery(query);
+}
+
+function wencaiQuick(q) {
+  document.getElementById('wencaiQueryInput').value = q;
+  wencaiSearch();
+}
+
+function wencaiStructuredSearch() {
+  const parts = [];
+  const industry = document.getElementById('wencaiIndustry').value;
+  const maxPE = document.getElementById('wencaiMaxPE').value;
+  const minMC = document.getElementById('wencaiMinMC').value;
+  const minChange = document.getElementById('wencaiMinChange').value;
+  if (industry) parts.push(industry + '行业');
+  if (maxPE) parts.push('市盈率小于' + maxPE);
+  if (minMC) parts.push('市值大于' + minMC + '亿');
+  if (minChange) parts.push('涨跌幅大于' + minChange + '%');
+  if (!parts.length) { showToast('请至少设置一个筛选条件', 'warning'); return; }
+  _doWencaiQuery(parts.join('，'));
+}
+
+async function _doWencaiQuery(query) {
+  const card = document.getElementById('wencaiResultCard');
+  const body = document.getElementById('wencaiResultBody');
+  const title = document.getElementById('wencaiResultTitle');
+  if (!card || !body) return;
+  card.style.display = '';
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 查询中...</div>';
+  title.textContent = '查询: ' + query;
+  try {
+    const resp = await fetch('/api/iwencai/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: query, perpage: 50 }),
+    });
+    const json = await resp.json();
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '查询失败') + '</div>'; return; }
+    if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到匹配的股票</div>'; return; }
+    title.textContent = '查询: ' + query + '（共 ' + json.total + ' 条）';
+    _renderWencaiTable(body, json.data);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>';
+  }
+}
+
+function _renderWencaiTable(container, rows) {
+  if (!rows.length) return;
+  const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  // 清理列名：去掉 iwencai 字段尾部的 [YYYYMMDD-YYYYMMDD] 时间区间
+  const cleanHeader = (c) => String(c).replace(/\s*\[\d{6,8}[-~]\d{6,8}\]\s*$/, '').trim();
+  // 默认隐藏的低价值列（按清洗后的列名匹配）
+  const hideCol = (name) => /^机构调研公告日期$|^机构调研序号$|^机构调研时间排名$/.test(name);
+  // 长文本列：内容易超长，允许换行
+  const wrapCol = (name) => /地点|地址|接待人员|主要内容|调研内容|参与机构|机构名称|备注|说明|摘要/.test(name);
+  const isDateCol = (name) => /日期|时间(?!排名)/.test(name);
+  // iwencai 经常以字符串形式返回数字，需要识别
+  const asNumber = (v) => {
+    if (v == null || v === '') return null;
+    if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+    const s = String(v).trim();
+    if (!/^-?\d+(\.\d+)?$/.test(s)) return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+  };
+  const fmtDate = (v) => {
+    const s = String(v);
+    if (/^\d{8}$/.test(s)) return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
+    return s;
+  };
+  const fmtNumber = (n, name) => {
+    if (/涨跌幅|增长率|收益率|换手率/.test(name)) return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+    if (Number.isInteger(n)) return String(n);
+    return n.toFixed(2);
+  };
+  const renderVisitBadge = (n) => {
+    let cls = '';
+    if (n >= 10) cls = ' hot';
+    else if (n >= 5) cls = ' warm';
+    return '<span class="visit-badge' + cls + '">' + n + '</span>';
+  };
+  const renderTypeTags = (s) => {
+    return String(s).split(/[,，;；、]/).map(t => t.trim()).filter(Boolean)
+      .map((t, i) => '<span class="tag-chip' + (i % 2 ? ' alt' : '') + '">' + escapeHtml(t) + '</span>').join('');
+  };
+
+  // 构建可见列列表（保留原始 key 用于取值，cleanHeader 用于显示）
+  const allKeys = Object.keys(rows[0]);
+  const cols = allKeys
+    .filter(k => k !== 'market_code' && k !== 'code')
+    .map(k => ({ key: k, name: cleanHeader(k) }))
+    .filter(c => !hideCol(c.name));
+
+  let html = '<table class="data-table"><thead><tr>';
+  cols.forEach(c => {
+    const wrapCls = wrapCol(c.name) ? ' class="wrap"' : '';
+    html += '<th' + wrapCls + '>' + escapeHtml(c.name) + '</th>';
+  });
+  html += '</tr></thead><tbody>';
+
+  rows.forEach(row => {
+    html += '<tr>';
+    cols.forEach(c => {
+      const v = row[c.key];
+      const name = c.name;
+      const classes = [];
+      let cell;
+
+      if (v == null || v === '' || v === 'nan') {
+        cell = '-';
+      } else if (name === '股票代码') {
+        cell = '<span class="code-link">' + escapeHtml(v) + '</span>';
+      } else if (name === '股票简称') {
+        cell = '<span class="name-strong">' + escapeHtml(v) + '</span>';
+      } else if (name === '调研机构家数') {
+        const n = asNumber(v);
+        cell = n != null ? renderVisitBadge(n) : escapeHtml(v);
+      } else if (name === '机构调研类型') {
+        cell = renderTypeTags(v);
+      } else {
+        const n = asNumber(v);
+        if (n != null && !isDateCol(name)) {
+          cell = fmtNumber(n, name);
+          classes.push('num');
+          if (/涨跌幅|增长率/.test(name)) classes.push(n >= 0 ? 'up' : 'down');
+        } else if (isDateCol(name)) {
+          cell = fmtDate(v);
+        } else {
+          cell = escapeHtml(v);
+        }
+      }
+      if (wrapCol(name)) classes.push('wrap');
+      const clsAttr = classes.length ? ' class="' + classes.join(' ') + '"' : '';
+      html += '<td' + clsAttr + '>' + cell + '</td>';
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+async function loadSectorHeatmap() {
+  const body = document.getElementById('sectorHeatmapBody');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
+  try {
+    const resp = await fetch('/api/iwencai/sectors');
+    const json = await resp.json();
+    if (!json.success || !json.data?.length) {
+      body.innerHTML = '<div class="empty-state">暂无数据</div>'; return;
+    }
+    _sectorsLoaded = true;
+    _renderIndustryGrid(body, json.data);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
+  }
+}
+
+function _renderIndustryGrid(container, industries) {
+  let html = '<div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px;">';
+  industries.forEach(ind => {
+    const name = ind.name || ind;
+    html += '<div class="heatmap-item" style="background:#F8F8FA;border:1px solid var(--border);color:var(--ink);cursor:pointer;padding:10px 14px;border-radius:var(--r-xs);font-size:13px;font-weight:500;transition:all var(--t) var(--ease);"'
+      + ' onclick="loadSectorStocks(\'' + String(name).replace(/'/g, "\\'") + '\')"'
+      + ' onmouseenter="this.style.borderColor=\'var(--blue)\';this.style.background=\'var(--blue-s)\'"'
+      + ' onmouseleave="this.style.borderColor=\'var(--border)\';this.style.background=\'#F8F8FA\'"'
+      + ' title="点击查看 ' + name + ' 成分股">'
+      + name
+      + '</div>';
+  });
+  html += '</div>';
+  html += '<div style="font-size:11px;color:var(--ink-3);margin-top:8px;text-align:center;">点击任意行业查看成分股</div>';
+  container.innerHTML = html;
+}
+
+async function loadSectorStocks(name) {
+  if (!name) {
+    name = document.getElementById('sectorNameInput').value.trim();
+  } else {
+    document.getElementById('sectorNameInput').value = name;
+  }
+  if (!name) { showToast('请输入概念名称', 'warning'); return; }
+  switchWencaiTab('sectors');
+  const card = document.getElementById('sectorResultCard');
+  const body = document.getElementById('sectorResultBody');
+  const title = document.getElementById('sectorResultTitle');
+  if (!card || !body || !title) return;
+  card.style.display = '';
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
+  title.textContent = '「' + name + '」成分股';
+  try {
+    const resp = await fetch('/api/iwencai/sector/' + encodeURIComponent(name));
+    const json = await resp.json();
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '查询失败') + '</div>'; return; }
+    if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到成分股</div>'; return; }
+    title.textContent = '「' + name + '」成分股（共 ' + json.total + ' 条）';
+    _renderWencaiTable(body, json.data);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>';
+  }
+}
+
+async function wencaiVisitsSearch() {
+  const query = document.getElementById('visitsQueryInput').value.trim();
+  const card = document.getElementById('visitsResultCard');
+  const body = document.getElementById('visitsResultBody');
+  if (!card || !body) return;
+  card.style.display = '';
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 扫描中...</div>';
+  try {
+    const resp = await fetch('/api/iwencai/visits/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: query, perpage: 50 }),
+    });
+    const json = await resp.json();
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '查询失败') + '</div>'; return; }
+    if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到符合条件的调研记录</div>'; return; }
+    _visitsLoaded = true;
+    _renderWencaiTable(body, json.data);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>';
+  }
+}
+
+function wencaiVisitsQuick(q) {
+  document.getElementById('visitsQueryInput').value = q;
+  wencaiVisitsSearch();
+}
+
+async function loadVisits() {
+  if (!_stockCode) return;
+  const el = document.getElementById('stockVisitsBody');
+  if (!el) return;
+  el.innerHTML = '<div class="empty-state">加载中...</div>';
+  try {
+    const resp = await fetch('/api/iwencai/visits/' + _stockCode);
+    const json = await resp.json();
+    if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">暂无机构调研记录</div>'; return; }
+    _renderWencaiTable(el, json.data);
+  } catch (e) { el.innerHTML = '<div class="empty-state">加载失败</div>'; }
+}
+</script>
+</body>
+</html>

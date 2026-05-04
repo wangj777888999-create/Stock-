@@ -1,0 +1,45 @@
+{
+  "_说明": "财务指标异常高亮规则。field 对应后端返回的字段名，rules 按顺序匹配（命中第一条即停止）。op: >, <, abs>（绝对值大于）。color: red=风险/异常, green=优秀/正向, orange=警示。",
+  "rules": [
+    {
+      "field": "净利润同比增长率",
+      "rules": [
+        { "op": ">",  "value": 100, "icon": "▲", "color": "red",    "tip": "增速异常偏高，注意基数效应" },
+        { "op": "<",  "value": -30, "icon": "▼", "color": "green",  "tip": "增速大幅下滑" }
+      ]
+    },
+    {
+      "field": "资产负债率",
+      "rules": [
+        { "op": ">", "value": 70, "icon": "▲", "color": "red",    "tip": "负债率偏高，存在偿债压力" },
+        { "op": ">", "value": 60, "icon": "△", "color": "orange", "tip": "负债率较高" }
+      ]
+    },
+    {
+      "field": "净资产收益率",
+      "rules": [
+        { "op": ">", "value": 25, "icon": "★", "color": "green", "tip": "ROE 优秀" },
+        { "op": "<", "value": 5,  "icon": "▽", "color": "red",   "tip": "ROE 偏低" }
+      ]
+    },
+    {
+      "field": "销售毛利率",
+      "rules": [
+        { "op": ">", "value": 60, "icon": "★", "color": "green", "tip": "高毛利" },
+        { "op": "<", "value": 10, "icon": "▽", "color": "red",   "tip": "毛利率偏低" }
+      ]
+    },
+    {
+      "field": "基本每股收益",
+      "rules": [
+        { "op": "<", "value": 0, "icon": "▼", "color": "red", "tip": "EPS 为负，处于亏损" }
+      ]
+    },
+    {
+      "field": "净利润",
+      "rules": [
+        { "op": "<", "value": 0, "icon": "▼", "color": "red", "tip": "净利润为负" }
+      ]
+    }
+  ]
+}
