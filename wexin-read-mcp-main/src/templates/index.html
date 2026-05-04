@@ -369,6 +369,12 @@ textarea.form-input {
   border: 1px solid var(--border-2);
 }
 .btn-ghost:hover { background: var(--bg); color: var(--ink); border-color: var(--border-2); }
+.market-tab-btn.active {
+  background: var(--blue-s);
+  color: var(--blue);
+  border-color: var(--blue);
+  font-weight: 600;
+}
 .btn-sm { padding: 6px 13px; font-size: 12.5px; border-radius: var(--r-xs); }
 .btn-icon {
   padding: 8px;
@@ -1602,35 +1608,38 @@ textarea.form-input {
 
         <!-- Tab 2: 板块扫描 -->
         <div id="wencai-panel-sectors" class="wencai-panel">
-          <div class="card" id="sectorListCard">
-            <div class="card-header">
-              <div class="card-title">行业板块</div>
-              <button class="btn btn-ghost btn-sm" onclick="loadSectorHeatmap()">刷新</button>
-            </div>
-            <div class="card-body" id="sectorHeatmapBody">
-              <div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>
-            </div>
-          </div>
+          <!-- Market switcher bar -->
+          <div id="marketSwitcherBar" style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;"></div>
 
-          <div class="card" style="margin-top:16px;">
-            <div class="card-header">
-              <div class="card-title">成分股查询</div>
-            </div>
-            <div class="card-body">
+          <!-- Search bar -->
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-body" style="padding:12px;">
               <div style="display:flex;gap:8px;">
-                <input id="sectorNameInput" class="input" placeholder="输入行业或概念名称，如 半导体、人工智能" style="flex:1;"
-                       onkeydown="if(event.key==='Enter')loadSectorStocks()">
-                <button class="btn btn-primary" onclick="loadSectorStocks()">查询</button>
+                <input id="marketSearchInput" class="input" placeholder="输入代码或名称搜索" style="flex:1;"
+                       onkeydown="if(event.key==='Enter')marketSearch()">
+                <button class="btn btn-primary" onclick="marketSearch()">搜索</button>
               </div>
             </div>
           </div>
 
-          <div class="card" id="sectorResultCard" style="display:none;">
+          <!-- Board grid / spot list -->
+          <div class="card" id="marketContentCard">
             <div class="card-header">
-              <div class="card-title" id="sectorResultTitle">成分股</div>
+              <div class="card-title" id="marketContentTitle">板块</div>
+              <button class="btn btn-ghost btn-sm" onclick="loadMarketBoards()">刷新</button>
+            </div>
+            <div class="card-body" id="marketContentBody">
+              <div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>
+            </div>
+          </div>
+
+          <!-- Board stocks result -->
+          <div class="card" id="marketResultCard" style="display:none;margin-top:16px;">
+            <div class="card-header">
+              <div class="card-title" id="marketResultTitle">成分股</div>
             </div>
             <div class="card-body" style="overflow-x:auto;padding:0;">
-              <div id="sectorResultBody" style="max-height:500px;overflow-y:auto;"></div>
+              <div id="marketResultBody" style="max-height:500px;overflow-y:auto;"></div>
             </div>
           </div>
         </div>
@@ -2860,7 +2869,9 @@ function switchWencaiTab(tab) {
   });
   // 自动加载数据，用户无需手动操作
   if (tab === 'sectors' && !_sectorsLoaded) {
-    loadSectorHeatmap();
+    initMarketSwitcher();
+    loadMarketBoards();
+    _sectorsLoaded = true;
   }
   if (tab === 'visits' && !_visitsLoaded) {
     wencaiVisitsSearch();  // 默认查询：近一月机构调研
@@ -3113,6 +3124,157 @@ async function loadVisits() {
     if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">暂无机构调研记录</div>'; return; }
     _renderWencaiTable(el, json.data);
   } catch (e) { el.innerHTML = '<div class="empty-state">加载失败</div>'; }
+}
+
+// --- Multi-Market Sector Scanner ---
+
+let _currentMarket = 'a_share';
+
+const MARKET_CONFIG = [
+  { name: 'a_share', label: 'A股' },
+  { name: 'fund', label: '基金' },
+  { name: 'us_stock', label: '美股' },
+  { name: 'hk_stock', label: '港股' },
+  { name: 'global_index', label: '全球指数' },
+  { name: 'crypto', label: '币圈' },
+];
+
+function initMarketSwitcher() {
+  const bar = document.getElementById('marketSwitcherBar');
+  if (!bar) return;
+  let html = '';
+  MARKET_CONFIG.forEach(m => {
+    const active = m.name === _currentMarket ? 'active' : '';
+    html += '<button class="btn btn-ghost btn-sm market-tab-btn ' + active + '" data-market="' + m.name + '"'
+      + ' onclick="switchMarket(\'' + m.name + '\')">'
+      + m.label + '</button>';
+  });
+  bar.innerHTML = html;
+}
+
+function switchMarket(market) {
+  _currentMarket = market;
+  // Update button states
+  document.querySelectorAll('.market-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.market === market);
+  });
+  // Hide result card
+  const resultCard = document.getElementById('marketResultCard');
+  if (resultCard) resultCard.style.display = 'none';
+  // Update search placeholder
+  const input = document.getElementById('marketSearchInput');
+  if (input) {
+    const config = MARKET_CONFIG.find(m => m.name === market);
+    input.placeholder = '搜索' + (config ? config.label : '') + '（代码或名称）';
+  }
+  loadMarketBoards();
+}
+
+async function loadMarketBoards() {
+  const body = document.getElementById('marketContentBody');
+  const title = document.getElementById('marketContentTitle');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
+
+  try {
+    const resp = await fetch('/api/market/' + _currentMarket + '/boards');
+    const json = await resp.json();
+    if (!json.success) {
+      body.innerHTML = '<div class="empty-state">' + (json.error || '加载失败') + '</div>';
+      return;
+    }
+    if (!json.data?.length) {
+      // No boards — try spot
+      loadMarketSpot();
+      return;
+    }
+    if (title) title.textContent = MARKET_CONFIG.find(m => m.name === _currentMarket)?.label || '板块';
+    _renderMarketGrid(body, json.data);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
+  }
+}
+
+async function loadMarketSpot() {
+  const body = document.getElementById('marketContentBody');
+  const title = document.getElementById('marketContentTitle');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
+
+  try {
+    const resp = await fetch('/api/market/' + _currentMarket + '/spot');
+    const json = await resp.json();
+    if (!json.success || !json.data?.length) {
+      body.innerHTML = '<div class="empty-state">暂无数据</div>';
+      return;
+    }
+    if (title) title.textContent = MARKET_CONFIG.find(m => m.name === _currentMarket)?.label || '行情';
+    _renderWencaiTable(body, json.data);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
+  }
+}
+
+function _renderMarketGrid(container, items) {
+  let html = '<div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px;">';
+  items.forEach(item => {
+    const name = item.name || item;
+    const label = name + (item.count ? ' (' + item.count + ')' : '');
+    html += '<div style="background:#F8F8FA;border:1px solid var(--border);color:var(--ink);cursor:pointer;padding:10px 14px;border-radius:var(--r-xs);font-size:13px;font-weight:500;transition:all var(--t) var(--ease);"'
+      + ' onclick="loadMarketBoardStocks(\'' + String(name).replace(/'/g, "\\'") + '\')"'
+      + ' onmouseenter="this.style.borderColor=\'var(--blue)\';this.style.background=\'var(--blue-s)\'"'
+      + ' onmouseleave="this.style.borderColor=\'var(--border)\';this.style.background=\'#F8F8FA\'"'
+      + ' title="点击查看 ' + name + '">'
+      + label
+      + '</div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+async function loadMarketBoardStocks(name) {
+  const card = document.getElementById('marketResultCard');
+  const body = document.getElementById('marketResultBody');
+  const title = document.getElementById('marketResultTitle');
+  if (!card || !body || !title) return;
+  card.style.display = '';
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
+  title.textContent = '「' + name + '」';
+
+  try {
+    const resp = await fetch('/api/market/' + _currentMarket + '/board/' + encodeURIComponent(name));
+    const json = await resp.json();
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '查询失败') + '</div>'; return; }
+    if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到数据</div>'; return; }
+    title.textContent = '「' + name + '」（共 ' + (json.total || json.data.length) + ' 条）';
+    _renderWencaiTable(body, json.data);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>';
+  }
+}
+
+async function marketSearch() {
+  const input = document.getElementById('marketSearchInput');
+  const keyword = input ? input.value.trim() : '';
+  if (!keyword) { showToast('请输入搜索关键词', 'warning'); return; }
+
+  const body = document.getElementById('marketContentBody');
+  const title = document.getElementById('marketContentTitle');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 搜索中...</div>';
+  if (title) title.textContent = '搜索: ' + keyword;
+
+  try {
+    const resp = await fetch('/api/market/' + _currentMarket + '/search?q=' + encodeURIComponent(keyword));
+    const json = await resp.json();
+    if (!json.success || !json.data?.length) {
+      body.innerHTML = '<div class="empty-state">未找到结果</div>';
+      return;
+    }
+    _renderWencaiTable(body, json.data);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">搜索失败: ' + e.message + '</div>';
+  }
 }
 </script>
 </body>
