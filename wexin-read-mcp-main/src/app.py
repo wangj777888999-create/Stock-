@@ -1,11 +1,16 @@
 """FastAPI Web应用 - 股票博主文章收集分析平台"""
 
 import asyncio
+import sys
 import base64
 import logging
 import json
 import re
 from pathlib import Path
+
+# Windows 上 Playwright 需要 ProactorEventLoop 来创建子进程
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -20,6 +25,7 @@ from emailer import EmailSender
 from blogger import BloggerManager
 from stock_service import StockService
 from iwencai_service import IWencaiService
+from market import get_provider, list_providers
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -252,6 +258,50 @@ async def api_iwencai_visits_search(req: dict):
     query = req.get("query", "")
     perpage = req.get("perpage", 50)
     return await wencai_service.get_visits_search(query, perpage=perpage)
+
+
+# ---------- 多市场板块路由 ----------
+
+@app.get("/api/market/markets")
+async def api_market_list():
+    """返回可用市场列表"""
+    return {"success": True, "data": list_providers()}
+
+
+@app.get("/api/market/{market}/boards")
+async def api_market_boards(market: str):
+    """板块列表"""
+    provider = get_provider(market)
+    if not provider:
+        return {"success": False, "error": f"未知市场: {market}"}
+    return await provider.get_boards()
+
+
+@app.get("/api/market/{market}/board/{name}")
+async def api_market_board_stocks(market: str, name: str):
+    """板块成分股"""
+    provider = get_provider(market)
+    if not provider:
+        return {"success": False, "error": f"未知市场: {market}"}
+    return await provider.get_board_stocks(name)
+
+
+@app.get("/api/market/{market}/spot")
+async def api_market_spot(market: str):
+    """实时行情"""
+    provider = get_provider(market)
+    if not provider:
+        return {"success": False, "error": f"未知市场: {market}"}
+    return await provider.get_spot()
+
+
+@app.get("/api/market/{market}/search")
+async def api_market_search(market: str, q: str = ""):
+    """搜索"""
+    provider = get_provider(market)
+    if not provider:
+        return {"success": False, "error": f"未知市场: {market}"}
+    return await provider.search(q)
 
 
 _RULES_PATH = Path(__file__).parent / "financial_rules.json"
@@ -916,4 +966,4 @@ async def websocket_task(ws: WebSocket):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=8000)
