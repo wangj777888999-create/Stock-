@@ -1,9 +1,9 @@
 """
-股票数据服务层 — A 股搜索、行情、详情、K线。
+股票数据服务层 — A 股/美股/港股搜索、行情、详情、K线。
 
 数据源：
-- 搜索: AKShare stock_info_a_code_name（静态代码表）
-- 行情: 腾讯股票 API（qt.gtimg.cn）
+- 搜索: A 股用 AKShare stock_info_a_code_name；美股/港股用精选静态列表
+- 行情: 腾讯股票 API（qt.gtimg.cn），支持 A 股/美股/港股
 - K线: 腾讯前复权日线 API（web.ifzq.gtimg.cn）
 - 公司简介: AKShare stock_profile_cninfo（巨潮资讯）
 - 财务指标: AKShare stock_financial_abstract_ths（同花顺）
