@@ -25,7 +25,7 @@ from emailer import EmailSender
 from blogger import BloggerManager
 from stock_service import StockService
 from iwencai_service import IWencaiService
-from market import get_provider, list_providers
+from market import get_provider
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -261,12 +261,6 @@ async def api_iwencai_visits_search(req: dict):
 
 
 # ---------- 多市场板块路由 ----------
-
-@app.get("/api/market/markets")
-async def api_market_list():
-    """返回可用市场列表"""
-    return {"success": True, "data": list_providers()}
-
 
 @app.get("/api/market/{market}/boards")
 async def api_market_boards(market: str):
@@ -963,6 +957,23 @@ async def websocket_task(ws: WebSocket):
 
 
 # ---------- 启动 ----------
+
+@app.on_event("startup")
+async def _startup():
+    """启动时预加载数据。"""
+    asyncio.create_task(StockService.preload_stock_list())
+
+    async def _preload_fund():
+        """后台预加载基金 ETF 数据。"""
+        try:
+            from market.fund import _get_etf_df
+            await _get_etf_df()
+            logger.info("基金 ETF 数据预加载完成")
+        except Exception as e:
+            logger.warning(f"基金数据预加载失败（首次访问时重试）: {e}")
+
+    asyncio.create_task(_preload_fund())
+
 
 if __name__ == "__main__":
     import uvicorn
