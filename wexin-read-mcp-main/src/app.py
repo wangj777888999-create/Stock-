@@ -216,6 +216,11 @@ async def api_stock_news(symbol: str):
     return await stock_service.get_news(symbol)
 
 
+@app.get("/api/stock/announcements/{symbol}")
+async def api_stock_announcements(symbol: str):
+    return await stock_service.get_announcements(symbol)
+
+
 @app.get("/api/stock/shareholders/{symbol}")
 async def api_stock_shareholders(symbol: str):
     return await stock_service.get_shareholders(symbol)

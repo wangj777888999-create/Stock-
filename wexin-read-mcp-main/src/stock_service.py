@@ -785,6 +785,44 @@ class StockService:
             logger.error(f"获取新闻失败 {symbol}: {e}")
             return {"success": False, "error": f"获取新闻失败: {e}"}
 
+    # ─── 7b. 巨潮资讯公告 ───
+
+    async def get_announcements(self, symbol: str) -> dict:
+        """获取巨潮资讯公告列表（含PDF链接）。仅 A 股。"""
+        market = detect_market(symbol)
+        if market != "a":
+            return {"success": False, "error": "该市场暂不支持公告数据"}
+        symbol = normalize_symbol(symbol)
+        cache_key = f"announcements:{symbol}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        try:
+            from datetime import datetime, timedelta
+            end_date = datetime.now().strftime("%Y%m%d")
+            start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
+            df = await asyncio.to_thread(
+                _patch_requests, ak.stock_zh_a_disclosure_report_cninfo,
+                symbol=symbol, start_date=start_date, end_date=end_date,
+            )
+            if df is None or df.empty:
+                return {"success": True, "data": []}
+
+            records = []
+            for _, row in df.head(30).iterrows():
+                title = _clean(row.iloc[2]) if len(row) > 2 else None
+                date = str(row.iloc[3])[:10] if len(row) > 3 else None
+                url = _clean(row.iloc[4]) if len(row) > 4 else None
+                if title:
+                    records.append({"title": title, "date": date, "url": url})
+            resp = {"success": True, "data": records}
+            cache.set(cache_key, resp, TTL_COMPANY)
+            return resp
+        except Exception as e:
+            logger.error(f"获取公告失败 {symbol}: {e}")
+            return {"success": False, "error": f"获取公告失败: {e}"}
+
     # ─── 8. 十大流通股东 ───
 
     async def get_shareholders(self, symbol: str) -> dict:
