@@ -27,6 +27,7 @@ from stock_utils import (
     TTL_DAILY,
     TTL_REALTIME,
     cache,
+    detect_market,
     get_exchange,
     get_market_name,
     normalize_symbol,
@@ -120,6 +121,175 @@ def _fmt_amount(v) -> str | None:
     return f"{sign}{a:.2f}"
 
 
+# ─── 美股精选列表（代码, 名称） ───
+_US_STOCKS = [
+    {"code": "AAPL", "name": "苹果 Apple"},
+    {"code": "MSFT", "name": "微软 Microsoft"},
+    {"code": "GOOGL", "name": "谷歌 Alphabet"},
+    {"code": "AMZN", "name": "亚马逊 Amazon"},
+    {"code": "NVDA", "name": "英伟达 NVIDIA"},
+    {"code": "META", "name": "Meta Platforms"},
+    {"code": "TSLA", "name": "特斯拉 Tesla"},
+    {"code": "AVGO", "name": "博通 Broadcom"},
+    {"code": "ORCL", "name": "甲骨文 Oracle"},
+    {"code": "CRM", "name": "赛富时 Salesforce"},
+    {"code": "AMD", "name": "AMD"},
+    {"code": "ADBE", "name": "Adobe"},
+    {"code": "INTC", "name": "英特尔 Intel"},
+    {"code": "CSCO", "name": "思科 Cisco"},
+    {"code": "IBM", "name": "IBM"},
+    {"code": "LLY", "name": "礼来 Eli Lilly"},
+    {"code": "UNH", "name": "联合健康 UnitedHealth"},
+    {"code": "JNJ", "name": "强生 Johnson & Johnson"},
+    {"code": "PFE", "name": "辉瑞 Pfizer"},
+    {"code": "ABBV", "name": "艾伯维 AbbVie"},
+    {"code": "MRK", "name": "默沙东 Merck"},
+    {"code": "ABT", "name": "雅培 Abbott"},
+    {"code": "JPM", "name": "摩根大通 JPMorgan Chase"},
+    {"code": "V", "name": "Visa"},
+    {"code": "MA", "name": "万事达 Mastercard"},
+    {"code": "BAC", "name": "美国银行 Bank of America"},
+    {"code": "WFC", "name": "富国银行 Wells Fargo"},
+    {"code": "GS", "name": "高盛 Goldman Sachs"},
+    {"code": "MS", "name": "摩根士丹利 Morgan Stanley"},
+    {"code": "WMT", "name": "沃尔玛 Walmart"},
+    {"code": "COST", "name": "好市多 Costco"},
+    {"code": "HD", "name": "家得宝 Home Depot"},
+    {"code": "MCD", "name": "麦当劳 McDonald's"},
+    {"code": "NKE", "name": "耐克 Nike"},
+    {"code": "SBUX", "name": "星巴克 Starbucks"},
+    {"code": "XOM", "name": "埃克森美孚 Exxon Mobil"},
+    {"code": "CVX", "name": "雪佛龙 Chevron"},
+    {"code": "NFLX", "name": "奈飞 Netflix"},
+    {"code": "DIS", "name": "迪士尼 Walt Disney"},
+    {"code": "PYPL", "name": "PayPal"},
+    {"code": "SQ", "name": "Block (Square)"},
+    {"code": "COIN", "name": "Coinbase"},
+    {"code": "UBER", "name": "Uber"},
+    {"code": "ABNB", "name": "Airbnb"},
+    {"code": "SPOT", "name": "Spotify"},
+    {"code": "SNAP", "name": "Snap"},
+    {"code": "PINS", "name": "Pinterest"},
+    {"code": "ZM", "name": "Zoom"},
+    {"code": "PLTR", "name": "Palantir"},
+    {"code": "SNOW", "name": "Snowflake"},
+    {"code": "CRWD", "name": "CrowdStrike"},
+    {"code": "PANW", "name": "Palo Alto Networks"},
+    {"code": "NOW", "name": "ServiceNow"},
+    {"code": "SHOP", "name": "Shopify"},
+    {"code": "SE", "name": "Sea Limited"},
+    {"code": "BABA", "name": "阿里巴巴 Alibaba"},
+    {"code": "JD", "name": "京东 JD.com"},
+    {"code": "PDD", "name": "拼多多 PDD Holdings"},
+    {"code": "NIO", "name": "蔚来 NIO"},
+    {"code": "XPEV", "name": "小鹏汽车 XPeng"},
+    {"code": "LI", "name": "理想汽车 Li Auto"},
+    {"code": "BRK.B", "name": "伯克希尔 Berkshire Hathaway"},
+    {"code": "C", "name": "花旗集团 Citigroup"},
+    {"code": "GE", "name": "通用电气 GE Aerospace"},
+    {"code": "CAT", "name": "卡特彼勒 Caterpillar"},
+    {"code": "BA", "name": "波音 Boeing"},
+    {"code": "LMT", "name": "洛克希德·马丁 Lockheed Martin"},
+    {"code": "RTX", "name": "RTX Corporation"},
+    {"code": "DE", "name": "迪尔 Deere & Company"},
+    {"code": "UPS", "name": "UPS"},
+    {"code": "FDX", "name": "联邦快递 FedEx"},
+    {"code": "T", "name": "AT&T"},
+    {"code": "VZ", "name": "Verizon"},
+    {"code": "KO", "name": "可口可乐 Coca-Cola"},
+    {"code": "PEP", "name": "百事可乐 PepsiCo"},
+    {"code": "PG", "name": "宝洁 Procter & Gamble"},
+    {"code": "CL", "name": "高露洁 Colgate-Palmolive"},
+    {"code": "TMO", "name": "赛默飞 Thermo Fisher"},
+    {"code": "DHR", "name": "丹纳赫 Danaher"},
+    {"code": "AMGN", "name": "安进 Amgen"},
+    {"code": "GILD", "name": "吉利德 Gilead Sciences"},
+    {"code": "BMY", "name": "百时美施贵宝 BMS"},
+    {"code": "CVS", "name": "CVS Health"},
+    {"code": "LOW", "name": "劳氏 Lowe's"},
+    {"code": "TGT", "name": "塔吉特 Target"},
+    {"code": "COP", "name": "康菲石油 ConocoPhillips"},
+    {"code": "SLB", "name": "斯伦贝谢 Schlumberger"},
+    {"code": "NEE", "name": "新纪元能源 NextEra Energy"},
+    {"code": "SO", "name": "南方公司 Southern Company"},
+    {"code": "DUK", "name": "杜克能源 Duke Energy"},
+    {"code": "PLD", "name": "普洛斯 Prologis"},
+    {"code": "AMT", "name": "美国塔 American Tower"},
+    {"code": "CCI", "name": "冠城国际 Crown Castle"},
+    {"code": "SPG", "name": "西蒙地产 Simon Property"},
+    {"code": "ISRG", "name": "直觉外科 Intuitive Surgical"},
+    {"code": "REGN", "name": "再生元 Regeneron"},
+    {"code": "VRTX", "name": "顶点制药 Vertex"},
+    {"code": "ZTS", "name": "硕腾 Zoetis"},
+    {"code": "SYK", "name": "史赛克 Stryker"},
+    {"code": "BSX", "name": "波士顿科学 Boston Scientific"},
+    {"code": "MDT", "name": "美敦力 Medtronic"},
+]
+
+# ─── 港股精选列表（代码, 名称） ───
+_HK_STOCKS = [
+    {"code": "00700", "name": "腾讯控股"},
+    {"code": "09988", "name": "阿里巴巴-SW"},
+    {"code": "03690", "name": "美团-W"},
+    {"code": "09999", "name": "网易-S"},
+    {"code": "09618", "name": "京东集团-SW"},
+    {"code": "09888", "name": "百度集团-SW"},
+    {"code": "01810", "name": "小米集团-W"},
+    {"code": "00268", "name": "金蝶国际"},
+    {"code": "00241", "name": "阿里健康"},
+    {"code": "06060", "name": "众安在线"},
+    {"code": "00005", "name": "汇丰控股"},
+    {"code": "01398", "name": "工商银行"},
+    {"code": "03988", "name": "中国银行"},
+    {"code": "00939", "name": "建设银行"},
+    {"code": "02318", "name": "中国平安"},
+    {"code": "01299", "name": "友邦保险"},
+    {"code": "00388", "name": "香港交易所"},
+    {"code": "02628", "name": "中国人寿"},
+    {"code": "06030", "name": "中信证券"},
+    {"code": "01109", "name": "华润置地"},
+    {"code": "00688", "name": "中国海外发展"},
+    {"code": "00016", "name": "新鸿基地产"},
+    {"code": "00012", "name": "恒基地产"},
+    {"code": "00883", "name": "中国海洋石油"},
+    {"code": "02313", "name": "申洲国际"},
+    {"code": "00291", "name": "华润啤酒"},
+    {"code": "01929", "name": "周大福"},
+    {"code": "00322", "name": "康师傅控股"},
+    {"code": "01099", "name": "国药控股"},
+    {"code": "02269", "name": "药明生物"},
+    {"code": "01177", "name": "中国生物制药"},
+    {"code": "00857", "name": "中国石油股份"},
+    {"code": "00386", "name": "中国石油化工"},
+    {"code": "01088", "name": "中国神华"},
+    {"code": "00941", "name": "中国移动"},
+    {"code": "00728", "name": "中国电信"},
+    {"code": "00762", "name": "中国联通"},
+    {"code": "00002", "name": "中电控股"},
+    {"code": "00003", "name": "香港中华煤气"},
+    {"code": "00006", "name": "电能实业"},
+    {"code": "02388", "name": "中银香港"},
+    {"code": "00992", "name": "联想集团"},
+    {"code": "02018", "name": "瑞声科技"},
+    {"code": "00981", "name": "中芯国际"},
+    {"code": "02020", "name": "安踏体育"},
+    {"code": "02331", "name": "李宁"},
+    {"code": "01211", "name": "比亚迪股份"},
+    {"code": "09901", "name": "新东方在线"},
+    {"code": "09626", "name": "哔哩哔哩-SW"},
+    {"code": "09868", "name": "小鹏汽车-W"},
+    {"code": "09866", "name": "蔚来-SW"},
+    {"code": "02015", "name": "理想汽车-W"},
+    {"code": "06618", "name": "京东健康"},
+    {"code": "09698", "name": "万国数据-SW"},
+    {"code": "09961", "name": "携程集团-S"},
+    {"code": "03888", "name": "金山软件"},
+    {"code": "01833", "name": "平安好医生"},
+    {"code": "06098", "name": "碧桂园服务"},
+    {"code": "02202", "name": "万科企业"},
+]
+
+
 class StockService:
     """A 股数据服务，按功能分区。"""
 
@@ -147,30 +317,46 @@ class StockService:
     # ─── 1. 搜索 ───
 
     async def search_stock(self, keyword: str) -> dict:
-        """搜索 A 股股票，支持名称/代码模糊匹配。"""
+        """搜索股票，支持 A 股/美股/港股。"""
         cache_key = f"search:{keyword}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
 
+        results = []
+
         try:
-            # 优先使用预加载的缓存
+            # 1. 搜索 A 股
             if StockService._stock_list_cache is not None:
                 df = StockService._stock_list_cache
             else:
-                # 降级：实时获取（首次调用时可能发生）
                 df = await asyncio.to_thread(_patch_requests, ak.stock_info_a_code_name)
 
             mask = (
                 df["code"].str.contains(keyword, case=False, na=False)
                 | df["name"].str.contains(keyword, case=False, na=False)
             )
-            matched = df[mask].head(20)
-            results = [
-                {"code": row["code"], "name": row["name"], "market": get_market_name(row["code"])}
-                for _, row in matched.iterrows()
-            ]
-            resp = {"success": True, "data": results}
+            matched = df[mask].head(15)
+            for _, row in matched.iterrows():
+                results.append({"code": row["code"], "name": row["name"], "market": "a"})
+
+            # 2. 搜索美股
+            kw_upper = keyword.upper()
+            for s in _US_STOCKS:
+                if kw_upper in s["code"].upper() or keyword in s["name"]:
+                    results.append({"code": s["code"], "name": s["name"], "market": "us"})
+                    if len(results) >= 25:
+                        break
+
+            # 3. 搜索港股
+            if len(results) < 25:
+                for s in _HK_STOCKS:
+                    if keyword in s["code"] or keyword in s["name"]:
+                        results.append({"code": s["code"], "name": s["name"], "market": "hk"})
+                        if len(results) >= 25:
+                            break
+
+            resp = {"success": True, "data": results[:25]}
             cache.set(cache_key, resp, TTL_COMPANY)
             return resp
         except Exception as e:
@@ -180,7 +366,8 @@ class StockService:
     # ─── 2. 实时行情 ───
 
     async def get_realtime_quote(self, symbol: str) -> dict:
-        """通过腾讯 API 获取单只股票的实时行情。"""
+        """通过腾讯 API 获取实时行情，支持 A 股/美股/港股。"""
+        market = detect_market(symbol)
         symbol = normalize_symbol(symbol)
         cache_key = f"quote:{symbol}"
         cached = cache.get(cache_key)
@@ -188,13 +375,26 @@ class StockService:
             return cached
 
         try:
-            exchange = get_exchange(symbol)
-            url = _QT_URL.format(exchange=exchange, code=symbol)
+            code = symbol
+            if market == "a":
+                exchange = get_exchange(symbol)
+            elif market == "hk":
+                exchange = "hk"
+                # normalize_symbol 会将 5 位港股代码补零为 6 位，需还原
+                if len(symbol) == 6 and symbol.startswith("0"):
+                    code = symbol[1:]
+            else:
+                exchange = "us"
+
+            url = _QT_URL.format(exchange=exchange, code=code)
             r = await asyncio.to_thread(_get, url, timeout=10)
             r.encoding = "gbk"
             record = _parse_tencent_quote(r.text, symbol)
             if record is None:
                 return {"success": False, "error": f"未找到股票 {symbol}"}
+
+            # 补充市场标识
+            record["市场"] = {"a": "A股", "hk": "港股", "us": "美股"}[market]
             resp = {"success": True, "data": record}
             cache.set(cache_key, resp, TTL_REALTIME)
             return resp
