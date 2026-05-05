@@ -60,6 +60,25 @@ def get_market_name(code: str) -> str:
     return "未知"
 
 
+def detect_market(code: str) -> str:
+    """识别股票所属市场: 'us', 'hk', 'a'。"""
+    code = str(code).strip()
+    # 纯英文字母 + 可选点后缀 → 美股
+    cleaned = code.upper().replace(".", "").replace("-", "")
+    if cleaned.isalpha():
+        return "us"
+    # 5 位数字 → 港股
+    if code.isdigit() and len(code) == 5:
+        return "hk"
+    # 6 位数字 → A 股
+    if code.isdigit() and len(code) == 6:
+        return "a"
+    # 混合（如 AAPL.OQ）→ 美股
+    if any(c.isalpha() for c in code):
+        return "us"
+    return "a"
+
+
 # ─── TTL 缓存 ───
 
 TTL_REALTIME = 30
