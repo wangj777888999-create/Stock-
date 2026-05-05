@@ -2649,41 +2649,108 @@ const _MA_CONFIG = [
   { period: 60, color: '#6b7280' },
 ];
 
-function addMALines(chart, candleData, toggleContainerId) {
-  const series = [];
-  let container = toggleContainerId ? document.getElementById(toggleContainerId) : null;
-  if (container) container.innerHTML = '';
-  _MA_CONFIG.forEach((cfg, i) => {
-    const s = chart.addLineSeries({
-      color: cfg.color, lineWidth: 1,
-      lastValueVisible: false, priceLineVisible: false,
-    });
-    s.setData(computeMA(candleData, cfg.period));
-    series.push({ series: s, visible: true, ...cfg });
-    if (container) {
-      const pill = document.createElement('span');
-      pill.textContent = 'MA' + cfg.period;
-      pill.style.cssText = 'cursor:pointer;font-size:11px;font-weight:500;padding:2px 8px;border-radius:10px;border:1px solid ' + cfg.color + ';color:#fff;background:' + cfg.color + ';user-select:none;transition:all .15s;';
-      pill.dataset.idx = i;
-      pill.onclick = () => {
-        const item = series[i];
-        item.visible = !item.visible;
-        if (item.visible) {
-          item.series.applyOptions({ visible: true });
-          pill.style.color = '#fff';
-          pill.style.background = cfg.color;
-          pill.style.borderColor = cfg.color;
-        } else {
-          item.series.applyOptions({ visible: false });
-          pill.style.color = cfg.color;
-          pill.style.background = 'transparent';
-          pill.style.borderColor = cfg.color;
-        }
-      };
-      container.appendChild(pill);
+const _MA_COLORS = ['#ef4444','#14b8a6','#f97316','#ec4899','#84cc16','#06b6d4','#eab308','#8b5cf6','#f43f5e','#22d3ee'];
+let _maColorIdx = 0;
+
+// { containerId: { chart, candleData, items:[{period,color,series,visible,pill}], customs:[periods] } }
+const _maStates = {};
+
+function _maMakePill(item, state) {
+  const pill = document.createElement('span');
+  pill.textContent = 'MA' + item.period;
+  const c = item.color;
+  pill.style.cssText = 'cursor:pointer;font-size:11px;font-weight:500;padding:2px 8px;border-radius:10px;border:1px solid '+c+';color:#fff;background:'+c+';user-select:none;transition:all .15s;white-space:nowrap;';
+  pill.onclick = () => {
+    item.visible = !item.visible;
+    if (item.visible) {
+      item.series.applyOptions({ visible: true });
+      pill.style.color = '#fff';
+      pill.style.background = c;
+    } else {
+      item.series.applyOptions({ visible: false });
+      pill.style.color = c;
+      pill.style.background = 'transparent';
     }
+  };
+  pill.oncontextmenu = (e) => {
+    e.preventDefault();
+    // right-click to remove custom MA
+    if (!state.customs.includes(item.period)) return;
+    state.chart.removeSeries(item.series);
+    state.customs = state.customs.filter(p => p !== item.period);
+    state.items = state.items.filter(x => x !== item);
+    pill.remove();
+  };
+  item.pill = pill;
+  return pill;
+}
+
+function _maAppendInput(container, state) {
+  const wrap = document.createElement('span');
+  wrap.style.cssText = 'display:inline-flex;align-items:center;gap:3px;margin-left:4px;';
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = '1';
+  input.max = '999';
+  input.placeholder = 'N';
+  input.style.cssText = 'width:40px;height:22px;border:1px solid var(--border);border-radius:6px;font-size:11px;text-align:center;padding:0 2px;outline:none;';
+  input.onkeydown = (e) => { if (e.key === 'Enter') btn.click(); };
+  const btn = document.createElement('button');
+  btn.textContent = '+';
+  btn.style.cssText = 'width:22px;height:22px;border:1px solid var(--border);border-radius:6px;background:var(--blue-s);color:var(--blue);font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;';
+  btn.onclick = () => {
+    const n = parseInt(input.value);
+    if (!n || n < 1 || state.items.some(x => x.period === n)) { input.value = ''; return; }
+    input.value = '';
+    const color = _MA_COLORS[_maColorIdx++ % _MA_COLORS.length];
+    const s = state.chart.addLineSeries({ color, lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
+    s.setData(computeMA(state.candleData, n));
+    const item = { period: n, color, series: s, visible: true };
+    state.items.push(item);
+    state.customs.push(n);
+    wrap.before(_maMakePill(item, state));
+  };
+  wrap.appendChild(input);
+  wrap.appendChild(btn);
+  container.appendChild(wrap);
+}
+
+function addMALines(chart, candleData, toggleContainerId) {
+  const container = toggleContainerId ? document.getElementById(toggleContainerId) : null;
+  const old = _maStates[toggleContainerId];
+  const customs = old ? [...old.customs] : [];
+
+  // clear old
+  if (container) container.innerHTML = '';
+  if (old) old.items.forEach(x => { try { chart.removeSeries(x.series); } catch(e){} });
+
+  const state = { chart, candleData, items: [], customs: [] };
+  if (toggleContainerId) _maStates[toggleContainerId] = state;
+
+  // built-in MAs
+  _MA_CONFIG.forEach(cfg => {
+    const s = chart.addLineSeries({ color: cfg.color, lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
+    s.setData(computeMA(candleData, cfg.period));
+    const item = { period: cfg.period, color: cfg.color, series: s, visible: true };
+    state.items.push(item);
+    if (container) container.appendChild(_maMakePill(item, state));
   });
-  return series;
+
+  // restore custom MAs
+  customs.forEach(n => {
+    const color = _MA_COLORS[_maColorIdx++ % _MA_COLORS.length];
+    const s = chart.addLineSeries({ color, lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
+    s.setData(computeMA(candleData, n));
+    const item = { period: n, color, series: s, visible: true };
+    state.items.push(item);
+    state.customs.push(n);
+    if (container) container.appendChild(_maMakePill(item, state));
+  });
+
+  // add input
+  if (container) _maAppendInput(container, state);
+
+  return state.items;
 }
 
 function aggregateKline(dailyData, period) {
