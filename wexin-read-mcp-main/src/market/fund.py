@@ -157,3 +157,84 @@ class FundProvider(MarketProvider):
         except Exception as e:
             logger.error(f"FundProvider.search error: {e}")
             return {"success": False, "error": str(e)}
+
+    async def get_etf_detail(self, code: str):
+        """获取单只 ETF 详情：基本信息 + K 线 + 前十大持仓。"""
+        import requests as _requests
+        ck = f"market:fund:detail:{code}"
+        cached = cache.get(ck)
+        if cached is not None:
+            return cached
+
+        _NO_PROXY = {"http": None, "https": None}
+
+        def _patch(func, **kw):
+            orig_get = _requests.get
+            orig_post = _requests.post
+            _requests.get = lambda url, **k: (k.setdefault("proxies", _NO_PROXY), orig_get(url, **k))[1]
+            _requests.post = lambda url, **k: (k.setdefault("proxies", _NO_PROXY), orig_post(url, **k))[1]
+            try:
+                return func(**kw)
+            finally:
+                _requests.get = orig_get
+                _requests.post = orig_post
+
+        try:
+            # 1. 基本信息（从 spot DataFrame 中获取）
+            info = {}
+            df = await _get_etf_df()
+            row = df[df["代码"] == code]
+            if not row.empty:
+                row = row.iloc[0]
+                info = {
+                    "代码": code,
+                    "名称": _clean(row.get("名称")),
+                    "最新价": _clean(row.get("最新价")),
+                    "涨跌幅": _clean(row.get("涨跌幅")),
+                    "成交额": _clean(row.get("成交额")),
+                    "换手率": _clean(row.get("换手率")),
+                }
+
+            # 2. K 线数据
+            kline_df = await asyncio.to_thread(
+                _patch, ak.fund_etf_hist_em,
+                symbol=code, period="daily",
+                start_date="20240101", end_date="20300101", adjust="qfq",
+            )
+            kline = []
+            if kline_df is not None and not kline_df.empty:
+                kline_df = kline_df.tail(120)
+                for _, r in kline_df.iterrows():
+                    kline.append({
+                        "date": str(r.get("日期", ""))[:10],
+                        "open": _clean(r.get("开盘")),
+                        "close": _clean(r.get("收盘")),
+                        "high": _clean(r.get("最高")),
+                        "low": _clean(r.get("最低")),
+                        "volume": _clean(r.get("成交量")),
+                    })
+
+            # 3. 前十大持仓
+            holdings = []
+            try:
+                hold_df = await asyncio.to_thread(
+                    _patch, ak.fund_portfolio_hold_em,
+                    symbol=code, date="",
+                )
+                if hold_df is not None and not hold_df.empty:
+                    for _, r in hold_df.head(10).iterrows():
+                        holdings.append({
+                            "股票名称": _clean(r.get("股票名称")),
+                            "持仓占比": _clean(r.get("占净值比例")),
+                            "持股数量": _clean(r.get("持股数")),
+                            "持仓市值": _clean(r.get("持仓市值")),
+                        })
+            except Exception:
+                pass  # 持仓数据可能不可用
+
+            resp = {"success": True, "data": {"info": info, "kline": kline, "holdings": holdings}}
+            cache.set(ck, resp, _DF_TTL)
+            return resp
+        except Exception as e:
+            logger.error(f"FundProvider.get_etf_detail error: {e}")
+            return {"success": False, "error": str(e)}

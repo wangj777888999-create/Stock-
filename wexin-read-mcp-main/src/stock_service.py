@@ -95,12 +95,48 @@ def _parse_tencent_quote(raw: str, symbol: str) -> dict | None:
 
 
 def _clean(v):
-    """将 NaN/NaT 转为 None，保持 JSON 序列化安全。"""
+    """将 NaN/NaT/numpy 类型转为 JSON 安全的 Python 原生类型。"""
     if v is None:
         return None
+    # numpy 类型 → Python 原生
+    if hasattr(v, "item"):
+        try:
+            v = v.item()
+        except (ValueError, TypeError):
+            pass
     if isinstance(v, float) and math.isnan(v):
         return None
     return v
+
+
+def _aggregate_kline(df, period: str):
+    """将日线数据聚合为周线或月线。df 需有 date/open/high/low/close/volume 列。"""
+    import pandas as pd
+    df = df.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.set_index("date").sort_index()
+    rule = "W" if period == "week" else "ME"
+    agg = df.resample(rule).agg({
+        "open": "first",
+        "high": "max",
+        "low": "min",
+        "close": "last",
+        "volume": "sum",
+    }).dropna(subset=["open"])
+    agg = agg.reset_index()
+    agg["date"] = agg["date"].dt.strftime("%Y-%m-%d")
+    return agg
+
+
+def _fmt_pct(v) -> str | None:
+    """格式化百分比数值，保留 2 位小数 + '%'。"""
+    v = _clean(v)
+    if v is None:
+        return None
+    try:
+        return f"{float(v):.2f}%"
+    except (TypeError, ValueError):
+        return str(v)
 
 
 def _fmt_amount(v) -> str | None:
@@ -405,52 +441,84 @@ class StockService:
     # ─── 3. K线历史数据 ───
 
     async def get_kline(self, symbol: str, period: str = "day", count: int = 120) -> dict:
-        """通过腾讯 API 获取前复权 K 线数据。支持 A 股/美股/港股。period: day/week/month"""
+        """获取前复权 K 线数据。A 股用腾讯 API，港股/美股用 AKShare。period: day/week/month"""
         market = detect_market(symbol)  # 先识别市场（normalize 会补零破坏港股代码）
-        original = str(symbol).strip()  # 保留原始代码用于 URL（港股需要 5 位）
-        symbol = normalize_symbol(symbol)
-        cache_key = f"kline:{symbol}:{period}:{count}"
+        original = str(symbol).strip()  # 保留原始代码（港股需要 5 位）
+        norm = normalize_symbol(symbol)
+        cache_key = f"kline:{norm}:{period}:{count}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
 
         try:
             if market == "a":
-                exchange = get_exchange(symbol)
-                url_code = symbol
-            elif market == "hk":
-                exchange = "hk"
-                url_code = original  # 港股用原始 5 位代码
-            else:
-                exchange = "us"
-                url_code = symbol
-
-            url = (
-                f"http://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
-                f"?param={exchange}{url_code},{period},2020-01-01,,{count},qfq"
-            )
-            r = await asyncio.to_thread(_get, url, timeout=10)
-            resp_data = r.json().get("data", {})
-            data = resp_data.get(f"{exchange}{url_code}", {})
-
-            # 不同市场 K 线字段名不同
-            if market == "us":
-                klines = data.get("day") or []
-            elif market == "hk":
-                klines = data.get("day") or []
-            else:
+                # A 股：腾讯 API
+                exchange = get_exchange(norm)
+                url = (
+                    f"http://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+                    f"?param={exchange}{norm},{period},2020-01-01,,{count},qfq"
+                )
+                r = await asyncio.to_thread(_get, url, timeout=10)
+                resp_data = r.json().get("data", {})
+                data = resp_data.get(f"{exchange}{norm}", {})
                 klines = data.get("qfqday") or data.get("qfqweek") or data.get("qfqmonth") or data.get("day") or []
+                records = []
+                for k in klines:
+                    records.append({
+                        "date": k[0],
+                        "open": float(k[1]),
+                        "close": float(k[2]),
+                        "high": float(k[3]),
+                        "low": float(k[4]),
+                        "volume": float(k[5]) if len(k) > 5 else 0,
+                    })
 
-            records = []
-            for k in klines:
-                records.append({
-                    "date": k[0],
-                    "open": float(k[1]),
-                    "close": float(k[2]),
-                    "high": float(k[3]),
-                    "low": float(k[4]),
-                    "volume": float(k[5]) if len(k) > 5 else 0,
-                })
+            elif market == "hk":
+                # 港股：AKShare stock_hk_hist
+                period_map = {"day": "daily", "week": "weekly", "month": "monthly"}
+                ak_period = period_map.get(period, "daily")
+                df = await asyncio.to_thread(
+                    _patch_requests, ak.stock_hk_hist,
+                    symbol=original, period=ak_period,
+                    start_date="20200101", end_date="20300101", adjust="qfq",
+                )
+                if df is None or df.empty:
+                    return {"success": False, "error": "暂无K线数据"}
+                df = df.tail(count)
+                records = []
+                for _, row in df.iterrows():
+                    records.append({
+                        "date": str(row["日期"])[:10],
+                        "open": _clean(row.get("开盘")),
+                        "close": _clean(row.get("收盘")),
+                        "high": _clean(row.get("最高")),
+                        "low": _clean(row.get("最低")),
+                        "volume": _clean(row.get("成交量")),
+                    })
+
+            else:
+                # 美股：AKShare stock_us_daily（仅支持日线）
+                df = await asyncio.to_thread(
+                    _patch_requests, ak.stock_us_daily,
+                    symbol=norm, adjust="qfq",
+                )
+                if df is None or df.empty:
+                    return {"success": False, "error": "暂无K线数据"}
+                # 日线：直接取最近 count 条；周/月：需要聚合
+                if period in ("week", "month"):
+                    df = _aggregate_kline(df, period)
+                df = df.tail(count)
+                records = []
+                for _, row in df.iterrows():
+                    records.append({
+                        "date": str(row["date"])[:10],
+                        "open": _clean(row.get("open")),
+                        "close": _clean(row.get("close")),
+                        "high": _clean(row.get("high")),
+                        "low": _clean(row.get("low")),
+                        "volume": _clean(row.get("volume")),
+                    })
+
             resp = {"success": True, "data": records}
             cache.set(cache_key, resp, TTL_DAILY)
             return resp
@@ -461,30 +529,77 @@ class StockService:
     # ─── 4. 公司简介 ───
 
     async def get_company_profile(self, symbol: str) -> dict:
-        """获取公司基本信息（巨潮资讯）。"""
-        symbol = normalize_symbol(symbol)
-        cache_key = f"profile:{symbol}"
+        """获取公司基本信息。A 股用巨潮资讯，港股/美股用 AKShare。"""
+        market = detect_market(symbol)
+        original = str(symbol).strip()
+        norm = normalize_symbol(symbol)
+        cache_key = f"profile:{norm}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
 
         try:
-            df = await asyncio.to_thread(_patch_requests, ak.stock_profile_cninfo, symbol=symbol)
-            if df is None or df.empty:
-                return {"success": False, "error": "未找到公司信息"}
-            row = df.iloc[0]
-            record = {
-                "公司名称": row.get("公司名称"),
-                "A股简称": row.get("A股简称"),
-                "所属行业": row.get("所属行业"),
-                "上市日期": row.get("上市日期"),
-                "注册资金": row.get("注册资金"),
-                "法人代表": row.get("法人代表"),
-                "官方网站": row.get("官方网站"),
-                "主营业务": row.get("主营业务"),
-                "经营范围": row.get("经营范围"),
-                "注册地址": row.get("注册地址"),
-            }
+            if market == "a":
+                df = await asyncio.to_thread(_patch_requests, ak.stock_profile_cninfo, symbol=norm)
+                if df is None or df.empty:
+                    return {"success": False, "error": "未找到公司信息"}
+                row = df.iloc[0]
+                record = {
+                    "公司名称": row.get("公司名称"),
+                    "A股简称": row.get("A股简称"),
+                    "所属行业": row.get("所属行业"),
+                    "上市日期": row.get("上市日期"),
+                    "注册资金": row.get("注册资金"),
+                    "法人代表": row.get("法人代表"),
+                    "官方网站": row.get("官方网站"),
+                    "主营业务": row.get("主营业务"),
+                    "经营范围": row.get("经营范围"),
+                    "注册地址": row.get("注册地址"),
+                }
+
+            elif market == "hk":
+                df = await asyncio.to_thread(
+                    _patch_requests, ak.stock_hk_company_profile_em,
+                    symbol=original,
+                )
+                if df is None or df.empty:
+                    return {"success": False, "error": "未找到公司信息"}
+                row = df.iloc[0]
+                record = {
+                    "公司名称": row.get("公司名称"),
+                    "英文名称": row.get("英文名称"),
+                    "所属行业": row.get("所属行业"),
+                    "上市日期": row.get("公司成立日期"),
+                    "法人代表": row.get("董事长"),
+                    "官方网站": row.get("公司网址"),
+                    "主营业务": row.get("公司介绍"),
+                    "注册地址": row.get("注册地"),
+                    "联系电话": row.get("联系电话"),
+                    "员工人数": _clean(row.get("员工人数")),
+                    "核数师": row.get("核数师"),
+                }
+
+            else:
+                # 美股：雪球基本信息
+                df = await asyncio.to_thread(
+                    _patch_requests, ak.stock_individual_basic_info_us_xq,
+                    symbol=norm,
+                )
+                if df is None or df.empty:
+                    return {"success": False, "error": "未找到公司信息"}
+                info = dict(zip(df["item"], df["value"]))
+                record = {
+                    "公司名称": info.get("org_name_en", ""),
+                    "英文名称": info.get("org_short_name_en", ""),
+                    "所属行业": info.get("org_industry", ""),
+                    "法人代表": info.get("chairman", ""),
+                    "官方网站": info.get("org_website", ""),
+                    "注册地址": info.get("office_address_en", ""),
+                    "联系电话": info.get("telephone", ""),
+                    "员工人数": _clean(info.get("staff_num")),
+                    "主营业务": info.get("org_introduction", ""),
+                }
+
             record = {k: _clean(v) for k, v in record.items()}
             resp = {"success": True, "data": record}
             cache.set(cache_key, resp, TTL_COMPANY)
@@ -496,38 +611,91 @@ class StockService:
     # ─── 5. 财务指标 ───
 
     async def get_financial(self, symbol: str) -> dict:
-        """获取最近几期核心财务指标（同花顺）。"""
-        symbol = normalize_symbol(symbol)
-        cache_key = f"financial:{symbol}"
+        """获取最近几期核心财务指标。A 股用同花顺，港股/美股用 AKShare。"""
+        market = detect_market(symbol)
+        original = str(symbol).strip()
+        norm = normalize_symbol(symbol)
+        cache_key = f"financial:{norm}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
 
         try:
-            df = await asyncio.to_thread(
-                _patch_requests, ak.stock_financial_abstract_ths,
-                symbol=symbol, indicator="按报告期",
-            )
-            if df is None or df.empty:
-                return {"success": False, "error": "未找到财务数据"}
+            if market == "a":
+                df = await asyncio.to_thread(
+                    _patch_requests, ak.stock_financial_abstract_ths,
+                    symbol=norm, indicator="按报告期",
+                )
+                if df is None or df.empty:
+                    return {"success": False, "error": "未找到财务数据"}
+                df = df.sort_values("报告期", ascending=False).head(16)
+                pick_cols = [
+                    "报告期", "净利润", "净利润同比增长率", "营业总收入", "营业总收入同比增长率",
+                    "基本每股收益", "每股净资产", "每股经营现金流",
+                    "销售净利率", "销售毛利率",
+                    "净资产收益率", "资产负债率", "流动比率",
+                ]
+                existing = [c for c in pick_cols if c in df.columns]
+                records = df[existing].to_dict(orient="records")
+                for r in records:
+                    for k, v in r.items():
+                        if v is False or v == "False" or v == "false":
+                            r[k] = None
+                        else:
+                            r[k] = _clean(v)
 
-            # 按报告期降序（最新在前）
-            df = df.sort_values("报告期", ascending=False).head(16)
-            pick_cols = [
-                "报告期", "净利润", "净利润同比增长率", "营业总收入", "营业总收入同比增长率",
-                "基本每股收益", "每股净资产", "每股经营现金流",
-                "销售净利率", "销售毛利率",
-                "净资产收益率", "资产负债率", "流动比率",
-            ]
-            existing = [c for c in pick_cols if c in df.columns]
-            records = df[existing].to_dict(orient="records")
-            # 清理 false/NaN → None
-            for r in records:
-                for k, v in r.items():
-                    if v is False or v == "False" or v == "false":
-                        r[k] = None
-                    else:
-                        r[k] = _clean(v)
+            elif market == "hk":
+                # 港股财务指标
+                df = await asyncio.to_thread(
+                    _patch_requests, ak.stock_financial_hk_analysis_indicator_em,
+                    symbol=original, indicator="按年度",
+                )
+                if df is None or df.empty:
+                    return {"success": False, "error": "未找到财务数据"}
+                df = df.sort_values("REPORT_DATE", ascending=False).head(8)
+                records = []
+                for _, row in df.iterrows():
+                    flow_ratio = _clean(row.get("CURRENT_RATIO"))
+                    records.append({
+                        "报告期": str(row.get("REPORT_DATE", ""))[:10],
+                        "基本每股收益": _clean(row.get("BASIC_EPS")),
+                        "营业总收入": _fmt_amount(row.get("OPERATE_INCOME")),
+                        "营业总收入同比增长率": _fmt_pct(row.get("OPERATE_INCOME_YOY")),
+                        "净利润": _fmt_amount(row.get("HOLDER_PROFIT")),
+                        "净利润同比增长率": _fmt_pct(row.get("HOLDER_PROFIT_YOY")),
+                        "销售毛利率": _fmt_pct(row.get("GROSS_PROFIT_RATIO")),
+                        "销售净利率": _fmt_pct(row.get("NET_PROFIT_RATIO")),
+                        "净资产收益率": _fmt_pct(row.get("ROE_AVG")),
+                        "资产负债率": _fmt_pct(row.get("DEBT_ASSET_RATIO")),
+                        "流动比率": f"{flow_ratio:.2f}" if flow_ratio is not None else None,
+                    })
+
+            else:
+                # 美股财务指标
+                df = await asyncio.to_thread(
+                    _patch_requests, ak.stock_financial_us_analysis_indicator_em,
+                    symbol=norm,
+                )
+                if df is None or df.empty:
+                    return {"success": False, "error": "未找到财务数据"}
+                df = df.sort_values("REPORT_DATE", ascending=False).head(8)
+                records = []
+                for _, row in df.iterrows():
+                    flow_ratio = _clean(row.get("CURRENT_RATIO"))
+                    records.append({
+                        "报告期": str(row.get("REPORT_DATE", ""))[:10],
+                        "基本每股收益": _clean(row.get("BASIC_EPS")),
+                        "营业总收入": _fmt_amount(row.get("OPERATE_INCOME")),
+                        "营业总收入同比增长率": _fmt_pct(row.get("OPERATE_INCOME_YOY")),
+                        "净利润": _fmt_amount(row.get("HOLDER_PROFIT")),
+                        "净利润同比增长率": _fmt_pct(row.get("HOLDER_PROFIT_YOY")),
+                        "销售毛利率": _fmt_pct(row.get("GROSS_PROFIT_RATIO")),
+                        "销售净利率": _fmt_pct(row.get("NET_PROFIT_RATIO")),
+                        "净资产收益率": _fmt_pct(row.get("ROE_AVG")),
+                        "资产负债率": _fmt_pct(row.get("DEBT_ASSET_RATIO")),
+                        "流动比率": f"{flow_ratio:.2f}" if flow_ratio is not None else None,
+                    })
+
             resp = {"success": True, "data": records}
             cache.set(cache_key, resp, TTL_DAILY)
             return resp
@@ -538,7 +706,10 @@ class StockService:
     # ─── 6. 资金流向 ───
 
     async def get_money_flow(self, symbol: str) -> dict:
-        """获取近期资金流向（主力/超大单/大单/中单/小单）。"""
+        """获取近期资金流向（主力/超大单/大单/中单/小单）。仅 A 股支持。"""
+        market = detect_market(symbol)
+        if market != "a":
+            return {"success": False, "error": "该市场暂不支持资金流向数据"}
         symbol = normalize_symbol(symbol)
         cache_key = f"flow:{symbol}"
         cached = cache.get(cache_key)
@@ -617,7 +788,10 @@ class StockService:
     # ─── 8. 十大流通股东 ───
 
     async def get_shareholders(self, symbol: str) -> dict:
-        """获取最新一期十大流通股东。"""
+        """获取最新一期十大流通股东。仅 A 股支持。"""
+        market = detect_market(symbol)
+        if market != "a":
+            return {"success": False, "error": "该市场暂不支持股东数据"}
         symbol = normalize_symbol(symbol)
         cache_key = f"holders:{symbol}"
         cached = cache.get(cache_key)

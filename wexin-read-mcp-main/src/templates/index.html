@@ -1067,6 +1067,10 @@ textarea.form-input {
         <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.6"/><path d="M10 6v8M8 8h4c1.1 0 2 .9 2 2s-.9 2-2 2H8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>币圈</span>
       </button>
+      <button class="nav-item" data-view="futures" onclick="switchView('futures', this)">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M3 17V7l4-4 4 4 6-4v14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 11l4-4 4 4 6-4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity=".5"/></svg>
+        <span>期货</span>
+      </button>
       <div class="nav-section-label" style="margin-top:8px;">系统</div>
       <button class="nav-item" data-view="config" onclick="switchView('config', this)">
         <svg viewBox="0 0 20 20" fill="none"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" stroke-width="1.7"/><path d="M16.243 10a6.243 6.243 0 01-.09 1.082l1.598 1.248-1.5 2.598-1.935-.694a6.26 6.26 0 01-1.875 1.083l-.33 2.017h-3l-.33-2.017a6.26 6.26 0 01-1.875-1.083l-1.935.694-1.5-2.598 1.598-1.248A6.243 6.243 0 013.757 10c0-.367.031-.727.09-1.082L2.249 7.67l1.5-2.598 1.935.694A6.26 6.26 0 017.559 4.683l.33-2.017h3l.33 2.017a6.26 6.26 0 011.875 1.083l1.935-.694 1.5 2.598-1.598 1.248c.059.355.09.715.09 1.082z" stroke="currentColor" stroke-width="1.7"/></svg>
@@ -1556,6 +1560,42 @@ textarea.form-input {
             <div id="fundResultBody" style="max-height:500px;overflow-y:auto;"></div>
           </div>
         </div>
+
+        <!-- ETF 详情面板 -->
+        <div id="fundDetailArea" style="display:none;">
+          <div style="margin-bottom:16px;">
+            <button class="btn btn-ghost" onclick="hideFundDetail()" style="font-size:13px;">← 返回基金列表</button>
+            <span id="fundDetailTitle" style="font-weight:600;font-size:16px;margin-left:8px;"></span>
+          </div>
+
+          <!-- K 线图 -->
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header">
+              <div class="card-title">K 线走势</div>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div id="fundKlineChart" style="height:360px;"></div>
+            </div>
+          </div>
+
+          <!-- 基本信息 -->
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header">
+              <div class="card-title">基本信息</div>
+            </div>
+            <div class="card-body" id="fundInfoBody"></div>
+          </div>
+
+          <!-- 前十大持仓 -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">前十大持仓</div>
+            </div>
+            <div class="card-body" style="overflow-x:auto;padding:0;">
+              <div id="fundHoldingsBody" style="max-height:400px;overflow-y:auto;"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ==================== VIEW: CRYPTO ==================== -->
@@ -1581,6 +1621,71 @@ textarea.form-input {
           <div class="card-body" style="overflow-x:auto;padding:0;">
             <div id="cryptoSpotBody" style="max-height:600px;overflow-y:auto;">
               <div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== VIEW: FUTURES ==================== -->
+      <div id="view-futures" class="view">
+
+        <!-- 搜索 -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-body" style="padding:12px;">
+            <div style="display:flex;gap:8px;">
+              <input id="futuresSearchInput" class="input" placeholder="搜索期货品种（如 螺纹、黄金）" style="flex:1;"
+                     onkeydown="if(event.key==='Enter')futuresSearch()">
+              <button class="btn btn-primary" onclick="futuresSearch()">搜索</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 板块分类 -->
+        <div class="card" id="futuresBoardCard">
+          <div class="card-header">
+            <div class="card-title">期货板块分类</div>
+            <button class="btn btn-ghost btn-sm" onclick="loadFuturesBoards()">刷新</button>
+          </div>
+          <div class="card-body" id="futuresBoardBody">
+            <div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>
+          </div>
+        </div>
+
+        <!-- 板块合约列表 -->
+        <div class="card" id="futuresResultCard" style="display:none;margin-top:16px;">
+          <div class="card-header">
+            <div class="card-title" id="futuresResultTitle">合约列表</div>
+          </div>
+          <div class="card-body" style="overflow-x:auto;padding:0;">
+            <div id="futuresResultBody" style="max-height:500px;overflow-y:auto;"></div>
+          </div>
+        </div>
+
+        <!-- 合约详情面板 -->
+        <div id="futuresDetailArea" style="display:none;">
+          <div style="margin-bottom:16px;">
+            <button class="btn btn-ghost" onclick="hideFuturesDetail()" style="font-size:13px;">← 返回合约列表</button>
+            <span id="futuresDetailTitle" style="font-weight:600;font-size:16px;margin-left:8px;"></span>
+          </div>
+
+          <!-- K 线图 -->
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header">
+              <div class="card-title">K 线走势</div>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div id="futuresKlineChart" style="height:360px;"></div>
+            </div>
+          </div>
+
+          <!-- 持仓龙虎榜 -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">持仓龙虎榜</div>
+              <span id="futuresRankDate" style="color:var(--ink-3);font-size:12px;"></span>
+            </div>
+            <div class="card-body" style="overflow-x:auto;padding:0;">
+              <div id="futuresRankBody" style="max-height:400px;overflow-y:auto;"></div>
             </div>
           </div>
         </div>
@@ -1757,6 +1862,7 @@ const topbarMeta = {
   stock:    { title: '股票查询', sub: '搜索 A 股/美股/港股 · 实时行情' },
   fund:     { title: '基金', sub: 'ETF 板块分类 · 基金搜索 · 实时行情' },
   crypto:   { title: '币圈', sub: '主流币种行情 · 币种搜索' },
+  futures:  { title: '期货', sub: '主力合约行情 · K线 · 持仓龙虎榜' },
 };
 
 let _fundLoaded = false;
@@ -1775,6 +1881,7 @@ function switchView(view, el) {
   if (view === 'bloggers') { loadBloggers(); }
   if (view === 'fund' && !_fundLoaded) { loadFundBoards(); _fundLoaded = true; }
   if (view === 'crypto') { loadCryptoSpot(); }
+  if (view === 'futures') { loadFuturesBoards(); }
 }
 
 /* ============================================================
@@ -2541,12 +2648,12 @@ async function selectStock(code, name, market) {
   show('stockQuoteBody');
 
   if (_stockMarket === 'us') {
-    // 美股：仅行情 + K线 + 新闻
-    show('panel-kline'); hide('panel-profile-financial'); hide('panel-holders-flow');
+    // 美股：行情 + K线 + 公司简介 + 财务 + 新闻
+    show('panel-kline'); show('panel-profile-financial'); hide('panel-holders-flow');
     show('panel-news'); hide('panel-visits');
   } else if (_stockMarket === 'hk') {
-    // 港股：全部面板
-    show('panel-kline'); show('panel-profile-financial'); show('panel-holders-flow');
+    // 港股：行情 + K线 + 公司简介 + 财务 + 新闻（无资金流向/股东/机构调研）
+    show('panel-kline'); show('panel-profile-financial'); hide('panel-holders-flow');
     show('panel-news'); hide('panel-visits');
   } else {
     // A股：全部面板（含机构调研）
@@ -2558,11 +2665,20 @@ async function selectStock(code, name, market) {
   // 并行加载面板
   refreshQuote();
   loadKline('day');
-  if (_stockMarket !== 'us') {
+  if (_stockMarket === 'a') {
+    // A股：全部面板
     loadProfile();
     loadFinancial();
     loadMoneyFlow();
     loadShareholders();
+  } else if (_stockMarket === 'hk') {
+    // 港股：公司简介 + 财务（无资金流向/股东）
+    loadProfile();
+    loadFinancial();
+  } else {
+    // 美股：公司简介 + 财务
+    loadProfile();
+    loadFinancial();
   }
   loadStockNews();
 }
@@ -2871,7 +2987,7 @@ async function _doWencaiQuery(query) {
   }
 }
 
-function _renderWencaiTable(container, rows) {
+function _renderWencaiTable(container, rows, onClick) {
   if (!rows.length) return;
   const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   // 清理列名：去掉 iwencai 字段尾部的 [YYYYMMDD-YYYYMMDD] 时间区间
@@ -2926,7 +3042,9 @@ function _renderWencaiTable(container, rows) {
   html += '</tr></thead><tbody>';
 
   rows.forEach(row => {
-    html += '<tr>';
+    const rowClick = onClick ? ' onclick="' + onClick(row) + '"' : '';
+    const rowStyle = onClick ? ' style="cursor:pointer;"' : '';
+    html += '<tr' + rowClick + rowStyle + '>';
     cols.forEach(c => {
       const v = row[c.key];
       const name = c.name;
@@ -2935,7 +3053,7 @@ function _renderWencaiTable(container, rows) {
 
       if (v == null || v === '' || v === 'nan') {
         cell = '-';
-      } else if (name === '股票代码') {
+      } else if (name === '股票代码' || name === '代码') {
         cell = '<span class="code-link">' + escapeHtml(v) + '</span>';
       } else if (name === '股票简称') {
         cell = '<span class="name-strong">' + escapeHtml(v) + '</span>';
@@ -3263,7 +3381,7 @@ async function loadFundBoardStocks(name) {
     if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '查询失败') + '</div>'; return; }
     if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到数据</div>'; return; }
     title.textContent = '「' + name + '」（共 ' + (json.total || json.data.length) + ' 条）';
-    _renderWencaiTable(body, json.data);
+    _renderWencaiTable(body, json.data, row => `selectFund('${row['代码']}','${(row['名称']||'').replace(/'/g,"\\'")}')`);
   } catch (e) {
     body.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>';
   }
@@ -3285,10 +3403,104 @@ async function fundSearch() {
     const json = await resp.json();
     if (!json.success || !json.data?.length) { body.innerHTML = '<div class="empty-state">未找到结果</div>'; return; }
     title.textContent = '搜索: ' + keyword + '（' + json.total + ' 条）';
-    _renderWencaiTable(body, json.data);
+    _renderWencaiTable(body, json.data, row => `selectFund('${row['代码']}','${(row['名称']||'').replace(/'/g,"\\'")}')`);
   } catch (e) {
     body.innerHTML = '<div class="empty-state">搜索失败: ' + e.message + '</div>';
   }
+}
+
+/* --- ETF 详情 --- */
+let _fundChart = null, _fundKlineSeries = null, _fundVolSeries = null;
+
+async function selectFund(code, name) {
+  const listArea = document.getElementById('fundBoardCard');
+  const resultCard = document.getElementById('fundResultCard');
+  const detailArea = document.getElementById('fundDetailArea');
+  const title = document.getElementById('fundDetailTitle');
+  if (!detailArea) return;
+
+  if (listArea) listArea.style.display = 'none';
+  if (resultCard) resultCard.style.display = 'none';
+  detailArea.style.display = '';
+  title.textContent = name + ' (' + code + ')';
+
+  // 清空旧数据
+  document.getElementById('fundKlineChart').innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
+  document.getElementById('fundInfoBody').innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
+  document.getElementById('fundHoldingsBody').innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
+
+  try {
+    const json = await (await fetch('/api/fund/detail/' + code)).json();
+    if (!json.success) {
+      document.getElementById('fundInfoBody').innerHTML = '<div class="empty-state">' + (json.error || '加载失败') + '</div>';
+      return;
+    }
+    const { info, kline, holdings } = json.data;
+
+    // 渲染基本信息
+    const infoEl = document.getElementById('fundInfoBody');
+    const infoRows = [
+      ['代码', info['代码']], ['名称', info['名称']], ['最新价', info['最新价']],
+      ['涨跌幅', info['涨跌幅'] != null ? info['涨跌幅'] + '%' : '-'],
+      ['成交额', info['成交额']], ['换手率', info['换手率'] != null ? info['换手率'] + '%' : '-'],
+    ].filter(r => r[1] != null);
+    infoEl.innerHTML = '<div style="font-size:13px;">'
+      + infoRows.map(r => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span style="color:var(--ink-3);font-size:12px;">${r[0]}</span><span style="font-size:13px;font-family:var(--mono);">${r[1]}</span></div>`).join('')
+      + '</div>';
+
+    // 渲染 K 线图
+    const chartEl = document.getElementById('fundKlineChart');
+    if (kline && kline.length) {
+      chartEl.innerHTML = '';
+      _fundChart = LightweightCharts.createChart(chartEl, {
+        width: chartEl.clientWidth, height: 360,
+        layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
+        grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+        crosshair: { mode: 0 },
+        rightPriceScale: { borderVisible: false },
+        timeScale: { borderVisible: false, timeVisible: false },
+      });
+      _fundKlineSeries = _fundChart.addCandlestickSeries({
+        upColor: '#ef4444', downColor: '#22c55e',
+        borderUpColor: '#ef4444', borderDownColor: '#22c55e',
+        wickUpColor: '#ef4444', wickDownColor: '#22c55e',
+      });
+      _fundKlineSeries.setData(kline.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
+      _fundVolSeries = _fundChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+      _fundChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+      _fundVolSeries.setData(kline.map(k => ({ time: k.date, value: k.volume, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
+      _fundChart.timeScale().fitContent();
+      new ResizeObserver(() => { if (_fundChart) _fundChart.applyOptions({ width: chartEl.clientWidth }); }).observe(chartEl);
+    } else {
+      chartEl.innerHTML = '<div class="empty-state" style="padding:40px;">暂无K线数据</div>';
+    }
+
+    // 渲染持仓
+    const holdEl = document.getElementById('fundHoldingsBody');
+    if (holdings && holdings.length) {
+      let h = '<table class="data-table"><thead><tr><th>排名</th><th>股票名称</th><th>持仓占比</th><th>持股数量</th><th>持仓市值</th></tr></thead><tbody>';
+      holdings.forEach((r, i) => {
+        h += `<tr><td class="num">${i + 1}</td><td>${r['股票名称'] || '-'}</td><td class="num">${r['持仓占比'] != null ? r['持仓占比'] + '%' : '-'}</td><td class="num">${r['持股数量'] ?? '-'}</td><td class="num">${r['持仓市值'] ?? '-'}</td></tr>`;
+      });
+      h += '</tbody></table>';
+      holdEl.innerHTML = h;
+    } else {
+      holdEl.innerHTML = '<div class="empty-state">暂无持仓数据</div>';
+    }
+  } catch (e) {
+    document.getElementById('fundInfoBody').innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
+  }
+}
+
+function hideFundDetail() {
+  const listArea = document.getElementById('fundBoardCard');
+  const resultCard = document.getElementById('fundResultCard');
+  const detailArea = document.getElementById('fundDetailArea');
+  if (detailArea) detailArea.style.display = 'none';
+  if (listArea) listArea.style.display = '';
+  if (resultCard) resultCard.style.display = '';
+  // 清理图表
+  if (_fundChart) { _fundChart.remove(); _fundChart = null; }
 }
 
 // --- Crypto View ---
@@ -3349,6 +3561,168 @@ function _renderCryptoTable(container, data) {
   });
   html += '</tbody></table>';
   container.innerHTML = html;
+}
+
+// --- Futures View ---
+
+async function loadFuturesBoards() {
+  const body = document.getElementById('futuresBoardBody');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
+  try {
+    const resp = await fetch('/api/market/futures/boards');
+    const json = await resp.json();
+    if (!json.success || !json.data?.length) {
+      body.innerHTML = '<div class="empty-state">' + (json.error || '加载失败') + '</div>';
+      return;
+    }
+    let html = '<div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px;">';
+    json.data.forEach(item => {
+      const label = item.name + ' (' + item.count + ')';
+      html += '<div style="background:#F8F8FA;border:1px solid var(--border);color:var(--ink);cursor:pointer;padding:10px 14px;border-radius:var(--r-xs);font-size:13px;font-weight:500;transition:all var(--t) var(--ease);"'
+        + ' onclick="loadFuturesBoardStocks(\'' + item.name.replace(/'/g, "\\'") + '\')"'
+        + ' onmouseenter="this.style.borderColor=\'var(--blue)\';this.style.background=\'var(--blue-s)\'"'
+        + ' onmouseleave="this.style.borderColor=\'var(--border)\';this.style.background=\'#F8F8FA\'"'
+        + ' title="点击查看 ' + item.name + '">'
+        + label + '</div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
+  }
+}
+
+async function loadFuturesBoardStocks(name) {
+  const card = document.getElementById('futuresResultCard');
+  const body = document.getElementById('futuresResultBody');
+  const title = document.getElementById('futuresResultTitle');
+  if (!card || !body || !title) return;
+  card.style.display = '';
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
+  title.textContent = '「' + name + '」';
+  try {
+    const resp = await fetch('/api/market/futures/board/' + encodeURIComponent(name));
+    const json = await resp.json();
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '查询失败') + '</div>'; return; }
+    if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到数据</div>'; return; }
+    title.textContent = '「' + name + '」（共 ' + (json.total || json.data.length) + ' 条）';
+    _renderWencaiTable(body, json.data, row => `selectFutures('${row['代码']}','${(row['名称']||'').replace(/'/g,"\\'")}')`);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>';
+  }
+}
+
+async function futuresSearch() {
+  const input = document.getElementById('futuresSearchInput');
+  const keyword = input ? input.value.trim() : '';
+  if (!keyword) { showToast('请输入搜索关键词', 'warning'); return; }
+  const card = document.getElementById('futuresResultCard');
+  const body = document.getElementById('futuresResultBody');
+  const title = document.getElementById('futuresResultTitle');
+  if (!card || !body || !title) return;
+  card.style.display = '';
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 搜索中...</div>';
+  title.textContent = '搜索: ' + keyword;
+  try {
+    const resp = await fetch('/api/market/futures/search?q=' + encodeURIComponent(keyword));
+    const json = await resp.json();
+    if (!json.success || !json.data?.length) { body.innerHTML = '<div class="empty-state">未找到结果</div>'; return; }
+    title.textContent = '搜索: ' + keyword + '（' + json.total + ' 条）';
+    _renderWencaiTable(body, json.data, row => `selectFutures('${row['代码']}','${(row['名称']||'').replace(/'/g,"\\'")}')`);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">搜索失败: ' + e.message + '</div>';
+  }
+}
+
+let _futuresChart = null, _futuresKlineSeries = null, _futuresVolSeries = null;
+
+async function selectFutures(code, name) {
+  const listArea = document.getElementById('futuresBoardCard');
+  const resultCard = document.getElementById('futuresResultCard');
+  const detailArea = document.getElementById('futuresDetailArea');
+  const title = document.getElementById('futuresDetailTitle');
+  if (!detailArea) return;
+
+  if (listArea) listArea.style.display = 'none';
+  if (resultCard) resultCard.style.display = 'none';
+  detailArea.style.display = '';
+  title.textContent = name + ' (' + code + ')';
+
+  document.getElementById('futuresKlineChart').innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
+  document.getElementById('futuresRankBody').innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
+  document.getElementById('futuresRankDate').textContent = '';
+
+  // 并行加载 K 线和龙虎榜
+  const [klineResult, rankResult] = await Promise.allSettled([
+    fetch('/api/futures/kline/' + code + '?count=200').then(r => r.json()),
+    fetch('/api/futures/rank/' + code).then(r => r.json()),
+  ]);
+
+  // 渲染 K 线
+  const chartEl = document.getElementById('futuresKlineChart');
+  if (klineResult.status === 'fulfilled' && klineResult.value.success && klineResult.value.data?.length) {
+    const kline = klineResult.value.data;
+    chartEl.innerHTML = '';
+    _futuresChart = LightweightCharts.createChart(chartEl, {
+      width: chartEl.clientWidth, height: 360,
+      layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
+      grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+      crosshair: { mode: 0 },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { borderVisible: false, timeVisible: false },
+    });
+    _futuresKlineSeries = _futuresChart.addCandlestickSeries({
+      upColor: '#ef4444', downColor: '#22c55e',
+      borderUpColor: '#ef4444', borderDownColor: '#22c55e',
+      wickUpColor: '#ef4444', wickDownColor: '#22c55e',
+    });
+    _futuresKlineSeries.setData(kline.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
+    if (kline[0].volume != null) {
+      _futuresVolSeries = _futuresChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+      _futuresChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+      _futuresVolSeries.setData(kline.map(k => ({ time: k.date, value: k.volume, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
+    }
+    _futuresChart.timeScale().fitContent();
+    new ResizeObserver(() => { if (_futuresChart) _futuresChart.applyOptions({ width: chartEl.clientWidth }); }).observe(chartEl);
+  } else {
+    chartEl.innerHTML = '<div class="empty-state" style="padding:40px;">暂无K线数据</div>';
+  }
+
+  // 渲染龙虎榜
+  const rankEl = document.getElementById('futuresRankBody');
+  const rankDateEl = document.getElementById('futuresRankDate');
+  if (rankResult.status === 'fulfilled' && rankResult.value.success && rankResult.value.data?.length) {
+    const rank = rankResult.value.data;
+    if (rankResult.value.date) rankDateEl.textContent = '数据日期: ' + rankResult.value.date;
+    let h = '<table class="data-table"><thead><tr><th>合约</th><th>成交量前5</th><th>增减</th><th>持买前5</th><th>增减</th><th>持卖前5</th><th>增减</th></tr></thead><tbody>';
+    rank.forEach(r => {
+      h += `<tr>
+        <td style="font-weight:500;">${r['合约'] || '-'}</td>
+        <td class="num">${r['成交量前5'] ?? '-'}</td>
+        <td class="num ${r['成交量增减'] > 0 ? 'up' : r['成交量增减'] < 0 ? 'down' : ''}">${r['成交量增减'] != null ? (r['成交量增减'] >= 0 ? '+' : '') + r['成交量增减'] : '-'}</td>
+        <td class="num">${r['持买量前5'] ?? '-'}</td>
+        <td class="num ${r['持买增减'] > 0 ? 'up' : r['持买增减'] < 0 ? 'down' : ''}">${r['持买增减'] != null ? (r['持买增减'] >= 0 ? '+' : '') + r['持买增减'] : '-'}</td>
+        <td class="num">${r['持卖量前5'] ?? '-'}</td>
+        <td class="num ${r['持卖增减'] > 0 ? 'up' : r['持卖增减'] < 0 ? 'down' : ''}">${r['持卖增减'] != null ? (r['持卖增减'] >= 0 ? '+' : '') + r['持卖增减'] : '-'}</td>
+      </tr>`;
+    });
+    h += '</tbody></table>';
+    rankEl.innerHTML = h;
+  } else {
+    const err = rankResult.status === 'fulfilled' ? (rankResult.value.error || '暂无数据') : '加载失败';
+    rankEl.innerHTML = '<div class="empty-state">' + err + '</div>';
+  }
+}
+
+function hideFuturesDetail() {
+  const listArea = document.getElementById('futuresBoardCard');
+  const resultCard = document.getElementById('futuresResultCard');
+  const detailArea = document.getElementById('futuresDetailArea');
+  if (detailArea) detailArea.style.display = 'none';
+  if (listArea) listArea.style.display = '';
+  if (resultCard) resultCard.style.display = '';
+  if (_futuresChart) { _futuresChart.remove(); _futuresChart = null; }
 }
 </script>
 </body>

@@ -298,6 +298,33 @@ async def api_market_search(market: str, q: str = ""):
     return await provider.search(q)
 
 
+@app.get("/api/fund/detail/{code}")
+async def api_fund_detail(code: str):
+    """ETF 详情：基本信息 + K 线 + 持仓"""
+    provider = get_provider("fund")
+    if not provider:
+        return {"success": False, "error": "基金服务不可用"}
+    return await provider.get_etf_detail(code)
+
+
+@app.get("/api/futures/kline/{symbol}")
+async def api_futures_kline(symbol: str, count: int = 120):
+    """期货 K 线"""
+    provider = get_provider("futures")
+    if not provider:
+        return {"success": False, "error": "期货服务不可用"}
+    return await provider.get_kline(symbol, count=count)
+
+
+@app.get("/api/futures/rank/{symbol}")
+async def api_futures_rank(symbol: str):
+    """期货持仓龙虎榜"""
+    provider = get_provider("futures")
+    if not provider:
+        return {"success": False, "error": "期货服务不可用"}
+    return await provider.get_rank(symbol)
+
+
 _RULES_PATH = Path(__file__).parent / "financial_rules.json"
 
 @app.get("/api/stock/financial-rules")
