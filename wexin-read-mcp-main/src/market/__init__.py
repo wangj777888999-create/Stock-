@@ -19,17 +19,9 @@ def list_providers() -> list[dict]:
     return [{"name": p.name, "label": p.label} for p in _providers.values()]
 
 
-# Import and register all providers at module load
-from .a_share import AShareProvider
+# Only register fund and crypto providers
 from .fund import FundProvider
-from .us_stock import USStockProvider
-from .hk_stock import HKStockProvider
-from .global_index import GlobalIndexProvider
 from .crypto import CryptoProvider
 
-register(AShareProvider())
 register(FundProvider())
-register(USStockProvider())
-register(HKStockProvider())
-register(GlobalIndexProvider())
 register(CryptoProvider())
