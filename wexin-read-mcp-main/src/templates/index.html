@@ -1444,6 +1444,7 @@ textarea.form-input {
                 <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('month',this)">月K</button>
               </div>
             </div>
+            <div style="display:flex;gap:6px;padding:6px 12px 0;" id="maToggles"></div>
             <div class="card-body" style="padding:0;">
               <div id="klineChart" style="width:100%;height:360px;"></div>
             </div>
@@ -1591,6 +1592,7 @@ textarea.form-input {
                 <button class="btn btn-ghost btn-sm" onclick="switchFundKlinePeriod('month',this)">月K</button>
               </div>
             </div>
+            <div style="display:flex;gap:6px;padding:6px 12px 0;" id="fundMaToggles"></div>
             <div class="card-body" style="padding:0;">
               <div id="fundKlineChart" style="height:360px;"></div>
             </div>
@@ -1696,6 +1698,7 @@ textarea.form-input {
                 <button class="btn btn-ghost btn-sm" onclick="switchFuturesKlinePeriod('month',this)">月K</button>
               </div>
             </div>
+            <div style="display:flex;gap:6px;padding:6px 12px 0;" id="futuresMaToggles"></div>
             <div class="card-body" style="padding:0;">
               <div id="futuresKlineChart" style="height:360px;"></div>
             </div>
@@ -2646,15 +2649,39 @@ const _MA_CONFIG = [
   { period: 60, color: '#6b7280' },
 ];
 
-function addMALines(chart, candleData) {
+function addMALines(chart, candleData, toggleContainerId) {
   const series = [];
-  _MA_CONFIG.forEach(cfg => {
+  let container = toggleContainerId ? document.getElementById(toggleContainerId) : null;
+  if (container) container.innerHTML = '';
+  _MA_CONFIG.forEach((cfg, i) => {
     const s = chart.addLineSeries({
       color: cfg.color, lineWidth: 1,
       lastValueVisible: false, priceLineVisible: false,
     });
     s.setData(computeMA(candleData, cfg.period));
-    series.push(s);
+    series.push({ series: s, visible: true, ...cfg });
+    if (container) {
+      const pill = document.createElement('span');
+      pill.textContent = 'MA' + cfg.period;
+      pill.style.cssText = 'cursor:pointer;font-size:11px;font-weight:500;padding:2px 8px;border-radius:10px;border:1px solid ' + cfg.color + ';color:#fff;background:' + cfg.color + ';user-select:none;transition:all .15s;';
+      pill.dataset.idx = i;
+      pill.onclick = () => {
+        const item = series[i];
+        item.visible = !item.visible;
+        if (item.visible) {
+          item.series.applyOptions({ visible: true });
+          pill.style.color = '#fff';
+          pill.style.background = cfg.color;
+          pill.style.borderColor = cfg.color;
+        } else {
+          item.series.applyOptions({ visible: false });
+          pill.style.color = cfg.color;
+          pill.style.background = 'transparent';
+          pill.style.borderColor = cfg.color;
+        }
+      };
+      container.appendChild(pill);
+    }
   });
   return series;
 }
@@ -2825,7 +2852,7 @@ async function loadKline(period) {
 
     // MA 均线
     const _candleData = json.data.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close }));
-    addMALines(_klineChart, _candleData);
+    addMALines(_klineChart, _candleData, 'maToggles');
 
     _klineVolSeries = _klineChart.addHistogramSeries({
       priceFormat: { type: 'volume' },
@@ -3557,7 +3584,7 @@ async function selectFund(code, name) {
       _fundKlineSeries.setData(kline.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
       // MA 均线
       _fundKlineRaw = kline.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close, volume: k.volume }));
-      addMALines(_fundChart, _fundKlineRaw);
+      addMALines(_fundChart, _fundKlineRaw, 'fundMaToggles');
       _fundVolSeries = _fundChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
       _fundChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
       _fundVolSeries.setData(kline.map(k => ({ time: k.date, value: k.volume, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
@@ -3608,7 +3635,7 @@ function switchFundKlinePeriod(period, btn) {
     wickUpColor: '#ef4444', wickDownColor: '#22c55e',
   });
   _fundKlineSeries.setData(data);
-  addMALines(_fundChart, data);
+  addMALines(_fundChart, data, 'fundMaToggles');
   _fundVolSeries = _fundChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
   _fundChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
   _fundVolSeries.setData(data.map(k => ({ time: k.time, value: k.volume || 0, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
@@ -3804,7 +3831,7 @@ async function selectFutures(code, name) {
     _futuresKlineSeries.setData(kline.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
     // MA 均线
     _futuresKlineRaw = kline.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close, volume: k.volume }));
-    addMALines(_futuresChart, _futuresKlineRaw);
+    addMALines(_futuresChart, _futuresKlineRaw, 'futuresMaToggles');
     if (kline[0].volume != null) {
       _futuresVolSeries = _futuresChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
       _futuresChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
@@ -3864,7 +3891,7 @@ function switchFuturesKlinePeriod(period, btn) {
     wickUpColor: '#ef4444', wickDownColor: '#22c55e',
   });
   _futuresKlineSeries.setData(data);
-  addMALines(_futuresChart, data);
+  addMALines(_futuresChart, data, 'futuresMaToggles');
   _futuresVolSeries = _futuresChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
   _futuresChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
   _futuresVolSeries.setData(data.map(k => ({ time: k.time, value: k.volume || 0, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
