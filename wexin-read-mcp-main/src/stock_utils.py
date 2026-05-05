@@ -62,14 +62,15 @@ def get_market_name(code: str) -> str:
 
 def detect_market(code: str) -> str:
     """识别股票所属市场: 'us', 'hk', 'a'。"""
-    code = str(code).strip()
-    # 纯英文字母 + 可选点后缀 → 美股
-    cleaned = code.upper().replace(".", "").replace("-", "")
-    if cleaned.isalpha():
-        return "us"
-    # 5 位数字 → 港股
-    if code.isdigit() and len(code) == 5:
+    # 先检查原始数字长度（normalize 会把 5 位港股补零为 6 位）
+    raw = str(code).strip()
+    raw_cleaned = raw.upper().replace(".", "").replace("-", "")
+    if raw_cleaned.isdigit() and len(raw_cleaned) == 5:
         return "hk"
+    code = normalize_symbol(code)
+    # 纯英文字母 → 美股
+    if code.isalpha():
+        return "us"
     # 6 位数字 → A 股
     if code.isdigit() and len(code) == 6:
         return "a"
