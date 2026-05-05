@@ -11,7 +11,7 @@ if _src not in sys.path:
 
 import akshare as ak
 import requests as _requests
-from stock_utils import TTL_REALTIME, TTL_DAILY, cache
+from stock_utils import TTL_REALTIME, TTL_DAILY, TTL_COMPANY, cache
 from .base import MarketProvider
 
 logger = logging.getLogger(__name__)
@@ -59,6 +59,19 @@ _CATEGORIES = {
     "贵金属": ["黄金", "白银"],
 }
 
+_DF_TTL = 300  # 原始 DataFrame 缓存 5 分钟
+
+
+async def _get_futures_df():
+    """获取期货主力合约 DataFrame（带共享缓存）。"""
+    ck = "market:futures:df"
+    cached = cache.get(ck)
+    if cached is not None:
+        return cached
+    df = await asyncio.to_thread(_patch, ak.futures_display_main_sina)
+    cache.set(ck, df, _DF_TTL)
+    return df
+
 
 class FuturesProvider(MarketProvider):
     name = "futures"
@@ -71,7 +84,7 @@ class FuturesProvider(MarketProvider):
         if cached is not None:
             return cached
         try:
-            df = await asyncio.to_thread(_patch, ak.futures_display_main_sina)
+            df = await _get_futures_df()
             if df is None or df.empty:
                 return {"success": False, "error": "获取期货列表失败"}
 
@@ -101,7 +114,7 @@ class FuturesProvider(MarketProvider):
         if cached is not None:
             return cached
         try:
-            df = await asyncio.to_thread(_patch, ak.futures_display_main_sina)
+            df = await _get_futures_df()
             if df is None or df.empty:
                 return {"success": False, "error": "获取期货列表失败"}
 
@@ -134,7 +147,7 @@ class FuturesProvider(MarketProvider):
         if cached is not None:
             return cached
         try:
-            df = await asyncio.to_thread(_patch, ak.futures_display_main_sina)
+            df = await _get_futures_df()
             if df is None or df.empty:
                 return {"success": False, "error": "获取期货列表失败"}
 
@@ -159,7 +172,7 @@ class FuturesProvider(MarketProvider):
         if cached is not None:
             return cached
         try:
-            df = await asyncio.to_thread(_patch, ak.futures_display_main_sina)
+            df = await _get_futures_df()
             if df is None or df.empty:
                 return {"success": False, "error": "获取期货列表失败"}
             if keyword:
@@ -189,9 +202,13 @@ class FuturesProvider(MarketProvider):
         if cached is not None:
             return cached
         try:
+            from datetime import datetime, timedelta
+            # 只拉取约 count*2 个交易日的数据（约1.5年），而非6年
+            start = (datetime.now() - timedelta(days=count * 2)).strftime("%Y%m%d")
+            end = (datetime.now() + timedelta(days=30)).strftime("%Y%m%d")
             df = await asyncio.to_thread(
                 _patch, ak.futures_main_sina,
-                symbol=symbol, start_date="20200101", end_date="20300101",
+                symbol=symbol, start_date=start, end_date=end,
             )
             if df is None or df.empty:
                 return {"success": False, "error": "暂无K线数据"}
@@ -259,7 +276,7 @@ class FuturesProvider(MarketProvider):
                     "持卖量前10": _clean(row.get("short_open_interest_top10")),
                 })
             resp = {"success": True, "data": records, "date": date_str}
-            cache.set(ck, resp, TTL_DAILY)
+            cache.set(ck, resp, TTL_COMPANY)
             return resp
         except Exception as e:
             logger.error(f"FuturesProvider.get_rank error: {e}")

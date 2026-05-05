@@ -19,7 +19,7 @@ _DF_TTL = 300  # DataFrame 缓存 5 分钟
 
 
 def _clean(v):
-    """Convert NaN/NaT to None."""
+    """Convert NaN/NaT to None, numpy types to Python native."""
     import math, pandas as pd
     if v is None:
         return None
@@ -30,6 +30,11 @@ def _clean(v):
         pass
     if isinstance(v, float) and math.isnan(v):
         return None
+    if hasattr(v, "item"):
+        try:
+            v = v.item()
+        except (ValueError, TypeError):
+            pass
     return v
 
 
@@ -224,10 +229,11 @@ class FundProvider(MarketProvider):
                 if hold_df is not None and not hold_df.empty:
                     for _, r in hold_df.head(10).iterrows():
                         holdings.append({
-                            "股票名称": _clean(r.get("股票名称")),
-                            "持仓占比": _clean(r.get("占净值比例")),
-                            "持股数量": _clean(r.get("持股数")),
-                            "持仓市值": _clean(r.get("持仓市值")),
+                            "code": _clean(r.iloc[1]) if len(r) > 1 else None,
+                            "name": _clean(r.iloc[2]) if len(r) > 2 else None,
+                            "ratio": _clean(r.iloc[3]) if len(r) > 3 else None,
+                            "shares": _clean(r.iloc[4]) if len(r) > 4 else None,
+                            "value": _clean(r.iloc[5]) if len(r) > 5 else None,
                         })
             except Exception:
                 pass  # 持仓数据可能不可用

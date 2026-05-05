@@ -1027,6 +1027,19 @@ textarea.form-input {
   </div>
 </div>
 
+<!-- 股票详情弹窗 -->
+<div class="modal-overlay" id="stockModal">
+  <div class="modal-box" style="width:520px;max-height:80vh;">
+    <div class="modal-header">
+      <h3 id="stockModalTitle">股票详情</h3>
+      <button class="modal-close" onclick="closeStockModal()">×</button>
+    </div>
+    <div id="stockModalBody" class="modal-body" style="text-align:left;min-height:auto;max-height:60vh;overflow-y:auto;">
+      <div style="text-align:center;padding:30px;"><span class="spinner dark"></span></div>
+    </div>
+  </div>
+</div>
+
 <!-- ===== APP SHELL ===== -->
 <div class="app">
 
@@ -1572,6 +1585,11 @@ textarea.form-input {
           <div class="card" style="margin-bottom:16px;">
             <div class="card-header">
               <div class="card-title">K 线走势</div>
+              <div style="display:flex;gap:4px;" id="fundKlinePeriodBtns">
+                <button class="btn btn-ghost btn-sm active" onclick="switchFundKlinePeriod('day',this)">日K</button>
+                <button class="btn btn-ghost btn-sm" onclick="switchFundKlinePeriod('week',this)">周K</button>
+                <button class="btn btn-ghost btn-sm" onclick="switchFundKlinePeriod('month',this)">月K</button>
+              </div>
             </div>
             <div class="card-body" style="padding:0;">
               <div id="fundKlineChart" style="height:360px;"></div>
@@ -1672,6 +1690,11 @@ textarea.form-input {
           <div class="card" style="margin-bottom:16px;">
             <div class="card-header">
               <div class="card-title">K 线走势</div>
+              <div style="display:flex;gap:4px;" id="futuresKlinePeriodBtns">
+                <button class="btn btn-ghost btn-sm active" onclick="switchFuturesKlinePeriod('day',this)">日K</button>
+                <button class="btn btn-ghost btn-sm" onclick="switchFuturesKlinePeriod('week',this)">周K</button>
+                <button class="btn btn-ghost btn-sm" onclick="switchFuturesKlinePeriod('month',this)">月K</button>
+              </div>
             </div>
             <div class="card-body" style="padding:0;">
               <div id="futuresKlineChart" style="height:360px;"></div>
@@ -2603,6 +2626,68 @@ async function testWxCookie() {
 }
 
 /* ============================================================
+   工具函数：MA 均线计算 + K线周期聚合
+   ============================================================ */
+function computeMA(data, period) {
+  const result = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) { result.push({ time: data[i].time }); continue; }
+    let sum = 0;
+    for (let j = 0; j < period; j++) sum += data[i - j].close;
+    result.push({ time: data[i].time, value: +(sum / period).toFixed(4) });
+  }
+  return result;
+}
+
+const _MA_CONFIG = [
+  { period: 5,  color: '#f59e0b' },
+  { period: 10, color: '#3b82f6' },
+  { period: 20, color: '#a855f7' },
+  { period: 60, color: '#6b7280' },
+];
+
+function addMALines(chart, candleData) {
+  const series = [];
+  _MA_CONFIG.forEach(cfg => {
+    const s = chart.addLineSeries({
+      color: cfg.color, lineWidth: 1,
+      lastValueVisible: false, priceLineVisible: false,
+    });
+    s.setData(computeMA(candleData, cfg.period));
+    series.push(s);
+  });
+  return series;
+}
+
+function aggregateKline(dailyData, period) {
+  if (!dailyData || !dailyData.length) return [];
+  if (period === 'day') return dailyData;
+  const groups = {};
+  dailyData.forEach(d => {
+    const dt = new Date(d.time);
+    let key;
+    if (period === 'week') {
+      // ISO week: get Monday
+      const day = dt.getDay();
+      const diff = dt.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(dt);
+      monday.setDate(diff);
+      key = monday.toISOString().slice(0, 10);
+    } else {
+      key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-01';
+    }
+    if (!groups[key]) groups[key] = { open: d.open, high: d.high, low: d.low, close: d.close, volume: d.volume || 0, time: key };
+    else {
+      groups[key].high = Math.max(groups[key].high, d.high);
+      groups[key].low = Math.min(groups[key].low, d.low);
+      groups[key].close = d.close;
+      groups[key].volume += (d.volume || 0);
+    }
+  });
+  return Object.values(groups).sort((a, b) => a.time < b.time ? -1 : 1);
+}
+
+/* ============================================================
    STOCK — 搜索、行情、K线、公司简介、财务、资金流向、新闻
    ============================================================ */
 let _stockCode = '';
@@ -2737,6 +2822,10 @@ async function loadKline(period) {
       wickUpColor: '#ef4444', wickDownColor: '#22c55e',
     });
     _klineSeries.setData(json.data.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
+
+    // MA 均线
+    const _candleData = json.data.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close }));
+    addMALines(_klineChart, _candleData);
 
     _klineVolSeries = _klineChart.addHistogramSeries({
       priceFormat: { type: 'volume' },
@@ -3410,7 +3499,7 @@ async function fundSearch() {
 }
 
 /* --- ETF 详情 --- */
-let _fundChart = null, _fundKlineSeries = null, _fundVolSeries = null;
+let _fundChart = null, _fundKlineSeries = null, _fundVolSeries = null, _fundKlineRaw = null;
 
 async function selectFund(code, name) {
   const listArea = document.getElementById('fundBoardCard');
@@ -3466,6 +3555,9 @@ async function selectFund(code, name) {
         wickUpColor: '#ef4444', wickDownColor: '#22c55e',
       });
       _fundKlineSeries.setData(kline.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
+      // MA 均线
+      _fundKlineRaw = kline.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close, volume: k.volume }));
+      addMALines(_fundChart, _fundKlineRaw);
       _fundVolSeries = _fundChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
       _fundChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
       _fundVolSeries.setData(kline.map(k => ({ time: k.date, value: k.volume, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
@@ -3478,9 +3570,11 @@ async function selectFund(code, name) {
     // 渲染持仓
     const holdEl = document.getElementById('fundHoldingsBody');
     if (holdings && holdings.length) {
-      let h = '<table class="data-table"><thead><tr><th>排名</th><th>股票名称</th><th>持仓占比</th><th>持股数量</th><th>持仓市值</th></tr></thead><tbody>';
+      let h = '<table class="data-table"><thead><tr><th>排名</th><th>代码</th><th>股票名称</th><th>持仓占比</th><th>持股数量</th><th>持仓市值</th></tr></thead><tbody>';
       holdings.forEach((r, i) => {
-        h += `<tr><td class="num">${i + 1}</td><td>${r['股票名称'] || '-'}</td><td class="num">${r['持仓占比'] != null ? r['持仓占比'] + '%' : '-'}</td><td class="num">${r['持股数量'] ?? '-'}</td><td class="num">${r['持仓市值'] ?? '-'}</td></tr>`;
+        const code = r.code || '';
+        const clickAttr = code ? ` style="cursor:pointer;color:var(--blue);" onclick="openStockModal('${code}','${(r.name||'').replace(/'/g,"\\'")}')"` : '';
+        h += `<tr><td class="num">${i + 1}</td><td style="font-family:var(--mono);font-size:12px;">${code || '-'}</td><td${clickAttr}>${r.name || '-'}</td><td class="num">${r.ratio != null ? r.ratio + '%' : '-'}</td><td class="num">${r.shares ?? '-'}</td><td class="num">${r.value ?? '-'}</td></tr>`;
       });
       h += '</tbody></table>';
       holdEl.innerHTML = h;
@@ -3490,6 +3584,36 @@ async function selectFund(code, name) {
   } catch (e) {
     document.getElementById('fundInfoBody').innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
   }
+}
+
+function switchFundKlinePeriod(period, btn) {
+  document.querySelectorAll('#fundKlinePeriodBtns .btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (!_fundKlineRaw || !_fundKlineRaw.length) return;
+  const data = aggregateKline(_fundKlineRaw, period);
+  if (_fundChart) { _fundChart.remove(); _fundChart = null; }
+  const chartEl = document.getElementById('fundKlineChart');
+  chartEl.innerHTML = '';
+  _fundChart = LightweightCharts.createChart(chartEl, {
+    width: chartEl.clientWidth, height: 360,
+    layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
+    grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+    crosshair: { mode: 0 },
+    rightPriceScale: { borderVisible: false },
+    timeScale: { borderVisible: false, timeVisible: false },
+  });
+  _fundKlineSeries = _fundChart.addCandlestickSeries({
+    upColor: '#ef4444', downColor: '#22c55e',
+    borderUpColor: '#ef4444', borderDownColor: '#22c55e',
+    wickUpColor: '#ef4444', wickDownColor: '#22c55e',
+  });
+  _fundKlineSeries.setData(data);
+  addMALines(_fundChart, data);
+  _fundVolSeries = _fundChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+  _fundChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+  _fundVolSeries.setData(data.map(k => ({ time: k.time, value: k.volume || 0, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
+  _fundChart.timeScale().fitContent();
+  new ResizeObserver(() => { if (_fundChart) _fundChart.applyOptions({ width: chartEl.clientWidth }); }).observe(chartEl);
 }
 
 function hideFundDetail() {
@@ -3635,7 +3759,7 @@ async function futuresSearch() {
   }
 }
 
-let _futuresChart = null, _futuresKlineSeries = null, _futuresVolSeries = null;
+let _futuresChart = null, _futuresKlineSeries = null, _futuresVolSeries = null, _futuresKlineRaw = null;
 
 async function selectFutures(code, name) {
   const listArea = document.getElementById('futuresBoardCard');
@@ -3678,6 +3802,9 @@ async function selectFutures(code, name) {
       wickUpColor: '#ef4444', wickDownColor: '#22c55e',
     });
     _futuresKlineSeries.setData(kline.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
+    // MA 均线
+    _futuresKlineRaw = kline.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close, volume: k.volume }));
+    addMALines(_futuresChart, _futuresKlineRaw);
     if (kline[0].volume != null) {
       _futuresVolSeries = _futuresChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
       _futuresChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
@@ -3715,6 +3842,36 @@ async function selectFutures(code, name) {
   }
 }
 
+function switchFuturesKlinePeriod(period, btn) {
+  document.querySelectorAll('#futuresKlinePeriodBtns .btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (!_futuresKlineRaw || !_futuresKlineRaw.length) return;
+  const data = aggregateKline(_futuresKlineRaw, period);
+  if (_futuresChart) { _futuresChart.remove(); _futuresChart = null; }
+  const chartEl = document.getElementById('futuresKlineChart');
+  chartEl.innerHTML = '';
+  _futuresChart = LightweightCharts.createChart(chartEl, {
+    width: chartEl.clientWidth, height: 360,
+    layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
+    grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+    crosshair: { mode: 0 },
+    rightPriceScale: { borderVisible: false },
+    timeScale: { borderVisible: false, timeVisible: false },
+  });
+  _futuresKlineSeries = _futuresChart.addCandlestickSeries({
+    upColor: '#ef4444', downColor: '#22c55e',
+    borderUpColor: '#ef4444', borderDownColor: '#22c55e',
+    wickUpColor: '#ef4444', wickDownColor: '#22c55e',
+  });
+  _futuresKlineSeries.setData(data);
+  addMALines(_futuresChart, data);
+  _futuresVolSeries = _futuresChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+  _futuresChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+  _futuresVolSeries.setData(data.map(k => ({ time: k.time, value: k.volume || 0, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
+  _futuresChart.timeScale().fitContent();
+  new ResizeObserver(() => { if (_futuresChart) _futuresChart.applyOptions({ width: chartEl.clientWidth }); }).observe(chartEl);
+}
+
 function hideFuturesDetail() {
   const listArea = document.getElementById('futuresBoardCard');
   const resultCard = document.getElementById('futuresResultCard');
@@ -3723,6 +3880,76 @@ function hideFuturesDetail() {
   if (listArea) listArea.style.display = '';
   if (resultCard) resultCard.style.display = '';
   if (_futuresChart) { _futuresChart.remove(); _futuresChart = null; }
+}
+
+/* --- 持仓股详情弹窗 --- */
+async function openStockModal(code, name) {
+  const modal = document.getElementById('stockModal');
+  const title = document.getElementById('stockModalTitle');
+  const body = document.getElementById('stockModalBody');
+  title.textContent = (name || code) + ' (' + code + ')';
+  body.innerHTML = '<div style="text-align:center;padding:30px;"><span class="spinner dark"></span> 加载中...</div>';
+  modal.classList.add('active');
+
+  try {
+    const [quoteResp, profileResp] = await Promise.allSettled([
+      fetch('/api/stock/quote/' + code).then(r => r.json()),
+      fetch('/api/stock/profile/' + code).then(r => r.json()),
+    ]);
+
+    let html = '';
+
+    // 行情
+    if (quoteResp.status === 'fulfilled' && quoteResp.value.success) {
+      const q = quoteResp.value.data;
+      const price = q['最新价'] ?? '-';
+      const change = q['涨跌额'] ?? 0;
+      const pct = q['涨跌幅'] ?? 0;
+      const up = parseFloat(change) >= 0;
+      const color = up ? 'var(--red)' : 'var(--green)';
+      const arrow = up ? '▲' : '▼';
+      html += '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px;">'
+        + `<span style="font-size:24px;font-weight:700;color:${color};">${price}</span>`
+        + `<span style="font-size:13px;color:${color};">${arrow} ${change} (${pct}%)</span></div>`;
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:13px;margin-bottom:14px;">';
+      const items = [
+        ['今开', q['今开']], ['昨收', q['昨收']], ['最高', q['最高']], ['最低', q['最低']],
+        ['市盈率', q['市盈率']], ['市净率', q['市净率']],
+        ['总市值', q['总市值'] != null ? q['总市值'] + '亿' : '-'],
+        ['成交量', q['成交量'] != null ? q['成交量'] + '手' : '-'],
+      ];
+      items.forEach(([k, v]) => {
+        html += `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);"><span style="color:var(--ink-3);font-size:12px;">${k}</span><span style="font-family:var(--mono);">${v ?? '-'}</span></div>`;
+      });
+      html += '</div>';
+    } else {
+      html += '<div style="color:var(--ink-3);font-size:13px;margin-bottom:14px;">行情数据暂不可用</div>';
+    }
+
+    // 公司简介
+    if (profileResp.status === 'fulfilled' && profileResp.value.success) {
+      const p = profileResp.value.data;
+      html += '<div style="border-top:1px solid var(--border);padding-top:12px;">';
+      html += '<div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--ink-2);">公司简介</div>';
+      const profItems = [
+        ['公司名称', p['公司名称']], ['所属行业', p['所属行业']], ['上市日期', p['上市日期']],
+        ['法人代表', p['法人代表']], ['主营业务', p['主营业务']],
+      ];
+      profItems.forEach(([k, v]) => {
+        if (v) html += `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);font-size:12px;"><span style="color:var(--ink-3);">${k}</span><span style="max-width:60%;text-align:right;">${v}</span></div>`;
+      });
+      html += '</div>';
+    }
+
+    if (!html) html = '<div style="text-align:center;color:var(--ink-3);padding:20px;">暂无数据</div>';
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = '<div style="text-align:center;color:var(--red);padding:20px;">加载失败: ' + e.message + '</div>';
+  }
+}
+
+function closeStockModal() {
+  document.getElementById('stockModal').classList.remove('active');
 }
 </script>
 </body>
