@@ -1059,9 +1059,13 @@ textarea.form-input {
         <svg viewBox="0 0 20 20" fill="none"><path d="M3 17V7l4-4 3 5 4-5 3 7v7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>股票查询</span>
       </button>
-      <button class="nav-item" data-view="wencai" onclick="switchView('wencai', this)">
-        <svg viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/><path d="M14 14l4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-        <span>条件选股</span>
+      <button class="nav-item" data-view="fund" onclick="switchView('fund', this)">
+        <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M7 7h6M7 10h6M7 13h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span>基金</span>
+      </button>
+      <button class="nav-item" data-view="crypto" onclick="switchView('crypto', this)">
+        <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.6"/><path d="M10 6v8M8 8h4c1.1 0 2 .9 2 2s-.9 2-2 2H8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>币圈</span>
       </button>
       <div class="nav-section-label" style="margin-top:8px;">系统</div>
       <button class="nav-item" data-view="config" onclick="switchView('config', this)">
@@ -1385,7 +1389,7 @@ textarea.form-input {
           </div>
           <div class="card-body">
             <div style="display:flex;gap:8px;margin-bottom:12px;">
-              <input id="stockSearchInput" class="input" placeholder="输入股票代码或名称，如 600519 或 贵州茅台" style="flex:1;" onkeydown="if(event.key==='Enter')searchStock()">
+              <input id="stockSearchInput" class="input" placeholder="搜索 A 股/美股/港股（代码或名称）" style="flex:1;" onkeydown="if(event.key==='Enter')searchStock()">
               <button class="btn btn-primary btn-sm" onclick="searchStock()">搜索</button>
             </div>
             <div id="stockSearchResults"></div>
@@ -1518,161 +1522,69 @@ textarea.form-input {
 
       </div><!-- /view-stock -->
 
-      <!-- ==================== VIEW: WENCAI ==================== -->
-      <div id="view-wencai" class="view">
+      <!-- ==================== VIEW: FUND ==================== -->
+      <div id="view-fund" class="view">
 
-        <div style="display:flex;gap:4px;margin-bottom:20px;">
-          <button class="btn btn-ghost btn-sm active" id="wencaiTabQuery" onclick="switchWencaiTab('query')">条件选股</button>
-          <button class="btn btn-ghost btn-sm" id="wencaiTabSectors" onclick="switchWencaiTab('sectors')">板块扫描</button>
-          <button class="btn btn-ghost btn-sm" id="wencaiTabVisits" onclick="switchWencaiTab('visits')">机构调研</button>
-        </div>
-
-        <!-- Tab 1: 条件选股 -->
-        <div id="wencai-panel-query" class="wencai-panel active">
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/><path d="M14 14l4 4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-                自然语言选股
-              </div>
-            </div>
-            <div class="card-body">
-              <div style="display:flex;gap:8px;">
-                <input id="wencaiQueryInput" class="input" placeholder="输入选股条件，如：市盈率小于20，净利润大于1亿，市值大于100亿"
-                       style="flex:1;" onkeydown="if(event.key==='Enter')wencaiSearch()">
-                <button class="btn btn-primary" onclick="wencaiSearch()">查询</button>
-              </div>
-              <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--ink-3);">
-                <span>快捷:</span>
-                <a href="#" onclick="wencaiQuick('今日涨停的股票');return false;" style="color:var(--blue);cursor:pointer;text-decoration:none;">今日涨停</a>
-                <a href="#" onclick="wencaiQuick('MACD金叉，成交量放大');return false;" style="color:var(--blue);cursor:pointer;text-decoration:none;">MACD金叉</a>
-                <a href="#" onclick="wencaiQuick('净资产收益率大于15%，股息率大于3%');return false;" style="color:var(--blue);cursor:pointer;text-decoration:none;">高ROE高股息</a>
-                <a href="#" onclick="wencaiQuick('2024年营收增长大于30%');return false;" style="color:var(--blue);cursor:pointer;text-decoration:none;">高增长</a>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M3 4h14M6 10h8M8 16h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                结构化筛选
-              </div>
-            </div>
-            <div class="card-body">
-              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;">
-                <div>
-                  <label style="font-size:11px;color:var(--ink-3);display:block;margin-bottom:3px;">行业板块</label>
-                  <select id="wencaiIndustry" class="input" style="padding:6px 10px;">
-                    <option value="">不限</option>
-                    <option value="银行">银行</option>
-                    <option value="证券">证券</option>
-                    <option value="保险">保险</option>
-                    <option value="白酒">白酒</option>
-                    <option value="医药">医药</option>
-                    <option value="半导体">半导体</option>
-                    <option value="新能源车">新能源车</option>
-                    <option value="光伏">光伏</option>
-                    <option value="人工智能">人工智能</option>
-                    <option value="消费电子">消费电子</option>
-                  </select>
-                </div>
-                <div>
-                  <label style="font-size:11px;color:var(--ink-3);display:block;margin-bottom:3px;">市盈率上限</label>
-                  <input id="wencaiMaxPE" class="input" type="number" placeholder="如 20" style="padding:6px 10px;">
-                </div>
-                <div>
-                  <label style="font-size:11px;color:var(--ink-3);display:block;margin-bottom:3px;">市值下限(亿)</label>
-                  <input id="wencaiMinMC" class="input" type="number" placeholder="如 100" style="padding:6px 10px;">
-                </div>
-                <div>
-                  <label style="font-size:11px;color:var(--ink-3);display:block;margin-bottom:3px;">涨跌幅下限(%)</label>
-                  <input id="wencaiMinChange" class="input" type="number" placeholder="如 3" style="padding:6px 10px;">
-                </div>
-              </div>
-              <div style="margin-top:12px;">
-                <button class="btn btn-primary btn-sm" onclick="wencaiStructuredSearch()">应用筛选</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="card" id="wencaiResultCard" style="display:none;">
-            <div class="card-header">
-              <div class="card-title" id="wencaiResultTitle">查询结果</div>
-            </div>
-            <div class="card-body" style="overflow-x:auto;padding:0;">
-              <div id="wencaiResultBody" style="max-height:500px;overflow-y:auto;"></div>
+        <!-- 基金搜索 -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-body" style="padding:12px;">
+            <div style="display:flex;gap:8px;">
+              <input id="fundSearchInput" class="input" placeholder="搜索基金（代码或名称）" style="flex:1;"
+                     onkeydown="if(event.key==='Enter')fundSearch()">
+              <button class="btn btn-primary" onclick="fundSearch()">搜索</button>
             </div>
           </div>
         </div>
 
-        <!-- Tab 2: 板块扫描 -->
-        <div id="wencai-panel-sectors" class="wencai-panel">
-          <!-- Market switcher bar -->
-          <div id="marketSwitcherBar" style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;"></div>
+        <!-- ETF 板块网格 -->
+        <div class="card" id="fundBoardCard">
+          <div class="card-header">
+            <div class="card-title">ETF 板块分类</div>
+            <button class="btn btn-ghost btn-sm" onclick="loadFundBoards()">刷新</button>
+          </div>
+          <div class="card-body" id="fundBoardBody">
+            <div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>
+          </div>
+        </div>
 
-          <!-- Search bar -->
-          <div class="card" style="margin-bottom:16px;">
-            <div class="card-body" style="padding:12px;">
-              <div style="display:flex;gap:8px;">
-                <input id="marketSearchInput" class="input" placeholder="输入代码或名称搜索" style="flex:1;"
-                       onkeydown="if(event.key==='Enter')marketSearch()">
-                <button class="btn btn-primary" onclick="marketSearch()">搜索</button>
-              </div>
+        <!-- 板块成分 ETF -->
+        <div class="card" id="fundResultCard" style="display:none;margin-top:16px;">
+          <div class="card-header">
+            <div class="card-title" id="fundResultTitle">成分基金</div>
+          </div>
+          <div class="card-body" style="overflow-x:auto;padding:0;">
+            <div id="fundResultBody" style="max-height:500px;overflow-y:auto;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== VIEW: CRYPTO ==================== -->
+      <div id="view-crypto" class="view">
+
+        <!-- 币种搜索 -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-body" style="padding:12px;">
+            <div style="display:flex;gap:8px;">
+              <input id="cryptoSearchInput" class="input" placeholder="搜索币种（名称或代码，如 BTC）" style="flex:1;"
+                     onkeydown="if(event.key==='Enter')cryptoSearch()">
+              <button class="btn btn-primary" onclick="cryptoSearch()">搜索</button>
             </div>
           </div>
+        </div>
 
-          <!-- Board grid / spot list -->
-          <div class="card" id="marketContentCard">
-            <div class="card-header">
-              <div class="card-title" id="marketContentTitle">板块</div>
-              <button class="btn btn-ghost btn-sm" onclick="loadMarketBoards()">刷新</button>
-            </div>
-            <div class="card-body" id="marketContentBody">
+        <!-- 币种行情列表 -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">主流币种行情</div>
+            <button class="btn btn-ghost btn-sm" onclick="loadCryptoSpot()">刷新</button>
+          </div>
+          <div class="card-body" style="overflow-x:auto;padding:0;">
+            <div id="cryptoSpotBody" style="max-height:600px;overflow-y:auto;">
               <div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>
             </div>
           </div>
-
-          <!-- Board stocks result -->
-          <div class="card" id="marketResultCard" style="display:none;margin-top:16px;">
-            <div class="card-header">
-              <div class="card-title" id="marketResultTitle">成分股</div>
-            </div>
-            <div class="card-body" style="overflow-x:auto;padding:0;">
-              <div id="marketResultBody" style="max-height:500px;overflow-y:auto;"></div>
-            </div>
-          </div>
         </div>
-
-        <!-- Tab 3: 机构调研 -->
-        <div id="wencai-panel-visits" class="wencai-panel">
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">机构调研扫描</div>
-            </div>
-            <div class="card-body">
-              <div style="display:flex;gap:8px;margin-bottom:8px;">
-                <input id="visitsQueryInput" class="input" placeholder="筛选条件，如：近一月有机构调研，股价上涨"
-                       style="flex:1;" onkeydown="if(event.key==='Enter')wencaiVisitsSearch()">
-                <button class="btn btn-primary" onclick="wencaiVisitsSearch()">扫描</button>
-              </div>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--ink-3);">
-                <span>快捷:</span>
-                <a href="#" onclick="wencaiVisitsQuick('机构调研家数大于5家');return false;" style="color:var(--blue);cursor:pointer;text-decoration:none;">热门调研股</a>
-                <a href="#" onclick="wencaiVisitsQuick('近一周有机构调研，股价上涨');return false;" style="color:var(--blue);cursor:pointer;text-decoration:none;">近一周调研上涨</a>
-                <a href="#" onclick="wencaiVisitsQuick('机构调研，市值小于500亿，市盈率小于30');return false;" style="color:var(--blue);cursor:pointer;text-decoration:none;">中小市值低估调研</a>
-              </div>
-            </div>
-          </div>
-
-          <div class="card" id="visitsResultCard" style="display:none;">
-            <div class="card-body" style="overflow-x:auto;padding:0;">
-              <div id="visitsResultBody" style="max-height:500px;overflow-y:auto;"></div>
-            </div>
-          </div>
-        </div>
-
-      </div><!-- /view-wencai -->
+      </div>
 
       <!-- ==================== VIEW: CONFIG ==================== -->
       <div id="view-config" class="view">
@@ -1842,9 +1754,12 @@ const topbarMeta = {
   task:     { title: '文章收集', sub: '从微信公众号抓取文章并生成分析报告' },
   bloggers: { title: '博主管理', sub: '添加、删除、刷新你关注的股票博主' },
   config:   { title: '配置设置', sub: '邮箱 SMTP · 公众号授权 · AI API' },
-  stock:    { title: '股票查询', sub: '搜索A股股票 · 查看实时行情' },
-  wencai:   { title: '条件选股', sub: '自然语言选股 · 板块扫描 · 机构调研' },
+  stock:    { title: '股票查询', sub: '搜索 A 股/美股/港股 · 实时行情' },
+  fund:     { title: '基金', sub: 'ETF 板块分类 · 基金搜索 · 实时行情' },
+  crypto:   { title: '币圈', sub: '主流币种行情 · 币种搜索' },
 };
+
+let _fundLoaded = false;
 
 function switchView(view, el) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -1858,6 +1773,8 @@ function switchView(view, el) {
   }
   if (view === 'task') refreshBloggerCheckList();
   if (view === 'bloggers') { loadBloggers(); }
+  if (view === 'fund' && !_fundLoaded) { loadFundBoards(); _fundLoaded = true; }
+  if (view === 'crypto') { loadCryptoSpot(); }
 }
 
 /* ============================================================
@@ -2598,12 +2515,12 @@ async function searchStock() {
     if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">' + (json.error || '未找到匹配的股票') + '</div>'; return; }
     el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
       + '<thead><tr style="border-bottom:1px solid var(--border);color:var(--ink-3);text-align:left;">'
-      + '<th style="padding:6px 8px;">代码</th><th style="padding:6px 8px;">名称</th><th style="padding:6px 8px;">板块</th><th style="padding:6px 8px;"></th></tr></thead>'
+      + '<th style="padding:6px 8px;">代码</th><th style="padding:6px 8px;">名称</th><th style="padding:6px 8px;">市场</th><th style="padding:6px 8px;"></th></tr></thead>'
       + '<tbody>' + json.data.map(s =>
         `<tr style="border-bottom:1px solid var(--border);cursor:pointer;" onclick="selectStock('${s.code}','${s.name}')">`
         + `<td style="padding:6px 8px;font-family:var(--mono);">${s.code}</td>`
         + `<td style="padding:6px 8px;font-weight:500;">${s.name}</td>`
-        + `<td style="padding:6px 8px;color:var(--ink-3);">${s.market || ''}</td>`
+        + `<td style="padding:6px 8px;color:var(--ink-3);">${({'a':'A股','us':'美股','hk':'港股'})[s.market] || s.market || ''}</td>`
         + `<td style="padding:6px 8px;"><button class="btn btn-primary btn-sm">查看详情</button></td></tr>`
       ).join('') + '</tbody></table>';
   } catch (e) { el.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>'; }
@@ -3275,6 +3192,138 @@ async function marketSearch() {
   } catch (e) {
     body.innerHTML = '<div class="empty-state">搜索失败: ' + e.message + '</div>';
   }
+}
+
+// --- Fund View ---
+
+async function loadFundBoards() {
+  const body = document.getElementById('fundBoardBody');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
+  try {
+    const resp = await fetch('/api/market/fund/boards');
+    const json = await resp.json();
+    if (!json.success || !json.data?.length) {
+      body.innerHTML = '<div class="empty-state">' + (json.error || '加载失败') + '</div>';
+      return;
+    }
+    let html = '<div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px;">';
+    json.data.forEach(item => {
+      const label = item.name + ' (' + item.count + ')';
+      html += '<div style="background:#F8F8FA;border:1px solid var(--border);color:var(--ink);cursor:pointer;padding:10px 14px;border-radius:var(--r-xs);font-size:13px;font-weight:500;transition:all var(--t) var(--ease);"'
+        + ' onclick="loadFundBoardStocks(\'' + item.name.replace(/'/g, "\\'") + '\')"'
+        + ' onmouseenter="this.style.borderColor=\'var(--blue)\';this.style.background=\'var(--blue-s)\'"'
+        + ' onmouseleave="this.style.borderColor=\'var(--border)\';this.style.background=\'#F8F8FA\'"'
+        + ' title="点击查看 ' + item.name + '">'
+        + label + '</div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
+  }
+}
+
+async function loadFundBoardStocks(name) {
+  const card = document.getElementById('fundResultCard');
+  const body = document.getElementById('fundResultBody');
+  const title = document.getElementById('fundResultTitle');
+  if (!card || !body || !title) return;
+  card.style.display = '';
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
+  title.textContent = '「' + name + '」';
+  try {
+    const resp = await fetch('/api/market/fund/board/' + encodeURIComponent(name));
+    const json = await resp.json();
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '查询失败') + '</div>'; return; }
+    if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到数据</div>'; return; }
+    title.textContent = '「' + name + '」（共 ' + (json.total || json.data.length) + ' 条）';
+    _renderWencaiTable(body, json.data);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>';
+  }
+}
+
+async function fundSearch() {
+  const input = document.getElementById('fundSearchInput');
+  const keyword = input ? input.value.trim() : '';
+  if (!keyword) { showToast('请输入搜索关键词', 'warning'); return; }
+  const card = document.getElementById('fundResultCard');
+  const body = document.getElementById('fundResultBody');
+  const title = document.getElementById('fundResultTitle');
+  if (!card || !body || !title) return;
+  card.style.display = '';
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 搜索中...</div>';
+  title.textContent = '搜索: ' + keyword;
+  try {
+    const resp = await fetch('/api/market/fund/search?q=' + encodeURIComponent(keyword));
+    const json = await resp.json();
+    if (!json.success || !json.data?.length) { body.innerHTML = '<div class="empty-state">未找到结果</div>'; return; }
+    title.textContent = '搜索: ' + keyword + '（' + json.total + ' 条）';
+    _renderWencaiTable(body, json.data);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">搜索失败: ' + e.message + '</div>';
+  }
+}
+
+// --- Crypto View ---
+
+async function loadCryptoSpot() {
+  const body = document.getElementById('cryptoSpotBody');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
+  try {
+    const resp = await fetch('/api/market/crypto/spot');
+    const json = await resp.json();
+    if (!json.success || !json.data?.length) { body.innerHTML = '<div class="empty-state">加载失败</div>'; return; }
+    _renderCryptoTable(body, json.data);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
+  }
+}
+
+async function cryptoSearch() {
+  const input = document.getElementById('cryptoSearchInput');
+  const keyword = input ? input.value.trim() : '';
+  if (!keyword) { loadCryptoSpot(); return; }
+  const body = document.getElementById('cryptoSpotBody');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 搜索中...</div>';
+  try {
+    const resp = await fetch('/api/market/crypto/search?q=' + encodeURIComponent(keyword));
+    const json = await resp.json();
+    if (!json.success || !json.data?.length) { body.innerHTML = '<div class="empty-state">未找到结果</div>'; return; }
+    _renderCryptoTable(body, json.data);
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">搜索失败: ' + e.message + '</div>';
+  }
+}
+
+function _renderCryptoTable(container, data) {
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+  html += '<thead><tr style="border-bottom:2px solid var(--border);text-align:left;">';
+  html += '<th style="padding:8px;">#</th><th style="padding:8px;">名称</th><th style="padding:8px;">代码</th>';
+  html += '<th style="padding:8px;text-align:right;">价格(USD)</th><th style="padding:8px;text-align:right;">24h涨跌</th>';
+  html += '<th style="padding:8px;text-align:right;">市值</th><th style="padding:8px;text-align:right;">24h成交量</th>';
+  html += '</tr></thead><tbody>';
+  data.forEach(c => {
+    const change = c.change_24h || 0;
+    const color = change >= 0 ? 'var(--green)' : 'var(--red)';
+    const sign = change >= 0 ? '+' : '';
+    const mcap = c.market_cap ? (c.market_cap >= 1e12 ? (c.market_cap/1e12).toFixed(2)+'T' : c.market_cap >= 1e9 ? (c.market_cap/1e9).toFixed(2)+'B' : (c.market_cap/1e6).toFixed(2)+'M') : '-';
+    const vol = c.volume_24h ? (c.volume_24h >= 1e9 ? (c.volume_24h/1e9).toFixed(2)+'B' : (c.volume_24h/1e6).toFixed(2)+'M') : '-';
+    html += '<tr style="border-bottom:1px solid var(--border);">';
+    html += '<td style="padding:8px;color:var(--ink-3);">' + (c.rank || '-') + '</td>';
+    html += '<td style="padding:8px;font-weight:500;">' + c.name + '</td>';
+    html += '<td style="padding:8px;color:var(--ink-3);">' + c.code + '</td>';
+    html += '<td style="padding:8px;text-align:right;font-weight:500;">' + (c.price ? c.price.toLocaleString() : '-') + '</td>';
+    html += '<td style="padding:8px;text-align:right;color:' + color + ';">' + sign + change.toFixed(2) + '%</td>';
+    html += '<td style="padding:8px;text-align:right;color:var(--ink-3);">$' + mcap + '</td>';
+    html += '<td style="padding:8px;text-align:right;color:var(--ink-3);">$' + vol + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
 }
 </script>
 </body>
