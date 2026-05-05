@@ -368,6 +368,7 @@ class StockService:
     async def get_realtime_quote(self, symbol: str) -> dict:
         """通过腾讯 API 获取实时行情，支持 A 股/美股/港股。"""
         market = detect_market(symbol)
+        original = str(symbol).strip()
         symbol = normalize_symbol(symbol)
         cache_key = f"quote:{symbol}"
         cached = cache.get(cache_key)
@@ -375,18 +376,17 @@ class StockService:
             return cached
 
         try:
-            code = symbol
             if market == "a":
                 exchange = get_exchange(symbol)
+                url_code = symbol
             elif market == "hk":
                 exchange = "hk"
-                # normalize_symbol 会将 5 位港股代码补零为 6 位，需还原
-                if len(symbol) == 6 and symbol.startswith("0"):
-                    code = symbol[1:]
+                url_code = original  # 港股用原始 5 位代码
             else:
                 exchange = "us"
+                url_code = symbol
 
-            url = _QT_URL.format(exchange=exchange, code=code)
+            url = _QT_URL.format(exchange=exchange, code=url_code)
             r = await asyncio.to_thread(_get, url, timeout=10)
             r.encoding = "gbk"
             record = _parse_tencent_quote(r.text, symbol)
@@ -405,7 +405,9 @@ class StockService:
     # ─── 3. K线历史数据 ───
 
     async def get_kline(self, symbol: str, period: str = "day", count: int = 120) -> dict:
-        """通过腾讯 API 获取前复权 K 线数据。period: day/week/month"""
+        """通过腾讯 API 获取前复权 K 线数据。支持 A 股/美股/港股。period: day/week/month"""
+        market = detect_market(symbol)  # 先识别市场（normalize 会补零破坏港股代码）
+        original = str(symbol).strip()  # 保留原始代码用于 URL（港股需要 5 位）
         symbol = normalize_symbol(symbol)
         cache_key = f"kline:{symbol}:{period}:{count}"
         cached = cache.get(cache_key)
@@ -413,14 +415,31 @@ class StockService:
             return cached
 
         try:
-            exchange = get_exchange(symbol)
+            if market == "a":
+                exchange = get_exchange(symbol)
+                url_code = symbol
+            elif market == "hk":
+                exchange = "hk"
+                url_code = original  # 港股用原始 5 位代码
+            else:
+                exchange = "us"
+                url_code = symbol
+
             url = (
                 f"http://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
-                f"?param={exchange}{symbol},{period},2020-01-01,,{count},qfq"
+                f"?param={exchange}{url_code},{period},2020-01-01,,{count},qfq"
             )
             r = await asyncio.to_thread(_get, url, timeout=10)
-            data = r.json().get("data", {}).get(f"{exchange}{symbol}", {})
-            klines = data.get("qfqday") or data.get("qfqweek") or data.get("qfqmonth") or data.get("day") or []
+            resp_data = r.json().get("data", {})
+            data = resp_data.get(f"{exchange}{url_code}", {})
+
+            # 不同市场 K 线字段名不同
+            if market == "us":
+                klines = data.get("day") or []
+            elif market == "hk":
+                klines = data.get("day") or []
+            else:
+                klines = data.get("qfqday") or data.get("qfqweek") or data.get("qfqmonth") or data.get("day") or []
 
             records = []
             for k in klines:
