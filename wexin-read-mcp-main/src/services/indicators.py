@@ -31,19 +31,20 @@ def calc_rsi(close: list[float], period: int = 14) -> list[float]:
 
 
 def _ema(data: np.ndarray, period: int) -> np.ndarray:
-    """指数移动平均，自动跳过前期 NaN 从第一个有效值开始计算。"""
+    """指数移动平均，自适应有效数据量（DIF 可能带前导 NaN）。"""
     alpha = 2.0 / (period + 1)
     result = np.full(len(data), np.nan)
     mask = ~np.isnan(data)
-    if not mask.any():
+    valid_idx = np.where(mask)[0]
+    if len(valid_idx) < 2:
         return result
-    first = int(np.argmax(mask))
-    seed_end = first + period
-    if seed_end > len(data):
-        return result
-    result[seed_end - 1] = data[first:seed_end].mean()
-    for i in range(seed_end, len(data)):
-        result[i] = alpha * data[i] + (1 - alpha) * result[i - 1]
+    actual_period = min(period, len(valid_idx))
+    seed_idx = valid_idx[actual_period - 1]
+    result[seed_idx] = data[valid_idx[:actual_period]].mean()
+    for i in range(actual_period, len(valid_idx)):
+        idx = valid_idx[i]
+        prev = valid_idx[i - 1]
+        result[idx] = alpha * data[idx] + (1 - alpha) * result[prev]
     return result
 
 
@@ -61,7 +62,8 @@ def calc_macd(close: list[float], fast: int = 12, slow: int = 26, signal: int = 
     dea = _ema(dif, signal)
     macd = 2.0 * (dif - dea)
 
-    start = slow + signal - 2
+    mask = ~np.isnan(dif) & ~np.isnan(dea) & ~np.isnan(macd)
+    start = int(np.argmax(mask)) if mask.any() else n
     return {
         "dif": [None]*start + dif[start:].tolist(),
         "dea": [None]*start + dea[start:].tolist(),
