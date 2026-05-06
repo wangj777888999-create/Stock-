@@ -1,12 +1,14 @@
 """
 股票数据工具函数 — 来自 cn-financial-mcp 项目，本地化副本。
 
-包含：股票代码规范化、TTL 缓存、多源降级调用。
+包含：股票代码规范化、持久化缓存（SQLite）、多源降级调用。
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import sqlite3
 import time
 from typing import Any, Callable
 
@@ -104,7 +106,6 @@ TTL_COMPANY = 86400
 
 # ─── 持久化缓存（SQLite）───
 
-import json
 from .database import get_db
 
 
@@ -124,19 +125,25 @@ def cache_get(key: str):
     return _deserialize(raw)
 
 
-def cache_set(key: str, value: object, ttl: int = TTL_DAILY) -> None:
+def cache_set(key: str, value: Any, ttl: int = TTL_DAILY) -> None:
     """写入 cache 表，自动处理 DataFrame 序列化。"""
     db = get_db()
     raw = _serialize(value)
-    db.execute(
-        "INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)",
-        (key, raw, time.time() + ttl),
-    )
-    db.commit()
+    for attempt in range(3):
+        try:
+            db.execute(
+                "INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)",
+                (key, raw, time.time() + ttl),
+            )
+            db.commit()
+            return
+        except sqlite3.OperationalError:
+            if attempt == 2:
+                raise
+            time.sleep(0.1)
 
 
-def _serialize(value: object) -> str:
-    import pandas as pd
+def _serialize(value: Any) -> str:
     if isinstance(value, pd.DataFrame):
         return json.dumps(
             {"__type": "DataFrame", "data": value.to_dict(orient="records")},
@@ -148,7 +155,6 @@ def _serialize(value: object) -> str:
 def _deserialize(raw: str):
     data = json.loads(raw)
     if isinstance(data, dict) and data.get("__type") == "DataFrame":
-        import pandas as pd
         return pd.DataFrame(data["data"])
     return data
 
@@ -159,7 +165,7 @@ class _CacheCompat:
     def get(self, key: str):
         return cache_get(key)
 
-    def set(self, key: str, value: object, ttl: int = TTL_DAILY) -> None:
+    def set(self, key: str, value: Any, ttl: int = TTL_DAILY) -> None:
         cache_set(key, value, ttl)
 
 
