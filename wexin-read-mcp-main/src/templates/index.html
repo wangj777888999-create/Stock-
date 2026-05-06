@@ -1089,6 +1089,10 @@ textarea.form-input {
         <svg viewBox="0 0 20 20" fill="none"><polygon points="10,3 13,9 19,10 14,15 15,21 10,18 5,21 6,15 1,10 7,9" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
         <span>自选股</span>
       </button>
+      <button class="nav-item" data-view="sim" onclick="switchView('sim', this)">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M5 13l4-4 3 5 4-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17" cy="4" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M3 17h14M3 13v4M17 13v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>模拟交易</span>
+      </button>
       <div class="nav-section-label" style="margin-top:8px;">系统</div>
       <button class="nav-item" data-view="config" onclick="switchView('config', this)">
         <svg viewBox="0 0 20 20" fill="none"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" stroke-width="1.7"/><path d="M16.243 10a6.243 6.243 0 01-.09 1.082l1.598 1.248-1.5 2.598-1.935-.694a6.26 6.26 0 01-1.875 1.083l-.33 2.017h-3l-.33-2.017a6.26 6.26 0 01-1.875-1.083l-1.935.694-1.5-2.598 1.598-1.248A6.243 6.243 0 013.757 10c0-.367.031-.727.09-1.082L2.249 7.67l1.5-2.598 1.935.694A6.26 6.26 0 017.559 4.683l.33-2.017h3l.33 2.017a6.26 6.26 0 011.875 1.083l1.935-.694 1.5 2.598-1.598 1.248c.059.355.09.715.09 1.082z" stroke="currentColor" stroke-width="1.7"/></svg>
@@ -1457,6 +1461,8 @@ textarea.form-input {
             <div style="display:flex;gap:6px;padding:6px 12px 0;" id="maToggles"></div>
             <div class="card-body" style="padding:0;">
               <div id="klineChart" style="width:100%;height:360px;"></div>
+              <div id="klineMacdChart" style="width:100%;height:120px;display:none;"></div>
+              <div id="klineRsiChart" style="width:100%;height:120px;display:none;"></div>
             </div>
           </div>
 
@@ -1763,6 +1769,70 @@ textarea.form-input {
         </div>
       </div>
 
+      <!-- ==================== VIEW: SIM TRADING ==================== -->
+      <div id="view-sim" class="view">
+        <!-- Stats cards row -->
+        <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap" id="sim-stats-cards"></div>
+
+        <!-- Account overview -->
+        <div style="margin-bottom:12px;color:#888;font-size:13px" id="sim-account-info"></div>
+
+        <!-- Open position button -->
+        <div style="margin-bottom:16px">
+          <button class="btn btn-primary btn-sm" onclick="simShowOpenForm()">+ 开仓</button>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><div class="card-title">当前持仓</div></div>
+          <div class="card-body" style="overflow-x:auto;padding:0;">
+            <table class="data-table" id="sim-positions-table">
+              <thead><tr>
+                <th>代码</th><th>方向</th><th>买入价</th><th>现价</th><th>数量</th><th>浮动盈亏</th><th>日期</th><th>备注</th><th>操作</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title">已平仓记录</div></div>
+          <div class="card-body" style="overflow-x:auto;padding:0;">
+            <table class="data-table" id="sim-history-table">
+              <thead><tr>
+                <th>代码</th><th>方向</th><th>买入价</th><th>卖出价</th><th>数量</th><th>盈亏</th><th>日期</th><th>备注</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 开仓 Modal -->
+        <div id="sim-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center">
+          <div style="background:#1a1a2e;padding:24px;border-radius:8px;min-width:380px;border:1px solid #333">
+            <h3 style="margin:0 0 16px;color:#eee">模拟开仓</h3>
+            <div style="display:grid;gap:10px">
+              <input id="sim-form-symbol" placeholder="股票代码 (例如 600519)" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee">
+              <div style="display:flex;gap:10px">
+                <select id="sim-form-direction" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;flex:1">
+                  <option value="long">做多</option><option value="short">做空</option>
+                </select>
+                <input id="sim-form-price" type="number" step="0.01" placeholder="成交价" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;flex:1">
+              </div>
+              <div style="display:flex;gap:10px">
+                <input id="sim-form-qty" type="number" placeholder="数量(股)" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;flex:1">
+                <input id="sim-form-fee" type="number" step="0.01" placeholder="手续费" value="5" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;flex:1">
+              </div>
+              <input id="sim-form-date" type="date" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee">
+              <input id="sim-form-note" placeholder="备注(可选)" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee">
+            </div>
+            <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('sim-modal').style.display='none'">取消</button>
+              <button class="btn btn-primary btn-sm" onclick="simOpen()">确认开仓</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ==================== VIEW: CONFIG ==================== -->
       <div id="view-config" class="view">
 
@@ -1936,6 +2006,7 @@ const topbarMeta = {
   crypto:   { title: '币圈', sub: '主流币种行情 · 币种搜索' },
   futures:   { title: '期货', sub: '主力合约行情 · K线 · 持仓龙虎榜' },
   watchlist: { title: '自选股', sub: '添加/删除 · 实时行情 · 30s自动刷新' },
+  sim: { title: '模拟交易', sub: '虚拟盘 · 开仓/平仓 · 盈亏统计' },
 };
 
 let _fundLoaded = false;
@@ -1956,6 +2027,7 @@ function switchView(view, el) {
   if (view === 'crypto') { loadCryptoSpot(); }
   if (view === 'futures') { loadFuturesBoards(); }
   if (view === 'watchlist') { loadWatchlist(); }
+  if (view === 'sim') { loadSim(); }
 }
 
 /* ============================================================
@@ -2838,6 +2910,8 @@ let _klineChart = null;
 let _quoteInterval = null;
 let _klineSeries = null;
 let _klineVolSeries = null;
+let _klineMacdChart = null;
+let _klineRsiChart = null;
 
 /* --- 搜索 --- */
 async function searchStock() {
@@ -2972,13 +3046,25 @@ function _renderQuoteInline(d) {
 }
 
 /* --- K线图 --- */
+function _disposeKlineSubCharts() {
+  if (_klineMacdChart) { try { _klineMacdChart.remove(); } catch(e){} _klineMacdChart = null; }
+  if (_klineRsiChart) { try { _klineRsiChart.remove(); } catch(e){} _klineRsiChart = null; }
+  const macdEl = document.getElementById('klineMacdChart');
+  const rsiEl = document.getElementById('klineRsiChart');
+  if (macdEl) macdEl.style.display = 'none';
+  if (rsiEl) rsiEl.style.display = 'none';
+}
+
 async function loadKline(period) {
   if (!_stockCode) return;
   const container = document.getElementById('klineChart');
   const isIntraday = ['1min','5min','15min','30min','60min'].includes(period);
+  const showIndicators = ['day','week','month'].includes(period);
+  _disposeKlineSubCharts();
   try {
     const count = isIntraday ? 480 : 99999;
-    const json = await (await fetch(`/api/stock/kline/${_stockCode}?period=${period}&count=${count}`)).json();
+    const url = `/api/stock/kline/${_stockCode}?period=${period}&count=${count}` + (showIndicators ? '&indicators=rsi,macd' : '');
+    const json = await (await fetch(url)).json();
     if (!json.success || !json.data?.length) { container.innerHTML = '<div class="empty-state" style="padding:40px;">暂无K线数据</div>'; return; }
 
     container.innerHTML = '';
@@ -3006,7 +3092,7 @@ async function loadKline(period) {
       });
       _klineSeries.setData(json.data.map(k => ({ time: isIntraday ? Math.floor(new Date(k.date).getTime()/1000) : k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
 
-      if (['day','week','month'].includes(period)) {
+      if (showIndicators) {
         const _candleData = json.data.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close }));
         addMALines(_klineChart, _candleData, 'maToggles');
       } else {
@@ -3032,6 +3118,79 @@ async function loadKline(period) {
     });
 
     new ResizeObserver(() => { if (_klineChart) _klineChart.applyOptions({ width: container.clientWidth }); }).observe(container);
+
+    // --- Indicator sub-charts (MACD + RSI) ---
+    if (showIndicators && json.indicators) {
+      const mainTs = _klineChart.timeScale();
+      const mainCrosshair = _klineChart.crossHairMarker;
+      const timeFormat = isIntraday ? (t => Math.floor(new Date(t).getTime()/1000)) : (t => t);
+
+      // MACD sub-chart
+      if (json.indicators.macd) {
+        const macdEl = document.getElementById('klineMacdChart');
+        macdEl.style.display = '';
+        macdEl.innerHTML = '';
+        _klineMacdChart = LightweightCharts.createChart(macdEl, {
+          width: macdEl.clientWidth, height: 120,
+          layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 10 },
+          grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+          crosshair: { mode: 0 },
+          rightPriceScale: { borderVisible: false },
+          timeScale: { borderVisible: false, visible: false },
+        });
+        const macdData = json.indicators.macd;
+        const difSeries = _klineMacdChart.addLineSeries({ color: '#f5d547', lineWidth: 1, lastValueVisible: false });
+        difSeries.setData(macdData.map(k => ({ time: timeFormat(k.date), value: k.dif })));
+        const deaSeries = _klineMacdChart.addLineSeries({ color: '#ef4444', lineWidth: 1, lastValueVisible: false });
+        deaSeries.setData(macdData.map(k => ({ time: timeFormat(k.date), value: k.dea })));
+        const histSeries = _klineMacdChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
+        histSeries.setData(macdData.map(k => ({ time: timeFormat(k.date), value: k.hist, color: k.hist >= 0 ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)' })));
+        _klineMacdChart.timeScale().fitContent();
+        _klineMacdChart.timeScale().applyOptions({ rightOffset: 5, minBarSpacing: 2, fixRightEdge: true });
+        new ResizeObserver(() => { if (_klineMacdChart) _klineMacdChart.applyOptions({ width: macdEl.clientWidth }); }).observe(macdEl);
+        // Sync crosshair move
+        if (mainTs) {
+          mainTs.subscribeVisibleTimeRangeChange(() => {
+            if (!_klineMacdChart) return;
+            const range = mainTs.getVisibleRange();
+            if (range) _klineMacdChart.timeScale().setVisibleRange(range);
+          });
+        }
+      }
+
+      // RSI sub-chart
+      if (json.indicators.rsi && json.indicators.rsi.values) {
+        const rsiEl = document.getElementById('klineRsiChart');
+        rsiEl.style.display = '';
+        rsiEl.innerHTML = '';
+        _klineRsiChart = LightweightCharts.createChart(rsiEl, {
+          width: rsiEl.clientWidth, height: 120,
+          layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 10 },
+          grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+          crosshair: { mode: 0 },
+          rightPriceScale: { borderVisible: false },
+          timeScale: { borderVisible: false, visible: false },
+        });
+        const rsiData = json.indicators.rsi.values;
+        const rsiSeries = _klineRsiChart.addLineSeries({ color: '#06b6d4', lineWidth: 1, lastValueVisible: false });
+        rsiSeries.setData(rsiData.map(k => ({ time: timeFormat(k.date), value: k.value })));
+        // Overbought/oversold lines (70/30)
+        try {
+          const rsiPriceScale = _klineRsiChart.priceScale('right');
+          rsiPriceScale.applyOptions({ scaleMargins: { top: 0, bottom: 0 } });
+        } catch(e){}
+        _klineRsiChart.timeScale().fitContent();
+        _klineRsiChart.timeScale().applyOptions({ rightOffset: 5, minBarSpacing: 2, fixRightEdge: true });
+        new ResizeObserver(() => { if (_klineRsiChart) _klineRsiChart.applyOptions({ width: rsiEl.clientWidth }); }).observe(rsiEl);
+        if (mainTs) {
+          mainTs.subscribeVisibleTimeRangeChange(() => {
+            if (!_klineRsiChart) return;
+            const range = mainTs.getVisibleRange();
+            if (range) _klineRsiChart.timeScale().setVisibleRange(range);
+          });
+        }
+      }
+    }
   } catch (e) { container.innerHTML = '<div class="empty-state" style="padding:40px;">K线加载失败</div>'; }
 }
 
@@ -4229,6 +4388,128 @@ function _startWatchlistRefresh() {
     const panel = document.getElementById('view-watchlist');
     if (panel && panel.classList.contains('active')) loadWatchlist();
   }, 30000);
+}
+
+/* ============================================================
+   模拟交易
+   ============================================================ */
+async function loadSim() {
+  // Account info
+  try {
+    const acct = await (await fetch('/api/sim/account')).json();
+    if (acct.success) {
+      const d = acct.data;
+      document.getElementById('sim-account-info').textContent =
+        '初始资金 ' + d.initial_capital.toLocaleString() + ' | 总权益 ' + d.total_equity.toLocaleString() + ' | 累计盈亏 ' + (d.closed_pnl >= 0 ? '+' : '') + d.closed_pnl.toLocaleString() + ' | 收益率 ' + d.total_return_pct + '% | 持仓 ' + d.positions_count + ' 笔';
+    }
+  } catch(e) { console.error(e); }
+
+  // Stats
+  try {
+    const st = await (await fetch('/api/sim/stats')).json();
+    if (st.success) {
+      const d = st.data;
+      document.getElementById('sim-stats-cards').innerHTML =
+        '<div class="card" style="flex:1;min-width:80px;text-align:center;padding:12px"><div style="font-size:24px;font-weight:bold">' + d.total_trades + '</div><div style="color:#888;font-size:12px">总交易</div></div>' +
+        '<div class="card" style="flex:1;min-width:80px;text-align:center;padding:12px"><div style="font-size:24px;font-weight:bold;color:#ef4444">' + (d.win_rate*100).toFixed(0) + '%</div><div style="color:#888;font-size:12px">胜率</div></div>' +
+        '<div class="card" style="flex:1;min-width:80px;text-align:center;padding:12px"><div style="font-size:24px;font-weight:bold;color:' + (d.total_pnl>0 ? '#ef4444' : '#22c55e') + '">' + (d.total_pnl>=0?'+':'') + d.total_pnl.toFixed(0) + '</div><div style="color:#888;font-size:12px">总PnL</div></div>' +
+        '<div class="card" style="flex:1;min-width:80px;text-align:center;padding:12px"><div style="font-size:24px;font-weight:bold">' + (d.avg_win||0).toFixed(0) + '</div><div style="color:#888;font-size:12px">均盈</div></div>' +
+        '<div class="card" style="flex:1;min-width:80px;text-align:center;padding:12px"><div style="font-size:24px;font-weight:bold">' + (d.avg_lose||0).toFixed(0) + '</div><div style="color:#888;font-size:12px">均亏</div></div>';
+    }
+  } catch(e) { console.error(e); }
+
+  // Positions
+  try {
+    const pos = await (await fetch('/api/sim/positions')).json();
+    const tbody = document.querySelector('#sim-positions-table tbody');
+    if (pos.success && pos.data.length) {
+      tbody.innerHTML = pos.data.map(p => {
+        const upnl = p.unrealized_pnl != null ? (p.unrealized_pnl>=0?'+':'') + p.unrealized_pnl.toFixed(2) : '-';
+        const dir = p.direction === 'long' ? '多' : '空';
+        const dirColor = p.direction === 'long' ? '#ef4444' : '#22c55e';
+        const pnlColor = p.unrealized_pnl > 0 ? '#ef4444' : p.unrealized_pnl < 0 ? '#22c55e' : '';
+        return '<tr onclick="openStockModal(\'' + p.symbol + '\',\'' + (p.name||p.symbol) + '\')" style="cursor:pointer">' +
+          '<td>' + p.symbol + '</td>' +
+          '<td style="color:' + dirColor + '">' + dir + '</td>' +
+          '<td>' + p.price + '</td>' +
+          '<td>' + (p.current_price||'-') + '</td>' +
+          '<td>' + p.quantity + '</td>' +
+          '<td style="color:' + pnlColor + '">' + upnl + '</td>' +
+          '<td>' + p.trade_date + '</td>' +
+          '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (p.note||'') + '</td>' +
+          '<td><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();simCloseForm(' + p.id + ')" style="color:#ef4444">平仓</button></td>' +
+        '</tr>';
+      }).join('');
+    } else {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#666;padding:24px">暂无持仓</td></tr>';
+    }
+  } catch(e) { console.error(e); }
+
+  // History
+  try {
+    const hist = await (await fetch('/api/sim/history')).json();
+    const tbody = document.querySelector('#sim-history-table tbody');
+    if (hist.success && hist.data.length) {
+      tbody.innerHTML = hist.data.map(h => {
+        const dir = h.direction === 'long' ? '多' : '空';
+        return '<tr>' +
+          '<td>' + h.symbol + '</td>' +
+          '<td>' + dir + '</td>' +
+          '<td>' + h.price + '</td>' +
+          '<td>' + h.close_price + '</td>' +
+          '<td>' + h.quantity + '</td>' +
+          '<td style="color:' + (h.pnl>0?'#ef4444':'#22c55e') + '">' + (h.pnl>=0?'+':'') + h.pnl.toFixed(2) + '</td>' +
+          '<td>' + (h.closed_at||'') + '</td>' +
+          '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (h.note||'') + '</td>' +
+        '</tr>';
+      }).join('');
+    } else {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#666;padding:24px">暂无记录</td></tr>';
+    }
+  } catch(e) { console.error(e); }
+}
+
+function simShowOpenForm() {
+  document.getElementById('sim-form-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('sim-form-symbol').value = '';
+  document.getElementById('sim-form-price').value = '';
+  document.getElementById('sim-form-qty').value = '';
+  document.getElementById('sim-form-note').value = '';
+  document.getElementById('sim-modal').style.display = 'flex';
+}
+
+async function simOpen() {
+  const body = {
+    symbol: document.getElementById('sim-form-symbol').value.trim(),
+    direction: document.getElementById('sim-form-direction').value,
+    price: parseFloat(document.getElementById('sim-form-price').value),
+    quantity: parseFloat(document.getElementById('sim-form-qty').value),
+    fee: parseFloat(document.getElementById('sim-form-fee').value) || 0,
+    trade_date: document.getElementById('sim-form-date').value,
+    note: document.getElementById('sim-form-note').value,
+  };
+  if (!body.symbol || !body.price || !body.quantity || !body.trade_date) {
+    alert('请填写完整（代码/价格/数量/日期）'); return;
+  }
+  try {
+    const r = await fetch('/api/sim/open', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j = await r.json();
+    if (j.success) {
+      document.getElementById('sim-modal').style.display = 'none';
+      loadSim();
+    } else alert(j.error);
+  } catch(e) { alert('请求失败: ' + e.message); }
+}
+
+function simCloseForm(id) {
+  const price = prompt('输入平仓价格:');
+  if (!price) return;
+  fetch('/api/sim/close', {
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({id, close_price:parseFloat(price), close_date:new Date().toISOString().slice(0,10)})
+  }).then(r=>r.json()).then(j=>{
+    if(j.success) loadSim(); else alert(j.error);
+  });
 }
 
 </script>
