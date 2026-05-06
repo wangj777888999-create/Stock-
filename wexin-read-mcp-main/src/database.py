@@ -91,6 +91,69 @@ def init_db(db_path: str | None = None) -> None:
                 result      TEXT NOT NULL,
                 created_at  TEXT NOT NULL DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS trade_journal (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol      TEXT NOT NULL,
+                market      TEXT NOT NULL,
+                direction   TEXT NOT NULL,
+                entry_date  TEXT,
+                exit_date   TEXT,
+                entry_price REAL,
+                exit_price  REAL,
+                quantity    REAL,
+                reason      TEXT,
+                reflection  TEXT,
+                tags        TEXT,
+                created_at  TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS sim_trades (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol      TEXT NOT NULL,
+                market      TEXT NOT NULL,
+                direction   TEXT NOT NULL,
+                price       REAL NOT NULL,
+                quantity    REAL NOT NULL,
+                fee         REAL DEFAULT 0,
+                trade_date  TEXT NOT NULL,
+                status      TEXT DEFAULT 'open',
+                closed_at   TEXT,
+                close_price REAL,
+                pnl         REAL,
+                note        TEXT,
+                created_at  TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS blogger_calls (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                blogger_id  TEXT NOT NULL,
+                symbol      TEXT NOT NULL,
+                market      TEXT NOT NULL,
+                call_type   TEXT,
+                call_date   TEXT NOT NULL,
+                call_price  REAL,
+                target_price REAL,
+                article_url TEXT,
+                notes       TEXT,
+                verified    INTEGER DEFAULT 0,
+                verified_at TEXT,
+                created_at  TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS real_trades (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol      TEXT NOT NULL,
+                market      TEXT NOT NULL,
+                direction   TEXT NOT NULL,
+                price       REAL NOT NULL,
+                quantity    REAL NOT NULL,
+                fee         REAL DEFAULT 0,
+                trade_date  TEXT NOT NULL,
+                source      TEXT DEFAULT 'manual',
+                note        TEXT,
+                created_at  TEXT DEFAULT (datetime('now'))
+            );
         """)
 
         # 清理过期缓存
@@ -100,8 +163,23 @@ def init_db(db_path: str | None = None) -> None:
         if deleted:
             logger.info(f"清理过期缓存: {deleted} 条")
 
+        _migrate()
         _db.commit()
         logger.info("数据库初始化完成")
+
+
+def _migrate():
+    """增量迁移：添加新列。忽略 'duplicate column name' 错误。"""
+    migrations = [
+        "ALTER TABLE watchlist ADD COLUMN tags TEXT DEFAULT ''",
+        "ALTER TABLE watchlist ADD COLUMN alert_price REAL",
+        "ALTER TABLE watchlist ADD COLUMN target_price REAL",
+    ]
+    for sql in migrations:
+        try:
+            _db.execute(sql)
+        except sqlite3.OperationalError:
+            pass
 
 
 def close_db() -> None:
