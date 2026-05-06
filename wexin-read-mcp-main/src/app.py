@@ -32,6 +32,8 @@ from database import init_db, close_db
 from routers.watchlist import router as watchlist_router
 from routers.sim import router as sim_router
 from routers.journal import router as journal_router
+from routers.verify import router as verify_router
+from routers.stats import router as stats_router
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -41,6 +43,8 @@ app = FastAPI(title="股票博主文章分析平台")
 app.include_router(watchlist_router)
 app.include_router(sim_router)
 app.include_router(journal_router)
+app.include_router(verify_router)
+app.include_router(stats_router)
 
 # 全局状态
 scraper = WeixinScraper()
