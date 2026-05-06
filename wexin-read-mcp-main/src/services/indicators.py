@@ -23,10 +23,27 @@ def calc_rsi(close: list[float], period: int = 14) -> list[float]:
         avg_gain[i] = (avg_gain[i-1] * (period - 1) + gain[i]) / period
         avg_loss[i] = (avg_loss[i-1] * (period - 1) + loss[i]) / period
 
-    rs = avg_gain / np.where(avg_loss == 0, 1e-10, avg_loss)
-    rsi = 100.0 - (100.0 / (1.0 + rs))
+    rs = np.divide(avg_gain, avg_loss, out=np.full_like(avg_gain, np.inf), where=(avg_loss != 0))
+    rsi = np.where(avg_loss == 0, 100.0, 100.0 - (100.0 / (1.0 + rs)))
 
     result = [None] * period + rsi[period:].tolist()
+    return result
+
+
+def _ema(data: np.ndarray, period: int) -> np.ndarray:
+    """指数移动平均，自动跳过前期 NaN 从第一个有效值开始计算。"""
+    alpha = 2.0 / (period + 1)
+    result = np.full(len(data), np.nan)
+    mask = ~np.isnan(data)
+    if not mask.any():
+        return result
+    first = int(np.argmax(mask))
+    seed_end = first + period
+    if seed_end > len(data):
+        return result
+    result[seed_end - 1] = data[first:seed_end].mean()
+    for i in range(seed_end, len(data)):
+        result[i] = alpha * data[i] + (1 - alpha) * result[i - 1]
     return result
 
 
@@ -38,18 +55,10 @@ def calc_macd(close: list[float], fast: int = 12, slow: int = 26, signal: int = 
 
     close_arr = np.array(close, dtype=float)
 
-    def ema(data, period):
-        alpha = 2.0 / (period + 1)
-        result = np.full(len(data), np.nan)
-        result[period-1] = data[:period].mean()
-        for i in range(period, len(data)):
-            result[i] = alpha * data[i] + (1 - alpha) * result[i-1]
-        return result
-
-    ema_fast = ema(close_arr, fast)
-    ema_slow = ema(close_arr, slow)
+    ema_fast = _ema(close_arr, fast)
+    ema_slow = _ema(close_arr, slow)
     dif = ema_fast - ema_slow
-    dea = ema(dif, signal)
+    dea = _ema(dif, signal)
     macd = 2.0 * (dif - dea)
 
     start = slow + signal - 2
@@ -74,15 +83,16 @@ def calc_kdj(high: list[float], low: list[float], close: list[float], n: int = 9
     d = np.full(length, np.nan)
     j = np.full(length, np.nan)
 
-    k[n-1] = 50.0
-    d[n-1] = 50.0
-
-    for t in range(n, length):
-        hh = high_arr[t-n+1:t+1].max()
-        ll = low_arr[t-n+1:t+1].min()
+    for t in range(n - 1, length):
+        hh = high_arr[t - n + 1 : t + 1].max()
+        ll = low_arr[t - n + 1 : t + 1].min()
         rsv = (close_arr[t] - ll) / (hh - ll + 1e-10) * 100.0
-        k[t] = 2.0/3.0 * k[t-1] + 1.0/3.0 * rsv
-        d[t] = 2.0/3.0 * d[t-1] + 1.0/3.0 * k[t]
+        if t == n - 1:
+            k[t] = 50.0
+            d[t] = 50.0
+        else:
+            k[t] = 2.0 / 3.0 * k[t - 1] + 1.0 / 3.0 * rsv
+            d[t] = 2.0 / 3.0 * d[t - 1] + 1.0 / 3.0 * k[t]
         j[t] = 3.0 * k[t] - 2.0 * d[t]
 
     return {
