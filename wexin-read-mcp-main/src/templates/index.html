@@ -1085,6 +1085,10 @@ textarea.form-input {
         <svg viewBox="0 0 20 20" fill="none"><path d="M3 17V7l4-4 4 4 6-4v14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 11l4-4 4 4 6-4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity=".5"/></svg>
         <span>期货</span>
       </button>
+      <button class="nav-item" data-view="watchlist" onclick="switchView('watchlist', this)">
+        <svg viewBox="0 0 20 20" fill="none"><polygon points="10,3 13,9 19,10 14,15 15,21 10,18 5,21 6,15 1,10 7,9" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        <span>自选股</span>
+      </button>
       <div class="nav-section-label" style="margin-top:8px;">系统</div>
       <button class="nav-item" data-view="config" onclick="switchView('config', this)">
         <svg viewBox="0 0 20 20" fill="none"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" stroke-width="1.7"/><path d="M16.243 10a6.243 6.243 0 01-.09 1.082l1.598 1.248-1.5 2.598-1.935-.694a6.26 6.26 0 01-1.875 1.083l-.33 2.017h-3l-.33-2.017a6.26 6.26 0 01-1.875-1.083l-1.935.694-1.5-2.598 1.598-1.248A6.243 6.243 0 013.757 10c0-.367.031-.727.09-1.082L2.249 7.67l1.5-2.598 1.935.694A6.26 6.26 0 017.559 4.683l.33-2.017h3l.33 2.017a6.26 6.26 0 011.875 1.083l1.935-.694 1.5 2.598-1.598 1.248c.059.355.09.715.09 1.082z" stroke="currentColor" stroke-width="1.7"/></svg>
@@ -1736,6 +1740,29 @@ textarea.form-input {
         </div>
       </div>
 
+      <!-- ==================== VIEW: WATCHLIST ==================== -->
+      <div id="view-watchlist" class="view">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">★ 自选股</div>
+            <div style="display:flex;gap:8px;">
+              <input id="watchlist-add-input" placeholder="输入代码添加 (例如600519)" style="padding:6px 10px;width:200px;border:1px solid #444;border-radius:6px;background:#1a1a2e;color:#eee;font-size:13px;">
+              <button class="btn btn-primary btn-sm" onclick="watchlistAdd()">添加</button>
+            </div>
+          </div>
+          <div class="card-body" style="overflow-x:auto;padding:0;">
+            <div style="max-height:600px;overflow-y:auto;">
+              <table class="data-table" id="watchlist-table">
+                <thead><tr>
+                  <th>代码</th><th>名称</th><th>现价</th><th>涨跌幅</th><th>成交额</th><th>备注</th><th>操作</th>
+                </tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ==================== VIEW: CONFIG ==================== -->
       <div id="view-config" class="view">
 
@@ -1907,7 +1934,8 @@ const topbarMeta = {
   stock:    { title: '股票查询', sub: '搜索 A 股/美股/港股 · 实时行情' },
   fund:     { title: '基金', sub: 'ETF 板块分类 · 基金搜索 · 实时行情' },
   crypto:   { title: '币圈', sub: '主流币种行情 · 币种搜索' },
-  futures:  { title: '期货', sub: '主力合约行情 · K线 · 持仓龙虎榜' },
+  futures:   { title: '期货', sub: '主力合约行情 · K线 · 持仓龙虎榜' },
+  watchlist: { title: '自选股', sub: '添加/删除 · 实时行情 · 30s自动刷新' },
 };
 
 let _fundLoaded = false;
@@ -1927,6 +1955,7 @@ function switchView(view, el) {
   if (view === 'fund' && !_fundLoaded) { loadFundBoards(); _fundLoaded = true; }
   if (view === 'crypto') { loadCryptoSpot(); }
   if (view === 'futures') { loadFuturesBoards(); }
+  if (view === 'watchlist') { loadWatchlist(); }
 }
 
 /* ============================================================
@@ -4124,6 +4153,84 @@ async function openStockModal(code, name) {
 function closeStockModal() {
   document.getElementById('stockModal').classList.remove('active');
 }
+
+// ============================================================
+//  自选股 WATCHLIST
+// ============================================================
+
+let _watchlistInterval = null;
+
+function loadWatchlist() {
+  const tbody = document.querySelector('#watchlist-table tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</td></tr>';
+  fetch('/api/watchlist/list')
+    .then(r => r.json())
+    .then(json => {
+      if (!json.success) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--ink-3);">' + (json.error || '暂无数据') + '</td></tr>';
+        return;
+      }
+      if (!json.data || !json.data.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--ink-3);">暂无自选股，请在上方输入代码添加</td></tr>';
+        return;
+      }
+      tbody.innerHTML = json.data.map(w => {
+        const q = w.quote || {};
+        const chg = q.change_pct != null ? (q.change_pct > 0 ? '+' : '') + parseFloat(q.change_pct).toFixed(2) + '%' : '-';
+        const color = q.change_pct != null && q.change_pct > 0 ? '#ef4444' : q.change_pct != null && q.change_pct < 0 ? '#22c55e' : '';
+        const vol = q.volume ? (q.volume / 100000000).toFixed(2) + '亿' : '-';
+        return '<tr onclick="openStockModal(\'' + w.symbol + '\',\'' + (w.name || '') + '\')" style="cursor:pointer;transition:background 0.15s">'
+          + '<td style="font-weight:500">' + w.symbol + '</td>'
+          + '<td>' + (w.name || '') + '</td>'
+          + '<td style="color:' + color + '">' + (q.price || '-') + '</td>'
+          + '<td style="color:' + color + '">' + chg + '</td>'
+          + '<td>' + vol + '</td>'
+          + '<td style="color:var(--ink-3);font-size:12px;">' + (w.note || '') + '</td>'
+          + '<td><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();watchlistDel(' + w.id + ')" style="color:var(--ink-3);width:24px;height:24px;padding:0;line-height:24px;font-size:14px;">✕</button></td>'
+          + '</tr>';
+      }).join('');
+      // Start auto-refresh
+      _startWatchlistRefresh();
+    })
+    .catch(e => {
+      console.error('watchlist load error:', e);
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);">加载失败: ' + e.message + '</td></tr>';
+    });
+}
+
+function watchlistAdd() {
+  const inp = document.getElementById('watchlist-add-input');
+  const sym = inp.value.trim();
+  if (!sym) { alert('请输入股票代码'); return; }
+  fetch('/api/watchlist/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ symbol: sym })
+  })
+    .then(r => r.json())
+    .then(j => {
+      if (j.success) { inp.value = ''; loadWatchlist(); }
+      else alert('添加失败: ' + (j.error || '未知错误'));
+    })
+    .catch(e => { alert('请求失败: ' + e.message); });
+}
+
+function watchlistDel(id) {
+  if (!confirm('确定移除此自选？')) return;
+  fetch('/api/watchlist/' + id, { method: 'DELETE' })
+    .then(() => loadWatchlist())
+    .catch(e => { console.error(e); });
+}
+
+function _startWatchlistRefresh() {
+  if (_watchlistInterval) return;
+  _watchlistInterval = setInterval(function() {
+    const panel = document.getElementById('view-watchlist');
+    if (panel && panel.classList.contains('active')) loadWatchlist();
+  }, 30000);
+}
+
 </script>
 </body>
 </html>
