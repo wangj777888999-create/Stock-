@@ -106,7 +106,7 @@ TTL_COMPANY = 86400
 
 # ─── 持久化缓存（SQLite）───
 
-from .database import get_db
+from database import get_db
 
 
 def cache_get(key: str):
