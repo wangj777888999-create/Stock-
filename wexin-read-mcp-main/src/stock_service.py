@@ -36,6 +36,8 @@ from stock_utils import (
     normalize_symbol,
 )
 
+from services.indicators import calc_rsi, calc_macd, calc_kdj, calc_boll
+
 logger = logging.getLogger("stock-service")
 
 # ─── 绕过系统代理的请求 ───
@@ -445,12 +447,12 @@ class StockService:
 
     # ─── 3. K线历史数据 ───
 
-    async def get_kline(self, symbol: str, period: str = "day", count: int = 120) -> dict:
+    async def get_kline(self, symbol: str, period: str = "day", count: int = 120, indicators: str = "") -> dict:
         """获取前复权 K 线数据。A 股用腾讯 API，港股/美股用 AKShare。period: day/week/month"""
         market = detect_market(symbol)  # 先识别市场（normalize 会补零破坏港股代码）
         original = str(symbol).strip()  # 保留原始代码（港股需要 5 位）
         norm = normalize_symbol(symbol)
-        cache_key = f"kline:{norm}:{period}:{count}"
+        cache_key = f"kline:{norm}:{period}:{count}:{indicators}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
@@ -558,7 +560,25 @@ class StockService:
                         "volume": _clean(row.get("volume")),
                     })
 
+            # 计算技术指标
+            ind_data = {}
+            if indicators:
+                close_prices = [r["close"] for r in records]
+                requested = [x.strip().lower() for x in indicators.split(",") if x.strip()]
+                if "rsi" in requested:
+                    ind_data["rsi"] = {"period": 14, "values": calc_rsi(close_prices)}
+                if "macd" in requested:
+                    ind_data["macd"] = calc_macd(close_prices)
+                if "kdj" in requested:
+                    high_prices = [r["high"] for r in records]
+                    low_prices = [r["low"] for r in records]
+                    ind_data["kdj"] = calc_kdj(high_prices, low_prices, close_prices)
+                if "boll" in requested:
+                    ind_data["boll"] = calc_boll(close_prices)
+
             resp = {"success": True, "data": records}
+            if ind_data:
+                resp["indicators"] = ind_data
             cache.set(cache_key, resp, TTL_DAILY)
             return resp
         except Exception as e:
