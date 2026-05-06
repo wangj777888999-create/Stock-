@@ -1461,8 +1461,8 @@ textarea.form-input {
             <div style="display:flex;gap:6px;padding:6px 12px 0;" id="maToggles"></div>
             <div class="card-body" style="padding:0;">
               <div id="klineChart" style="width:100%;height:360px;"></div>
-              <div id="klineMacdChart" style="width:100%;height:120px;display:none;"></div>
-              <div id="klineRsiChart" style="width:100%;height:120px;display:none;"></div>
+              <div style="position:relative;display:none" id="klineMacdChartWrap"><span style="position:absolute;top:2px;left:6px;z-index:1;font-size:10px;color:#f5d547;pointer-events:none">MACD (12,26,9)</span><div id="klineMacdChart" style="width:100%;height:120px;"></div></div>
+              <div style="position:relative;display:none" id="klineRsiChartWrap"><span style="position:absolute;top:2px;left:6px;z-index:1;font-size:10px;color:#06b6d4;pointer-events:none">RSI (14)</span><div id="klineRsiChart" style="width:100%;height:120px;"></div></div>
             </div>
           </div>
 
@@ -3051,8 +3051,10 @@ function _disposeKlineSubCharts() {
   if (_klineRsiChart) { try { _klineRsiChart.remove(); } catch(e){} _klineRsiChart = null; }
   const macdEl = document.getElementById('klineMacdChart');
   const rsiEl = document.getElementById('klineRsiChart');
-  if (macdEl) macdEl.style.display = 'none';
-  if (rsiEl) rsiEl.style.display = 'none';
+  const macdWrap = document.getElementById('klineMacdChartWrap');
+  const rsiWrap = document.getElementById('klineRsiChartWrap');
+  if (macdWrap) macdWrap.style.display = 'none';
+  if (rsiWrap) rsiWrap.style.display = 'none';
 }
 
 async function loadKline(period) {
@@ -3128,8 +3130,9 @@ async function loadKline(period) {
 
       // MACD sub-chart
       if (json.indicators.macd) {
+        const macdWrap = document.getElementById('klineMacdChartWrap');
         const macdEl = document.getElementById('klineMacdChart');
-        macdEl.style.display = '';
+        macdWrap.style.display = '';
         macdEl.innerHTML = '';
         _klineMacdChart = LightweightCharts.createChart(macdEl, {
           width: macdEl.clientWidth, height: 120,
@@ -3161,8 +3164,9 @@ async function loadKline(period) {
 
       // RSI sub-chart
       if (json.indicators.rsi && json.indicators.rsi.values) {
+        const rsiWrap = document.getElementById('klineRsiChartWrap');
         const rsiEl = document.getElementById('klineRsiChart');
-        rsiEl.style.display = '';
+        rsiWrap.style.display = '';
         rsiEl.innerHTML = '';
         _klineRsiChart = LightweightCharts.createChart(rsiEl, {
           width: rsiEl.clientWidth, height: 120,
