@@ -61,12 +61,26 @@ def get_market_name(code: str) -> str:
 
 
 def detect_market(code: str) -> str:
-    """识别股票所属市场: 'us', 'hk', 'a'。"""
-    # 先检查原始数字长度（normalize 会把 5 位港股补零为 6 位）
+    """识别股票所属市场: 'us', 'hk', 'a', 'kr', 'jp'。"""
     raw = str(code).strip()
-    raw_cleaned = raw.upper().replace(".", "").replace("-", "")
+    upper = raw.upper()
+
+    # 显式后缀优先
+    if upper.endswith(".KS") or upper.endswith(".KQ"):
+        return "kr"
+    if upper.endswith(".T"):
+        return "jp"
+
+    raw_cleaned = upper.replace(".", "").replace("-", "")
+
+    # 4 位纯数字 → 日股（A 股 normalize 后始终 6 位）
+    if raw_cleaned.isdigit() and len(raw_cleaned) == 4:
+        return "jp"
+
+    # 5 位纯数字 → 港股
     if raw_cleaned.isdigit() and len(raw_cleaned) == 5:
         return "hk"
+
     code = normalize_symbol(code)
     # 纯英文字母 → 美股
     if code.isalpha():
@@ -83,27 +97,73 @@ def detect_market(code: str) -> str:
 # ─── TTL 缓存 ───
 
 TTL_REALTIME = 30
+TTL_REALTIME_REFRESH = 5
 TTL_DAILY = 300
 TTL_COMPANY = 86400
 
 
-class TTLCache:
-    def __init__(self):
-        self._store: dict[str, tuple[Any, float]] = {}
+# ─── 持久化缓存（SQLite）───
 
-    def get(self, key: str) -> Any | None:
-        if key in self._store:
-            value, expires_at = self._store[key]
-            if time.time() < expires_at:
-                return value
-            del self._store[key]
+import json
+from .database import get_db
+
+
+def cache_get(key: str):
+    """从 cache 表读取缓存值。过期返回 None 并删除旧行。"""
+    db = get_db()
+    row = db.execute(
+        "SELECT value, expires_at FROM cache WHERE key = ?", (key,)
+    ).fetchone()
+    if not row:
         return None
+    raw, expires_at = row
+    if time.time() >= expires_at:
+        db.execute("DELETE FROM cache WHERE key = ?", (key,))
+        db.commit()
+        return None
+    return _deserialize(raw)
 
-    def set(self, key: str, value: Any, ttl: int = TTL_DAILY) -> None:
-        self._store[key] = (value, time.time() + ttl)
+
+def cache_set(key: str, value: object, ttl: int = TTL_DAILY) -> None:
+    """写入 cache 表，自动处理 DataFrame 序列化。"""
+    db = get_db()
+    raw = _serialize(value)
+    db.execute(
+        "INSERT OR REPLACE INTO cache (key, value, expires_at) VALUES (?, ?, ?)",
+        (key, raw, time.time() + ttl),
+    )
+    db.commit()
 
 
-cache = TTLCache()
+def _serialize(value: object) -> str:
+    import pandas as pd
+    if isinstance(value, pd.DataFrame):
+        return json.dumps(
+            {"__type": "DataFrame", "data": value.to_dict(orient="records")},
+            ensure_ascii=False,
+        )
+    return json.dumps(value, ensure_ascii=False, default=str)
+
+
+def _deserialize(raw: str):
+    data = json.loads(raw)
+    if isinstance(data, dict) and data.get("__type") == "DataFrame":
+        import pandas as pd
+        return pd.DataFrame(data["data"])
+    return data
+
+
+class _CacheCompat:
+    """向后兼容旧 TTLCache API，委托给 cache_get/cache_set。"""
+
+    def get(self, key: str):
+        return cache_get(key)
+
+    def set(self, key: str, value: object, ttl: int = TTL_DAILY) -> None:
+        cache_set(key, value, ttl)
+
+
+cache = _CacheCompat()
 
 
 # ─── 多源降级调用 ───
