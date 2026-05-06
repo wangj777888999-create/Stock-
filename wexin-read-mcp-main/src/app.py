@@ -29,12 +29,16 @@ from iwencai_service import IWencaiService
 from global_stock_service import global_stock_service
 from market import get_provider
 from database import init_db, close_db
+from routers.watchlist import router as watchlist_router
+from routers.sim import router as sim_router
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="股票博主文章分析平台")
+app.include_router(watchlist_router)
+app.include_router(sim_router)
 
 # 全局状态
 scraper = WeixinScraper()
