@@ -36,6 +36,8 @@ def _clean(v):
     import math, pandas as pd
     if v is None:
         return None
+    if isinstance(v, pd.Timestamp):
+        return str(v)
     try:
         if pd.isna(v):
             return None

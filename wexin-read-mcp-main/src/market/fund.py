@@ -19,10 +19,12 @@ _DF_TTL = 300  # DataFrame 缓存 5 分钟
 
 
 def _clean(v):
-    """Convert NaN/NaT to None, numpy types to Python native."""
+    """Convert NaN/NaT to None, Timestamp to str, numpy types to Python native."""
     import math, pandas as pd
     if v is None:
         return None
+    if isinstance(v, pd.Timestamp):
+        return str(v)
     try:
         if pd.isna(v):
             return None
@@ -165,7 +167,7 @@ class FundProvider(MarketProvider):
 
     async def get_etf_detail(self, code: str):
         """获取单只 ETF 详情：基本信息 + K 线 + 前十大持仓。"""
-        import requests as _requests
+        import requests as _requests, time as _time
         ck = f"market:fund:detail:{code}"
         cached = cache.get(ck)
         if cached is not None:
@@ -183,6 +185,20 @@ class FundProvider(MarketProvider):
             finally:
                 _requests.get = orig_get
                 _requests.post = orig_post
+
+        def _call_ak(func, **kw):
+            """带重试的 AKShare 调用（应对东方财富限频断连）。"""
+            last_err = None
+            for attempt in range(3):
+                try:
+                    return func(**kw)
+                except Exception as e:
+                    last_err = e
+                    if attempt < 2:
+                        wait = (attempt + 1) * 3
+                        logger.info(f"重试 {attempt+1}/3（{wait}s 后）: {e}")
+                        _time.sleep(wait)
+            raise last_err
 
         try:
             # 1. 基本信息（从 spot DataFrame 中获取）
@@ -202,7 +218,7 @@ class FundProvider(MarketProvider):
 
             # 2. K 线数据
             kline_df = await asyncio.to_thread(
-                _patch, ak.fund_etf_hist_em,
+                _call_ak, _patch, func=ak.fund_etf_hist_em,
                 symbol=code, period="daily",
                 start_date="20240101", end_date="20300101", adjust="qfq",
             )
@@ -223,7 +239,7 @@ class FundProvider(MarketProvider):
             holdings = []
             try:
                 hold_df = await asyncio.to_thread(
-                    _patch, ak.fund_portfolio_hold_em,
+                    _call_ak, _patch, func=ak.fund_portfolio_hold_em,
                     symbol=code, date="",
                 )
                 if hold_df is not None and not hold_df.empty:

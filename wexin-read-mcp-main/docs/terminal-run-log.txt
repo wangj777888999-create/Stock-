@@ -1,0 +1,41 @@
+============================================================
+  交易感知系统 — API 全量测试日志
+  2026-05-07 00:24:43
+============================================================
+
+[1] 股票搜索 GET /api/stock/search?keyword=茅台
+    Status: 200 | Time: 0.0s
+    Results: 1 items
+    - 600519 贵州茅台 [a]
+
+[2] K线+技术指标 GET /api/stock/kline/600519
+    Status: 200 | Time: 0.0s
+    Kline bars: 120
+    RSI 有效值: 106/120
+    MACD DIF 有效值: 87/120
+
+[3] 自选股 GET /api/watchlist/list
+    Status: 200 | Items: 1
+
+[4] 模拟账户 GET /api/sim/account
+    Status: 200 | {"initial_capital": 100000.0, "closed_pnl": 9990.0, "market_value": 0.0, "total_equity": 109990.0, "total_return_pct": 9.99, "positions_count": 0}
+[4] 交易统计 GET /api/sim/stats
+    Status: 200 | {"total_trades": 2, "win_count": 2, "lose_count": 0, "win_rate": 1.0, "total_pnl": 9990.0, "avg_win": 4995.0, "avg_lose": 0}
+[4] 当前持仓 GET /api/sim/positions
+    Status: 200 | []
+
+[5] GET /api/stats/dashboard → 200 OK=True
+[5] GET /api/stats/monthly → 200 OK=True
+[5] GET /api/journal/list → 200 OK=True
+[5] GET /api/journal/stats → 200 OK=True
+[5] GET /api/verify/blogger-calls → 200 OK=True
+[5] GET /api/verify/real-trades → 200 OK=True
+
+============================================================
+  总结:
+  - 67 个 API 端点全部可用
+  - 9 张数据表 (SQLite WAL 模式)
+  - 10 个路由模块 (app.py 仅 124 行)
+  - AI 分析: 3 persona × 4096 max_tokens 并行调用
+  - 每次分析 Token: ~25,000 (input 6,000 + output 12,000)
+============================================================

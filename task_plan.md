@@ -113,6 +113,30 @@
 
 ---
 
+### 任务8: Windows 兼容性修复 — 公众号登录异常 (2026-05-05)
+
+**问题**: Windows 上点击"公众号登录"报 `NotImplementedError`，Playwright 无法启动浏览器。
+
+| 阶段 | 状态 |
+|------|------|
+| 定位根因: uvicorn `--reload` 子进程强制 SelectorEventLoop | ✅ |
+| 添加 WindowsProactorEventLoopPolicy | ✅ |
+| 去掉 `--reload` 参数 | ✅ |
+| 安装 Playwright headless shell 组件 | ✅ |
+| Playwright 降级到 1.49.1（兼容 Python 3.13） | ✅ |
+
+**改动文件**: `src/app.py`（事件循环策略 + 去掉 reload）、`src/scraper.py`（headless 参数调整）
+
+---
+
+### 任务9: 多市场板块扩展 (2026-05-05 — 进行中)
+
+**需求**: 扩展板块扫描功能，支持基金/ETF、美股、港股、全球指数、加密货币。
+
+**设计文档**: `docs/superpowers/specs/2026-05-05-multi-market-sectors-design.md`
+
+---
+
 ## 核心文件索引
 
 | 文件 | 职责 | 行数 |

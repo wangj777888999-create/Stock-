@@ -148,6 +148,7 @@ def _serialize(value: Any) -> str:
         return json.dumps(
             {"__type": "DataFrame", "data": value.to_dict(orient="records")},
             ensure_ascii=False,
+            default=str,
         )
     return json.dumps(value, ensure_ascii=False, default=str)
 
