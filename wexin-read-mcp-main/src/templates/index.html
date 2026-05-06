@@ -3124,6 +3124,7 @@ async function loadKline(period) {
       const mainTs = _klineChart.timeScale();
       const mainCrosshair = _klineChart.crossHairMarker;
       const timeFormat = isIntraday ? (t => Math.floor(new Date(t).getTime()/1000)) : (t => t);
+      const dates = json.data.map(d => d.date);
 
       // MACD sub-chart
       if (json.indicators.macd) {
@@ -3140,11 +3141,11 @@ async function loadKline(period) {
         });
         const macdData = json.indicators.macd;
         const difSeries = _klineMacdChart.addLineSeries({ color: '#f5d547', lineWidth: 1, lastValueVisible: false });
-        difSeries.setData(macdData.map(k => ({ time: timeFormat(k.date), value: k.dif })));
+        difSeries.setData(macdData.dif.map((v, i) => ({ time: timeFormat(dates[i]), value: v })).filter(k => k.value != null));
         const deaSeries = _klineMacdChart.addLineSeries({ color: '#ef4444', lineWidth: 1, lastValueVisible: false });
-        deaSeries.setData(macdData.map(k => ({ time: timeFormat(k.date), value: k.dea })));
+        deaSeries.setData(macdData.dea.map((v, i) => ({ time: timeFormat(dates[i]), value: v })).filter(k => k.value != null));
         const histSeries = _klineMacdChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
-        histSeries.setData(macdData.map(k => ({ time: timeFormat(k.date), value: k.hist, color: k.hist >= 0 ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)' })));
+        histSeries.setData(macdData.macd.map((v, i) => ({ time: timeFormat(dates[i]), value: v, color: v != null && v >= 0 ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)' })).filter(k => k.value != null));
         _klineMacdChart.timeScale().fitContent();
         _klineMacdChart.timeScale().applyOptions({ rightOffset: 5, minBarSpacing: 2, fixRightEdge: true });
         new ResizeObserver(() => { if (_klineMacdChart) _klineMacdChart.applyOptions({ width: macdEl.clientWidth }); }).observe(macdEl);
@@ -3171,9 +3172,9 @@ async function loadKline(period) {
           rightPriceScale: { borderVisible: false },
           timeScale: { borderVisible: false, visible: false },
         });
-        const rsiData = json.indicators.rsi.values;
+        const rsiValues = json.indicators.rsi.values;
         const rsiSeries = _klineRsiChart.addLineSeries({ color: '#06b6d4', lineWidth: 1, lastValueVisible: false });
-        rsiSeries.setData(rsiData.map(k => ({ time: timeFormat(k.date), value: k.value })));
+        rsiSeries.setData(rsiValues.map((v, i) => ({ time: timeFormat(dates[i]), value: v })).filter(k => k.value != null));
         // Overbought/oversold lines (70/30)
         try {
           const rsiPriceScale = _klineRsiChart.priceScale('right');
