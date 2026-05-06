@@ -24,8 +24,11 @@ from analyzer import ArticleAnalyzer
 from emailer import EmailSender
 from blogger import BloggerManager
 from stock_service import StockService
+from stock_utils import detect_market
 from iwencai_service import IWencaiService
+from global_stock_service import global_stock_service
 from market import get_provider
+from database import init_db, close_db
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -183,46 +186,74 @@ async def get_config():
 async def api_stock_search(keyword: str = ""):
     if not keyword or len(keyword.strip()) < 1:
         return {"success": False, "error": "请输入搜索关键词"}
-    return await stock_service.search_stock(keyword.strip())
+    kw = keyword.strip()
+    result = await stock_service.search_stock(kw)
+    # 追加韩/日股搜索结果
+    global_result = await global_stock_service.search(kw)
+    if global_result.get("success") and global_result.get("data"):
+        result.setdefault("data", []).extend(global_result["data"])
+        result["data"] = result["data"][:25]
+    return result
 
 
 @app.get("/api/stock/quote/{symbol}")
-async def api_stock_quote(symbol: str):
-    return await stock_service.get_realtime_quote(symbol)
+async def api_stock_quote(symbol: str, auto: int = 0):
+    market = detect_market(symbol)
+    if market in ("kr", "jp"):
+        return await global_stock_service.get_realtime_quote(symbol, market)
+    bypass = auto == 1 and market == "a"
+    return await stock_service.get_realtime_quote(symbol, bypass_cache=bypass)
 
 
 @app.get("/api/stock/kline/{symbol}")
 async def api_stock_kline(symbol: str, period: str = "day", count: int = 120):
+    market = detect_market(symbol)
+    if market in ("kr", "jp"):
+        return await global_stock_service.get_kline(symbol, market, period, count)
     return await stock_service.get_kline(symbol, period, count)
 
 
 @app.get("/api/stock/profile/{symbol}")
 async def api_stock_profile(symbol: str):
+    market = detect_market(symbol)
+    if market in ("kr", "jp"):
+        return await global_stock_service.get_profile(symbol, market)
     return await stock_service.get_company_profile(symbol)
 
 
 @app.get("/api/stock/financial/{symbol}")
 async def api_stock_financial(symbol: str):
+    market = detect_market(symbol)
+    if market in ("kr", "jp"):
+        return {"success": False, "error": "韩股/日股暂不支持详细财务数据"}
     return await stock_service.get_financial(symbol)
 
 
 @app.get("/api/stock/flow/{symbol}")
 async def api_stock_flow(symbol: str):
+    if detect_market(symbol) in ("kr", "jp"):
+        return {"success": False, "error": "韩股/日股暂不支持资金流向"}
     return await stock_service.get_money_flow(symbol)
 
 
 @app.get("/api/stock/news/{symbol}")
 async def api_stock_news(symbol: str):
+    if detect_market(symbol) in ("kr", "jp"):
+        return {"success": False, "error": "韩股/日股暂不支持新闻"}
     return await stock_service.get_news(symbol)
 
 
 @app.get("/api/stock/announcements/{symbol}")
 async def api_stock_announcements(symbol: str):
+    if detect_market(symbol) in ("kr", "jp"):
+        return {"success": False, "error": "韩股/日股暂不支持公告"}
     return await stock_service.get_announcements(symbol)
 
 
 @app.get("/api/stock/shareholders/{symbol}")
 async def api_stock_shareholders(symbol: str):
+    if detect_market(symbol) in ("kr", "jp"):
+        return {"success": False, "error": "韩股/日股暂不支持股东信息"}
     return await stock_service.get_shareholders(symbol)
 
 
@@ -993,6 +1024,7 @@ async def websocket_task(ws: WebSocket):
 @app.on_event("startup")
 async def _startup():
     """启动时预加载数据。"""
+    init_db()
     asyncio.create_task(StockService.preload_stock_list())
 
     async def _preload_fund():
@@ -1005,6 +1037,13 @@ async def _startup():
             logger.warning(f"基金数据预加载失败（首次访问时重试）: {e}")
 
     asyncio.create_task(_preload_fund())
+
+
+@app.on_event("shutdown")
+async def _shutdown():
+    """关闭时清理数据库连接。"""
+    close_db()
+    logger.info("数据库连接已关闭")
 
 
 if __name__ == "__main__":
