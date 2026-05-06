@@ -16,8 +16,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import math
+import re
 
 import akshare as ak
 import requests as _requests
@@ -26,6 +28,7 @@ from stock_utils import (
     TTL_COMPANY,
     TTL_DAILY,
     TTL_REALTIME,
+    TTL_REALTIME_REFRESH,
     cache,
     detect_market,
     get_exchange,
@@ -401,15 +404,16 @@ class StockService:
 
     # ─── 2. 实时行情 ───
 
-    async def get_realtime_quote(self, symbol: str) -> dict:
+    async def get_realtime_quote(self, symbol: str, bypass_cache: bool = False) -> dict:
         """通过腾讯 API 获取实时行情，支持 A 股/美股/港股。"""
         market = detect_market(symbol)
         original = str(symbol).strip()
         symbol = normalize_symbol(symbol)
         cache_key = f"quote:{symbol}"
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return cached
+        if not bypass_cache:
+            cached = cache.get(cache_key)
+            if cached is not None:
+                return cached
 
         try:
             if market == "a":
@@ -432,7 +436,8 @@ class StockService:
             # 补充市场标识
             record["市场"] = {"a": "A股", "hk": "港股", "us": "美股"}[market]
             resp = {"success": True, "data": record}
-            cache.set(cache_key, resp, TTL_REALTIME)
+            ttl = TTL_REALTIME_REFRESH if bypass_cache else TTL_REALTIME
+            cache.set(cache_key, resp, ttl)
             return resp
         except Exception as e:
             logger.error(f"获取行情失败 {symbol}: {e}")
@@ -452,26 +457,60 @@ class StockService:
 
         try:
             if market == "a":
-                # A 股：腾讯 API
-                exchange = get_exchange(norm)
-                url = (
-                    f"http://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
-                    f"?param={exchange}{norm},{period},2020-01-01,,{count},qfq"
-                )
-                r = await asyncio.to_thread(_get, url, timeout=10)
-                resp_data = r.json().get("data", {})
-                data = resp_data.get(f"{exchange}{norm}", {})
-                klines = data.get("qfqday") or data.get("qfqweek") or data.get("qfqmonth") or data.get("day") or []
-                records = []
-                for k in klines:
-                    records.append({
-                        "date": k[0],
-                        "open": float(k[1]),
-                        "close": float(k[2]),
-                        "high": float(k[3]),
-                        "low": float(k[4]),
-                        "volume": float(k[5]) if len(k) > 5 else 0,
-                    })
+                minute_periods = {"1min", "5min", "15min", "30min", "60min"}
+                if period in minute_periods:
+                    # A 股分钟级：新浪 API（支持历史分钟数据）
+                    exchange_prefix = get_exchange(norm)
+                    scale_map = {"1min": 1, "5min": 5, "15min": 15, "30min": 30, "60min": 60}
+                    scale = scale_map[period]
+                    sina_url = (
+                        f"https://quotes.sina.cn/cn/api/jsonp_v2.php/var%20_1m_data="
+                        f"/CN_MarketDataService.getKLineData"
+                        f"?symbol={exchange_prefix}{norm}&scale={scale}&ma=no&datalen={count}"
+                    )
+                    r = await asyncio.to_thread(_get, sina_url, timeout=10)
+                    text = r.text
+                    # 解析 JSONP：var _1m_data=(JSON);
+                    m = re.search(r'=\((\[.*?\])\);', text, re.DOTALL)
+                    if not m:
+                        return {"success": False, "error": "暂无K线数据"}
+                    raw_items = json.loads(m.group(1))
+                    if not raw_items:
+                        return {"success": False, "error": "暂无K线数据"}
+                    records = []
+                    for item in raw_items:
+                        records.append({
+                            "date": item["day"][:16],  # "2026-05-06 09:35"
+                            "open": float(item["open"]),
+                            "close": float(item["close"]),
+                            "high": float(item["high"]),
+                            "low": float(item["low"]),
+                            "volume": int(float(item["volume"])),
+                        })
+                else:
+                    # A 股日/周/月：腾讯 API（count 上限 2000，超出会导致接口返回空）
+                    exchange = get_exchange(norm)
+                    api_count = min(count, 2000)
+                    url = (
+                        f"http://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+                        f"?param={exchange}{norm},{period},2010-01-01,,{api_count},qfq"
+                    )
+                    r = await asyncio.to_thread(_get, url, timeout=10)
+                    resp_data = r.json().get("data", {})
+                    if not isinstance(resp_data, dict):
+                        return {"success": False, "error": "暂无K线数据"}
+                    data = resp_data.get(f"{exchange}{norm}", {})
+                    klines = data.get("qfqday") or data.get("qfqweek") or data.get("qfqmonth") or data.get("day") or []
+                    records = []
+                    for k in klines:
+                        records.append({
+                            "date": k[0],
+                            "open": float(k[1]),
+                            "close": float(k[2]),
+                            "high": float(k[3]),
+                            "low": float(k[4]),
+                            "volume": float(k[5]) if len(k) > 5 else 0,
+                        })
 
             elif market == "hk":
                 # 港股：AKShare stock_hk_hist

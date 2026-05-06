@@ -295,6 +295,7 @@ body {
   gap: 8px;
 }
 .card-title svg { width:15px; height:15px; color: var(--ink-3); }
+.card-header-left { display: flex; align-items: center; gap: 8px; }
 .card-body { padding: 20px 24px; }
 .card-body + .card-body { padding-top: 0; }
 
@@ -1439,6 +1440,11 @@ textarea.form-input {
                 <span>K线走势</span>
               </div>
               <div style="display:flex;gap:4px;" id="klinePeriodBtns">
+                <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('1min',this)">分时</button>
+                <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('5min',this)">5分</button>
+                <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('15min',this)">15分</button>
+                <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('30min',this)">30分</button>
+                <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('60min',this)">60分</button>
                 <button class="btn btn-ghost btn-sm active" onclick="switchKlinePeriod('day',this)">日K</button>
                 <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('week',this)">周K</button>
                 <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('month',this)">月K</button>
@@ -1531,7 +1537,7 @@ textarea.form-input {
                 <span>公司公告</span>
               </div>
             </div>
-            <div class="card-body" id="stockAnnouncementsBody" style="max-height:400px;overflow-y:auto;">
+            <div class="card-body" id="stockAnnouncementsBody" style="max-height:400px;overflow:auto;">
               <div class="empty-state">加载中...</div>
             </div>
           </div>
@@ -1544,7 +1550,7 @@ textarea.form-input {
                 <span>机构调研</span>
               </div>
             </div>
-            <div class="card-body" id="stockVisitsBody" style="max-height:400px;overflow-y:auto;">
+            <div class="card-body" id="stockVisitsBody" style="max-height:400px;overflow:auto;">
               <div class="empty-state">选择股票后加载</div>
             </div>
           </div>
@@ -2800,6 +2806,7 @@ function aggregateKline(dailyData, period) {
 let _stockCode = '';
 let _stockName = '';
 let _klineChart = null;
+let _quoteInterval = null;
 let _klineSeries = null;
 let _klineVolSeries = null;
 
@@ -2828,6 +2835,8 @@ async function searchStock() {
 /* --- 选中股票 → 根据市场差异化加载面板 --- */
 let _stockMarket = 'a';
 async function selectStock(code, name, market) {
+  // 清除旧的自动刷新定时器
+  if (_quoteInterval) { clearInterval(_quoteInterval); _quoteInterval = null; }
   _stockCode = code; _stockName = name; _stockMarket = market || 'a';
   document.getElementById('stockDetailArea').style.display = '';
   document.getElementById('quoteStockTitle').textContent = name + ' (' + code + ')';
@@ -2839,12 +2848,8 @@ async function selectStock(code, name, market) {
   // 行情：所有市场
   show('stockQuoteBody');
 
-  if (_stockMarket === 'us') {
-    // 美股：行情 + K线 + 公司简介 + 财务 + 新闻
-    show('panel-kline'); show('panel-profile-financial'); hide('panel-holders-flow');
-    show('panel-news'); hide('panel-visits'); hide('panel-announcements');
-  } else if (_stockMarket === 'hk') {
-    // 港股：行情 + K线 + 公司简介 + 财务 + 新闻（无资金流向/股东/机构调研）
+  if (_stockMarket === 'us' || _stockMarket === 'hk' || _stockMarket === 'kr' || _stockMarket === 'jp') {
+    // 美股/港股/韩股/日股：行情 + K线 + 公司简介 + 新闻
     show('panel-kline'); show('panel-profile-financial'); hide('panel-holders-flow');
     show('panel-news'); hide('panel-visits'); hide('panel-announcements');
   } else {
@@ -2857,6 +2862,21 @@ async function selectStock(code, name, market) {
   // 并行加载面板
   refreshQuote();
   loadKline('day');
+
+  // A股：交易时段每5秒自动刷新行情
+  if (_stockMarket === 'a') {
+    _quoteInterval = setInterval(() => {
+      if (_stockMarket !== 'a') { clearInterval(_quoteInterval); _quoteInterval = null; return; }
+      const now = new Date();
+      if (now.getDay() === 0 || now.getDay() === 6) return;
+      const mins = now.getHours() * 60 + now.getMinutes();
+      if (!((mins >= 555 && mins <= 690) || (mins >= 780 && mins <= 900))) return;
+      fetch('/api/stock/quote/' + _stockCode + '?auto=1')
+        .then(r => r.json())
+        .then(json => { if (json.success) _renderQuoteInline(json.data); })
+        .catch(() => {});
+    }, 5000);
+  }
   if (_stockMarket === 'a') {
     // A股：全部面板
     loadProfile();
@@ -2864,12 +2884,12 @@ async function selectStock(code, name, market) {
     loadMoneyFlow();
     loadShareholders();
     loadAnnouncements();
-  } else if (_stockMarket === 'hk') {
-    // 港股：公司简介 + 财务（无资金流向/股东）
+  } else if (_stockMarket === 'kr' || _stockMarket === 'jp') {
+    // 韩股/日股：仅公司简介（无财务/资金流向/股东）
     loadProfile();
-    loadFinancial();
+    document.getElementById('stockFinancialBody').innerHTML = '<div class="empty-state">暂不支持</div>';
   } else {
-    // 美股：公司简介 + 财务
+    // 美股/港股：公司简介 + 财务
     loadProfile();
     loadFinancial();
   }
@@ -2904,16 +2924,34 @@ async function refreshQuote() {
 function _qi(l,v){return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span style="color:var(--ink-3);font-size:12px;">${l}</span><span style="font-size:13px;font-family:var(--mono);">${v??'-'}</span></div>`;}
 function _fn(n,u){if(n==null)return'-';const v=parseFloat(n);if(isNaN(v))return String(n);const s=u||'';if(v>=1e8)return(v/1e8).toFixed(2)+'亿'+s;if(v>=1e4)return(v/1e4).toFixed(2)+'万'+s;return v.toLocaleString()+s;}
 function _pct(v){return v!=null?v+'%':'-';}
+function _renderQuoteInline(d) {
+  const body = document.getElementById('stockQuoteBody');
+  const price = d['最新价'] ?? '-', change = d['涨跌额'] ?? 0, pct = d['涨跌幅'] ?? 0;
+  const up = parseFloat(change) >= 0, c = up ? 'var(--red)' : 'var(--green)', arr = up ? '▲' : '▼';
+  body.innerHTML =
+    `<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px;">`
+    + `<span style="font-size:28px;font-weight:700;color:${c};">${price}</span>`
+    + `<span style="font-size:14px;color:${c};">${arr} ${change} (${pct}%)</span></div>`
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px 14px;">'
+    + _qi('今开',d['今开'])+_qi('昨收',d['昨收'])+_qi('最高',d['最高'])+_qi('最低',d['最低'])
+    + _qi('成交量',_fn(d['成交量'],'手'))+_qi('成交额',_fn(d['成交额'],'万'))
+    + _qi('换手率',_pct(d['换手率']))+_qi('振幅',_pct(d['振幅']))
+    + _qi('市盈率',d['市盈率'])+_qi('市净率',d['市净率'])
+    + _qi('总市值',d['总市值']!=null?d['总市值']+'亿':'-')
+    + _qi('流通市值',d['流通市值']!=null?d['流通市值']+'亿':'-')
+    + '</div>';
+}
 
 /* --- K线图 --- */
 async function loadKline(period) {
   if (!_stockCode) return;
   const container = document.getElementById('klineChart');
+  const isIntraday = ['1min','5min','15min','30min','60min'].includes(period);
   try {
-    const json = await (await fetch(`/api/stock/kline/${_stockCode}?period=${period}&count=365`)).json();
+    const count = isIntraday ? 480 : 99999;
+    const json = await (await fetch(`/api/stock/kline/${_stockCode}?period=${period}&count=${count}`)).json();
     if (!json.success || !json.data?.length) { container.innerHTML = '<div class="empty-state" style="padding:40px;">暂无K线数据</div>'; return; }
 
-    // 清空旧图
     container.innerHTML = '';
     _klineChart = LightweightCharts.createChart(container, {
       width: container.clientWidth, height: 360,
@@ -2921,37 +2959,49 @@ async function loadKline(period) {
       grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
       crosshair: { mode: 0 },
       rightPriceScale: { borderVisible: false },
-      timeScale: { borderVisible: false, timeVisible: false },
+      timeScale: { borderVisible: false, timeVisible: isIntraday },
     });
 
-    _klineSeries = _klineChart.addCandlestickSeries({
-      upColor: '#ef4444', downColor: '#22c55e',
-      borderUpColor: '#ef4444', borderDownColor: '#22c55e',
-      wickUpColor: '#ef4444', wickDownColor: '#22c55e',
-    });
-    _klineSeries.setData(json.data.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
+    if (period === '1min') {
+      _klineSeries = _klineChart.addAreaSeries({
+        lineColor: '#2563EB', topColor: 'rgba(37,99,235,0.15)', bottomColor: 'rgba(37,99,235,0.01)',
+        lineWidth: 1.5,
+      });
+      _klineSeries.setData(json.data.map(k => ({ time: Math.floor(new Date(k.date).getTime()/1000), value: k.close })));
+      document.getElementById('maToggles').innerHTML = '';
+    } else {
+      _klineSeries = _klineChart.addCandlestickSeries({
+        upColor: '#ef4444', downColor: '#22c55e',
+        borderUpColor: '#ef4444', borderDownColor: '#22c55e',
+        wickUpColor: '#ef4444', wickDownColor: '#22c55e',
+      });
+      _klineSeries.setData(json.data.map(k => ({ time: isIntraday ? Math.floor(new Date(k.date).getTime()/1000) : k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
 
-    // MA 均线
-    const _candleData = json.data.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close }));
-    addMALines(_klineChart, _candleData, 'maToggles');
+      if (['day','week','month'].includes(period)) {
+        const _candleData = json.data.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close }));
+        addMALines(_klineChart, _candleData, 'maToggles');
+      } else {
+        document.getElementById('maToggles').innerHTML = '';
+      }
+    }
 
-    _klineVolSeries = _klineChart.addHistogramSeries({
-      priceFormat: { type: 'volume' },
-      priceScaleId: 'vol',
-    });
-    _klineChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
-    _klineVolSeries.setData(json.data.map(k => ({ time: k.date, value: k.volume, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
+    if (period !== '1min') {
+      _klineVolSeries = _klineChart.addHistogramSeries({
+        priceFormat: { type: 'volume' },
+        priceScaleId: 'vol',
+      });
+      _klineChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+      _klineVolSeries.setData(json.data.map(k => ({ time: isIntraday ? Math.floor(new Date(k.date).getTime()/1000) : k.date, value: k.volume, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
+    }
 
     const ts = _klineChart.timeScale();
     ts.fitContent();
-    // 仅锁定右边界，左侧可自由滑动查看历史
     ts.applyOptions({
       rightOffset: 5,
       minBarSpacing: 2,
       fixRightEdge: true,
     });
 
-    // 响应式
     new ResizeObserver(() => { if (_klineChart) _klineChart.applyOptions({ width: container.clientWidth }); }).observe(container);
   } catch (e) { container.innerHTML = '<div class="empty-state" style="padding:40px;">K线加载失败</div>'; }
 }
