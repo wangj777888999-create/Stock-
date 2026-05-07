@@ -22,7 +22,6 @@ import math
 import re
 
 import akshare as ak
-import requests as _requests
 
 from stock_utils import (
     TTL_COMPANY,
@@ -37,30 +36,13 @@ from stock_utils import (
 )
 
 from services.indicators import calc_rsi, calc_macd, calc_kdj, calc_boll
+from http_client import session, patch_requests
 
 logger = logging.getLogger("stock-service")
 
-# ─── 绕过系统代理的请求 ───
-
-_NO_PROXY = {"http": None, "https": None}
-
-
-def _get(url, **kw):
-    kw.setdefault("proxies", _NO_PROXY)
-    return _requests.get(url, **kw)
-
-
-def _patch_requests(func, **kwargs):
-    """在绕过代理的环境下调用 AKShare 函数。"""
-    orig_get = _requests.get
-    orig_post = _requests.post
-    _requests.get = lambda url, **kw: (kw.setdefault("proxies", _NO_PROXY), orig_get(url, **kw))[1]
-    _requests.post = lambda url, **kw: (kw.setdefault("proxies", _NO_PROXY), orig_post(url, **kw))[1]
-    try:
-        return func(**kwargs)
-    finally:
-        _requests.get = orig_get
-        _requests.post = orig_post
+# 兼容旧调用名
+_get = session.get
+_patch_requests = patch_requests
 
 
 # ─── 腾讯行情 API ───
@@ -492,10 +474,10 @@ class StockService:
                 else:
                     # A 股日/周/月：腾讯 API（count 上限 2000，超出会导致接口返回空）
                     exchange = get_exchange(norm)
-                    api_count = min(count, 2000)
+                    api_count = 2000 if count >= 99999 else min(count, 2000)
                     url = (
                         f"http://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
-                        f"?param={exchange}{norm},{period},2010-01-01,,{api_count},qfq"
+                        f"?param={exchange}{norm},{period},2005-01-01,,{api_count},qfq"
                     )
                     r = await asyncio.to_thread(_get, url, timeout=10)
                     resp_data = r.json().get("data", {})
@@ -521,11 +503,12 @@ class StockService:
                 df = await asyncio.to_thread(
                     _patch_requests, ak.stock_hk_hist,
                     symbol=original, period=ak_period,
-                    start_date="20200101", end_date="20300101", adjust="qfq",
+                    start_date="20100101", end_date="20300101", adjust="qfq",
                 )
                 if df is None or df.empty:
                     return {"success": False, "error": "暂无K线数据"}
-                df = df.tail(count)
+                if count < 99999:
+                    df = df.tail(count)
                 records = []
                 for _, row in df.iterrows():
                     records.append({
@@ -548,7 +531,8 @@ class StockService:
                 # 日线：直接取最近 count 条；周/月：需要聚合
                 if period in ("week", "month"):
                     df = _aggregate_kline(df, period)
-                df = df.tail(count)
+                if count < 99999:
+                    df = df.tail(count)
                 records = []
                 for _, row in df.iterrows():
                     records.append({

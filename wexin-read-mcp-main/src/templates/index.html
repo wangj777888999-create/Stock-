@@ -388,6 +388,27 @@ textarea.form-input {
   display: flex; align-items: center; justify-content: center;
 }
 .btn-icon:hover { background: var(--bg); color: var(--ink-2); }
+.btn-watchlist-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-watchlist-del:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--red);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+.btn-watchlist-del:active {
+  transform: scale(0.9);
+}
 .btn-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
 /* ============================================================
@@ -2012,6 +2033,13 @@ const topbarMeta = {
 let _fundLoaded = false;
 
 function switchView(view, el) {
+  // 博主管理 & 文章收集 需要登录
+  if ((view === 'task' || view === 'bloggers') && !_mpLoggedIn) {
+    if (el) el.classList.remove('active');
+    _pendingView = { view, el };
+    startMpLogin();
+    return;
+  }
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   if (el) el.classList.add('active');
@@ -2121,39 +2149,30 @@ async function loadConfig() {
   }
 }
 
+let _mpLoggedIn = true; // 全局登录状态，默认 true 避免误拦
+let _pendingView = null; // 登录成功后自动跳转的视图
+
 async function checkMpLoginStatus() {
   try {
     const res = await fetch('/api/config/mp-login-status');
     const data = await res.json();
     const statusEl = document.getElementById('mpStatus');
     if (!data.logged_in) {
+      _mpLoggedIn = false;
       statusEl.textContent = '⚠ ' + data.message;
       statusEl.style.color = 'var(--red)';
       statusEl.style.fontWeight = '700';
-      showLoginWarning(data.message);
     } else {
+      _mpLoggedIn = true;
       statusEl.textContent = '✓ 已授权';
       statusEl.style.color = 'var(--green)';
       statusEl.style.fontWeight = '600';
-      // 登录状态正常，移除警告 banner
-      const oldBanner = document.getElementById('loginWarningBanner');
-      if (oldBanner) oldBanner.remove();
     }
   } catch (e) {
     console.error('登录状态检测失败', e);
   }
 }
 
-function showLoginWarning(message) {
-  let warnEl = document.getElementById('loginWarningBanner');
-  if (!warnEl) {
-    warnEl = document.createElement('div');
-    warnEl.id = 'loginWarningBanner';
-    warnEl.style.cssText = 'position:fixed;top:0;left:0;right:0;background:var(--red);color:white;padding:12px 20px;text-align:center;font-weight:600;z-index:9999;display:flex;align-items:center;justify-content:center;gap:12px;';
-    document.body.prepend(warnEl);
-  }
-  warnEl.innerHTML = '⚠ ' + message + ' <button onclick="startMpLogin()" style="background:white;color:var(--red);border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-weight:700;margin-left:12px;">立即登录</button>';
-}
 
 async function saveConfig() {
   const body = {
@@ -2380,12 +2399,10 @@ async function autoRefreshBloggers() {
       bloggerList = data.bloggers;
       renderBloggerManageList(); refreshBloggerCheckList(); updateBloggerBadge();
       if (data.login_required) {
-        showLoginWarning('您的公众号登录已失效，请重新登录以继续获取最新文章');
-        showToast('部分博主刷新失败，请重新登录公众号后台', 'error');
+        _mpLoggedIn = false;
+        showToast('登录已失效，请重新扫码登录', 'error');
+        startMpLogin();
       } else {
-        // 登录正常，移除可能残留的警告 banner
-        const oldBanner = document.getElementById('loginWarningBanner');
-        if (oldBanner) oldBanner.remove();
         showToast('博主文章状态已刷新', 'success');
       }
     } else { showToast('刷新失败', 'error'); }
@@ -2697,16 +2714,21 @@ function handleMpLoginMessage(msg) {
     case 'waiting': { const s = document.getElementById('qrScanStatus'); if(s && !s.dataset.scanned) s.textContent = msg.message; break; }
     case 'scanned': { const s = document.getElementById('qrScanStatus'); if(s){s.textContent=msg.message;s.style.color='var(--green)';s.dataset.scanned='1';} break; }
     case 'success':
+      _mpLoggedIn = true;
       body.innerHTML = `<div style="text-align:center;"><div style="font-size:48px;margin-bottom:12px;">✅</div><p style="color:var(--green);font-size:15px;font-weight:600;">${msg.message}</p><p style="color:var(--ink-3);font-size:12px;margin-top:8px;">Token: ${msg.token} | Cookie长度: ${msg.cookie_len}</p></div>`;
       footer.style.display = 'none';
       document.getElementById('mpStatus').textContent = '✓ 已授权';
       document.getElementById('mpStatus').style.color = 'var(--green)';
       document.getElementById('mpStatus').style.fontWeight = '600';
-      // 移除登录警告 banner
-      const warnBanner = document.getElementById('loginWarningBanner');
-      if (warnBanner) warnBanner.remove();
       loadConfig();
-      setTimeout(() => { document.getElementById('qrModal').classList.remove('active'); }, 2500);
+      setTimeout(() => {
+        document.getElementById('qrModal').classList.remove('active');
+        // 登录成功后跳转到之前想进入的页面
+        if (_pendingView) {
+          switchView(_pendingView.view, _pendingView.el);
+          _pendingView = null;
+        }
+      }, 2500);
       break;
     case 'error':
       body.innerHTML = `<div style="text-align:center;"><p style="color:var(--red);font-size:14px;">${msg.message}</p><button class="btn btn-red btn-sm" onclick="cancelMpLogin();startMpLogin();" style="margin-top:16px;">重试</button></div>`;
@@ -4145,7 +4167,7 @@ async function selectFutures(code, name) {
 
   // 并行加载 K 线和龙虎榜
   const [klineResult, rankResult] = await Promise.allSettled([
-    fetch('/api/futures/kline/' + code + '?count=200').then(r => r.json()),
+    fetch('/api/futures/kline/' + code + '?count=99999').then(r => r.json()),
     fetch('/api/futures/rank/' + code).then(r => r.json()),
   ]);
 
@@ -4351,7 +4373,7 @@ function loadWatchlist() {
           + '<td style="color:' + color + '">' + chg + '</td>'
           + '<td>' + vol + '</td>'
           + '<td style="color:var(--ink-3);font-size:12px;">' + (w.note || '') + '</td>'
-          + '<td><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();watchlistDel(' + w.id + ')" style="color:var(--ink-3);width:24px;height:24px;padding:0;line-height:24px;font-size:14px;">✕</button></td>'
+          + '<td><button class="btn-watchlist-del" onclick="event.stopPropagation();watchlistDel(' + w.id + ')" title="删除"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button></td>'
           + '</tr>';
       }).join('');
       // Start auto-refresh

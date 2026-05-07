@@ -1,7 +1,8 @@
-"""Fund/ETF market provider — uses AKShare fund_etf_spot_em with shared DataFrame cache."""
+"""Fund/ETF market provider — 新浪为主 + 同花顺备选，双源容灾。"""
 
 import asyncio
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -9,18 +10,21 @@ _src = str(Path(__file__).parent.parent)
 if _src not in sys.path:
     sys.path.insert(0, _src)
 
-import akshare as ak
+import pandas as pd
 from stock_utils import TTL_COMPANY, cache
 from .base import MarketProvider
 
 logger = logging.getLogger(__name__)
 
 _DF_TTL = 300  # DataFrame 缓存 5 分钟
+_PROXY_KEYS = ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY")
 
+
+# ---------- 工具函数 ----------
 
 def _clean(v):
     """Convert NaN/NaT to None, Timestamp to str, numpy types to Python native."""
-    import math, pandas as pd
+    import math
     if v is None:
         return None
     if isinstance(v, pd.Timestamp):
@@ -47,6 +51,90 @@ def _df_to_dicts(df, columns=None):
     return [{k: _clean(v) for k, v in row.items()} for _, row in df.iterrows()]
 
 
+# ---------- 数据源（清除代理环境变量调用） ----------
+
+def _no_proxy_env():
+    """返回被清除的代理环境变量（用于 restore）。"""
+    saved = {k: os.environ.pop(k) for k in _PROXY_KEYS if k in os.environ}
+    return saved
+
+
+def _restore_env(saved):
+    """恢复之前清除的代理环境变量。"""
+    for k, v in saved.items():
+        os.environ[k] = v
+
+
+def _fetch_sina_etf():
+    """主数据源：新浪 ETF 列表。"""
+    import akshare as ak
+    saved = _no_proxy_env()
+    try:
+        df = ak.fund_etf_category_sina(symbol="ETF基金")
+        # 统一列名
+        col_map = {
+            "代码": "代码", "名称": "名称",
+            "最新价": "最新价", "涨跌幅": "涨跌幅",
+            "成交量": "成交量", "成交额": "成交额",
+            "涨跌额": "涨跌额", "买入": "买入", "卖出": "卖出",
+            "昨收": "昨收", "今开": "今开", "最高": "最高", "最低": "最低",
+        }
+        df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
+        logger.info(f"新浪源获取 {len(df)} 只 ETF")
+        return df
+    finally:
+        _restore_env(saved)
+
+
+def _fetch_ths_etf():
+    """备选数据源：同花顺 ETF 列表。"""
+    import akshare as ak
+    saved = _no_proxy_env()
+    try:
+        df = ak.fund_etf_spot_ths()
+        # 统一列名
+        col_map = {
+            "基金代码": "代码", "基金名称": "名称",
+            "当前-单位净值": "最新价", "增长率": "涨跌幅",
+        }
+        df = df.rename(columns={k: v for k, v in col_map.items() if k in df.columns})
+        logger.info(f"同花顺源获取 {len(df)} 只 ETF")
+        return df
+    finally:
+        _restore_env(saved)
+
+
+async def _get_etf_df():
+    """获取 ETF DataFrame（带缓存 + 双源切换）。"""
+    ck = "market:fund:df"
+    cached = cache.get(ck)
+    if cached is not None:
+        return cached
+
+    # 策略 1：新浪
+    try:
+        df = await asyncio.to_thread(_fetch_sina_etf)
+        if df is not None and not df.empty:
+            cache.set(ck, df, _DF_TTL)
+            return df
+    except Exception as e:
+        logger.warning(f"新浪 ETF 源失败: {e}")
+
+    # 策略 2：同花顺
+    logger.info("切换到同花顺备选数据源")
+    try:
+        df = await asyncio.to_thread(_fetch_ths_etf)
+        if df is not None and not df.empty:
+            cache.set(ck, df, _DF_TTL)
+            return df
+    except Exception as e:
+        logger.warning(f"同花顺备选也失败: {e}")
+
+    raise RuntimeError("所有 ETF 数据源均不可用")
+
+
+# ---------- 板块分类 ----------
+
 _CATEGORIES = {
     "科技ETF": ["科技", "半导体", "芯片", "人工智能", "AI", "计算机", "软件", "通信", "电子"],
     "医药ETF": ["医药", "医疗", "生物", "创新药", "健康"],
@@ -60,17 +148,6 @@ _CATEGORIES = {
     "债券ETF": ["国债", "债券", "信用债", "利率债"],
     "商品ETF": ["黄金", "白银", "原油", "豆粕", "铜"],
 }
-
-
-async def _get_etf_df():
-    """获取 ETF DataFrame（带缓存）。"""
-    ck = "market:fund:df"
-    cached = cache.get(ck)
-    if cached is not None:
-        return cached
-    df = await asyncio.to_thread(ak.fund_etf_spot_em)
-    cache.set(ck, df, _DF_TTL)
-    return df
 
 
 def _classify_boards(df):
@@ -100,6 +177,8 @@ def _filter_by_board(df, board_name):
     else:
         return df[df["名称"].str.contains(board_name, na=False)]
 
+
+# ---------- Provider ----------
 
 class FundProvider(MarketProvider):
     name = "fund"
@@ -167,44 +246,17 @@ class FundProvider(MarketProvider):
 
     async def get_etf_detail(self, code: str):
         """获取单只 ETF 详情：基本信息 + K 线 + 前十大持仓。"""
-        import requests as _requests, time as _time
         ck = f"market:fund:detail:{code}"
         cached = cache.get(ck)
         if cached is not None:
             return cached
 
-        _NO_PROXY = {"http": None, "https": None}
-
-        def _patch(func, **kw):
-            orig_get = _requests.get
-            orig_post = _requests.post
-            _requests.get = lambda url, **k: (k.setdefault("proxies", _NO_PROXY), orig_get(url, **k))[1]
-            _requests.post = lambda url, **k: (k.setdefault("proxies", _NO_PROXY), orig_post(url, **k))[1]
-            try:
-                return func(**kw)
-            finally:
-                _requests.get = orig_get
-                _requests.post = orig_post
-
-        def _call_ak(func, **kw):
-            """带重试的 AKShare 调用（应对东方财富限频断连）。"""
-            last_err = None
-            for attempt in range(3):
-                try:
-                    return func(**kw)
-                except Exception as e:
-                    last_err = e
-                    if attempt < 2:
-                        wait = (attempt + 1) * 3
-                        logger.info(f"重试 {attempt+1}/3（{wait}s 后）: {e}")
-                        _time.sleep(wait)
-            raise last_err
-
         try:
-            # 1. 基本信息（从 spot DataFrame 中获取）
+            # 1. 基本信息
             info = {}
             df = await _get_etf_df()
-            row = df[df["代码"] == code]
+            # 新浪代码带市场前缀(sz/sh)，需要匹配后缀
+            row = df[df["代码"].str.endswith(code, na=False)]
             if not row.empty:
                 row = row.iloc[0]
                 info = {
@@ -213,35 +265,51 @@ class FundProvider(MarketProvider):
                     "最新价": _clean(row.get("最新价")),
                     "涨跌幅": _clean(row.get("涨跌幅")),
                     "成交额": _clean(row.get("成交额")),
-                    "换手率": _clean(row.get("换手率")),
                 }
 
-            # 2. K 线数据
-            kline_df = await asyncio.to_thread(
-                _call_ak, _patch, func=ak.fund_etf_hist_em,
-                symbol=code, period="daily",
-                start_date="20240101", end_date="20300101", adjust="qfq",
-            )
+            # 2. K 线数据 — 新浪
+            import akshare as ak
             kline = []
-            if kline_df is not None and not kline_df.empty:
-                kline_df = kline_df.tail(120)
-                for _, r in kline_df.iterrows():
-                    kline.append({
-                        "date": str(r.get("日期", ""))[:10],
-                        "open": _clean(r.get("开盘")),
-                        "close": _clean(r.get("收盘")),
-                        "high": _clean(r.get("最高")),
-                        "low": _clean(r.get("最低")),
-                        "volume": _clean(r.get("成交量")),
-                    })
+            try:
+                # 从新浪代码获取完整代码
+                full_code = None
+                if not row.empty:
+                    full_code = _clean(row.iloc[0] if hasattr(row, 'iloc') else row.get("代码"))
+                if not full_code:
+                    # 推测市场前缀
+                    full_code = f"sz{code}" if code.startswith(("0", "3", "15")) else f"sh{code}"
 
-            # 3. 前十大持仓
+                saved = _no_proxy_env()
+                try:
+                    kline_df = await asyncio.to_thread(
+                        ak.fund_etf_hist_sina, symbol=full_code,
+                    )
+                finally:
+                    _restore_env(saved)
+
+                if kline_df is not None and not kline_df.empty:
+                    for _, r in kline_df.iterrows():
+                        kline.append({
+                            "date": str(r.get("date", ""))[:10],
+                            "open": _clean(r.get("open")),
+                            "close": _clean(r.get("close")),
+                            "high": _clean(r.get("high")),
+                            "low": _clean(r.get("low")),
+                            "volume": _clean(r.get("volume")),
+                        })
+            except Exception as e:
+                logger.warning(f"K线获取失败({code}): {e}")
+
+            # 3. 前十大持仓 — 尝试 AKShare
             holdings = []
             try:
-                hold_df = await asyncio.to_thread(
-                    _call_ak, _patch, func=ak.fund_portfolio_hold_em,
-                    symbol=code, date="",
-                )
+                saved = _no_proxy_env()
+                try:
+                    hold_df = await asyncio.to_thread(
+                        ak.fund_portfolio_hold_em, symbol=code, date="",
+                    )
+                finally:
+                    _restore_env(saved)
                 if hold_df is not None and not hold_df.empty:
                     for _, r in hold_df.head(10).iterrows():
                         holdings.append({

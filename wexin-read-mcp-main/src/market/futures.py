@@ -10,26 +10,11 @@ if _src not in sys.path:
     sys.path.insert(0, _src)
 
 import akshare as ak
-import requests as _requests
 from stock_utils import TTL_REALTIME, TTL_DAILY, TTL_COMPANY, cache
 from .base import MarketProvider
+from http_client import patch_requests as _patch
 
 logger = logging.getLogger(__name__)
-
-_NO_PROXY = {"http": None, "https": None}
-
-
-def _patch(func, **kw):
-    """绕过系统代理调用 AKShare。"""
-    orig_get = _requests.get
-    orig_post = _requests.post
-    _requests.get = lambda url, **k: (k.setdefault("proxies", _NO_PROXY), orig_get(url, **k))[1]
-    _requests.post = lambda url, **k: (k.setdefault("proxies", _NO_PROXY), orig_post(url, **k))[1]
-    try:
-        return func(**kw)
-    finally:
-        _requests.get = orig_get
-        _requests.post = orig_post
 
 
 def _clean(v):
@@ -205,8 +190,9 @@ class FuturesProvider(MarketProvider):
             return cached
         try:
             from datetime import datetime, timedelta
-            # 只拉取约 count*2 个交易日的数据（约1.5年），而非6年
-            start = (datetime.now() - timedelta(days=count * 2)).strftime("%Y%m%d")
+            # count>=99999 时拉取全部历史
+            lookback_days = 365 * 20 if count >= 99999 else count * 2
+            start = (datetime.now() - timedelta(days=lookback_days)).strftime("%Y%m%d")
             end = (datetime.now() + timedelta(days=30)).strftime("%Y%m%d")
             df = await asyncio.to_thread(
                 _patch, ak.futures_main_sina,
@@ -214,7 +200,8 @@ class FuturesProvider(MarketProvider):
             )
             if df is None or df.empty:
                 return {"success": False, "error": "暂无K线数据"}
-            df = df.tail(count)
+            if count < 99999:
+                df = df.tail(count)
             records = []
             for _, row in df.iterrows():
                 records.append({

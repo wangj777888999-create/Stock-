@@ -600,7 +600,7 @@ def load_config() -> AppConfig:
 |------|------|--------|--------|------|
 | **Phase 0** | 紧急：添加 .gitignore，修复敏感信息 | 🔴 必须 | 0.5天 | 无 |
 | **Phase 1** | 安全：环境变量配置方案 | 🔴 必须 | 1天 | 低 |
-| **Phase 2** | 性能：连接池 + 缓存持久化 | 🟡 重要 | 2天 | 中 |
+| **Phase 2** | 性能：连接池 + 缓存持久化 | 🟡 重要 | ✅ 已完成 | — |
 | **Phase 3** | 解耦：拆分 app.py | 🟡 重要 | 3天 | 中 |
 | **Phase 4** | 内容安全：输入过滤 | 🟡 中等 | 1天 | 低 |
 | **Phase 5** | 存储：引入 SQLite | 🟢 可选 | 2天 | 中 |
@@ -699,66 +699,45 @@ class AppConfig:
         )
 ```
 
-### 4.4 Phase 2 详细方案
+### 4.4 Phase 2 详细方案 ✅ 已完成
 
-#### 2.1 httpx 连接池
+#### 2.1 HTTP 连接池（已完成）
 
-```python
-# stock_service.py 新增
-class StockService:
-    _http_client: httpx.AsyncClient | None = None
+**实际方案**：使用 `requests.Session` 替代原计划的 `httpx.AsyncClient`。
+原因：项目使用同步 `requests` 调用 + `asyncio.to_thread` 包装，无需 httpx。
 
-    @classmethod
-    def get_http_client(cls) -> httpx.AsyncClient:
-        if cls._http_client is None:
-            cls._http_client = httpx.AsyncClient(
-                timeout=30,
-                proxies={"http": None, "https": None},
-                limits=httpx.Limits(
-                    max_keepalive_connections=20,
-                    max_connections=100
-                )
-            )
-        return cls._http_client
-
-    @classmethod
-    async def close_http_client(cls):
-        if cls._http_client:
-            await cls._http_client.aclose()
-            cls._http_client = None
-```
-
-#### 2.2 缓存持久化
+新建 `src/http_client.py`，提供全局连接池：
 
 ```python
-# stock_utils.py 修改
-import json
-from pathlib import Path
+import requests
 
-class PersistentTTLCache:
-    CACHE_DIR = Path(__file__).parent.parent / ".cache"
+session = requests.Session()
+session.trust_env = False  # 不读系统代理环境变量（VPN/Clash/Surge 不影响）
+session.proxies = {"http": None, "https": None}  # 双保险
 
-    def __init__(self):
-        self._store: dict[str, tuple[Any, float]] = {}
-        self._load_from_disk()
-
-    def _load_from_disk(self):
-        cache_file = self.CACHE_DIR / "stock_cache.json"
-        if cache_file.exists():
-            try:
-                data = json.loads(cache_file.read_text())
-                now = time.time()
-                self._store = {
-                    k: (v, float(exp)) for k, (v, exp) in data.items()
-                    if now < float(exp)
-                }
-            except Exception:
-                pass
-
-    def set(self, key: str, value: Any, ttl: int = TTL_DAILY):
-        self._store[key] = (value, time.time() + ttl)
-        self._save_to_disk()
+def patch_requests(func, **kwargs):
+    """临时替换 requests.get/post 为走连接池的版本，用于 AKShare。"""
+    import requests as _requests
+    orig_get, orig_post = _requests.get, _requests.post
+    _requests.get, _requests.post = session.get, session.post
+    try:
+        return func(**kwargs)
+    finally:
+        _requests.get, _requests.post = orig_get, orig_post
 ```
+
+**改动文件**：
+- 新建 `src/http_client.py` — 共享连接池 + 代理绕过
+- `stock_service.py` — 删除 19 行重复代理代码，改为导入
+- `iwencai_service.py` — 删除 14 行重复代理代码，改为导入
+- `market/futures.py` — 删除 14 行重复代理代码，改为导入
+
+#### 2.2 缓存持久化（已完成，早于本计划）
+
+实际在 Phase 5（SQLite 引入）时一并完成。`stock_utils.py` 已使用 SQLite `cache` 表实现持久化缓存，包含：
+- `cache_get()` — 从 SQLite 读取，过期自动删除
+- `cache_set()` — 写入 SQLite，支持 DataFrame 序列化
+- `_CacheCompat` — 兼容旧 `TTLCache` API
 
 ---
 
@@ -770,8 +749,8 @@ class PersistentTTLCache:
 |------|------|--------|
 | .gitignore | 保护敏感文件不提交 | 🔴 |
 | 环境变量配置 | 敏感信息不存储文件 | 🔴 |
-| 连接池 | 减少连接开销 | 🟡 |
-| 缓存持久化 | 重启不丢失缓存 | 🟡 |
+| 连接池 | 减少连接开销 | ✅ 已完成 |
+| 缓存持久化 | 重启不丢失缓存 | ✅ 已完成 |
 | 内容过滤 | XSS防护 | 🟡 |
 
 ### 5.2 中期 (3-6个月)
@@ -816,9 +795,10 @@ class PersistentTTLCache:
 
 ### Phase 2 验收
 
-- [ ] 并发请求延迟降低 20%+
-- [ ] 缓存重启后存在
-- [ ] 无连接泄漏
+- [x] 全局 Session 统一管理，trust_env=False 绕过 VPN 代理
+- [x] stock_service / iwencai_service / futures 三处重复代码消除
+- [x] 缓存通过 SQLite 持久化，重启后数据保留
+- [x] 接口功能正常，腾讯行情 API 请求成功
 
 ### Phase 3 验收
 

@@ -8,26 +8,11 @@ import math
 
 import akshare as ak
 import pywencai
-import requests as _requests
 
 from stock_utils import TTL_COMPANY, TTL_DAILY, TTL_REALTIME, cache
+from http_client import patch_requests as _patch_requests
 
 logger = logging.getLogger("iwencai-service")
-
-_NO_PROXY = {"http": None, "https": None}
-
-
-def _patch_requests(func, **kwargs):
-    """绕过代理调用 AKShare 函数"""
-    orig_get = _requests.get
-    orig_post = _requests.post
-    _requests.get = lambda url, **kw: (kw.setdefault("proxies", _NO_PROXY), orig_get(url, **kw))[1]
-    _requests.post = lambda url, **kw: (kw.setdefault("proxies", _NO_PROXY), orig_post(url, **kw))[1]
-    try:
-        return func(**kwargs)
-    finally:
-        _requests.get = orig_get
-        _requests.post = orig_post
 
 
 def _clean(v):
