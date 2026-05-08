@@ -3070,8 +3070,8 @@ async function refreshQuote() {
     const up = parseFloat(change) >= 0, c = up ? 'var(--red)' : 'var(--green)', arr = up ? '▲' : '▼';
     body.innerHTML =
       `<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px;">`
-      + `<span style="font-size:28px;font-weight:700;color:${c};">${price}</span>`
-      + `<span style="font-size:14px;color:${c};">${arr} ${change} (${pct}%)</span></div>`
+      + `<span style="font-size:28px;font-weight:700;color:${c};">${escapeHtml(price)}</span>`
+      + `<span style="font-size:14px;color:${c};">${escapeHtml(arr + ' ' + change + ' (' + pct + '%)')}</span></div>`
       + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px 14px;">'
       + _qi('今开',d['今开'])+_qi('昨收',d['昨收'])+_qi('最高',d['最高'])+_qi('最低',d['最低'])
       + _qi('成交量',_fn(d['成交量'],'手'))+_qi('成交额',_fn(d['成交额'],'万'))
@@ -3091,8 +3091,8 @@ function _renderQuoteInline(d) {
   const up = parseFloat(change) >= 0, c = up ? 'var(--red)' : 'var(--green)', arr = up ? '▲' : '▼';
   body.innerHTML =
     `<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px;">`
-    + `<span style="font-size:28px;font-weight:700;color:${c};">${price}</span>`
-    + `<span style="font-size:14px;color:${c};">${arr} ${change} (${pct}%)</span></div>`
+    + `<span style="font-size:28px;font-weight:700;color:${c};">${escapeHtml(price)}</span>`
+    + `<span style="font-size:14px;color:${c};">${escapeHtml(arr + ' ' + change + ' (' + pct + '%)')}</span></div>`
     + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px 14px;">'
     + _qi('今开',d['今开'])+_qi('昨收',d['昨收'])+_qi('最高',d['最高'])+_qi('最低',d['最低'])
     + _qi('成交量',_fn(d['成交量'],'手'))+_qi('成交额',_fn(d['成交额'],'万'))
@@ -3502,7 +3502,6 @@ async function _doWencaiQuery(query) {
 
 function _renderWencaiTable(container, rows, onClick) {
   if (!rows.length) return;
-  const escapeHtml = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   // 清理列名：去掉 iwencai 字段尾部的 [YYYYMMDD-YYYYMMDD] 时间区间
   const cleanHeader = (c) => String(c).replace(/\s*\[\d{6,8}[-~]\d{6,8}\]\s*$/, '').trim();
   // 默认隐藏的低价值列（按清洗后的列名匹配）
@@ -3555,9 +3554,8 @@ function _renderWencaiTable(container, rows, onClick) {
   html += '</tr></thead><tbody>';
 
   rows.forEach(row => {
-    const rowClick = onClick ? ' onclick="' + onClick(row) + '"' : '';
     const rowStyle = onClick ? ' style="cursor:pointer;"' : '';
-    html += '<tr' + rowClick + rowStyle + '>';
+    html += '<tr' + rowStyle + (onClick ? ' data-code="' + escapeHtml(row['代码'] || '') + '" data-name="' + escapeHtml(row['名称'] || '') + '"' : '') + '>';
     cols.forEach(c => {
       const v = row[c.key];
       const name = c.name;
@@ -3595,6 +3593,11 @@ function _renderWencaiTable(container, rows, onClick) {
   });
   html += '</tbody></table>';
   container.innerHTML = html;
+  if (onClick) {
+    container.querySelectorAll('tr[data-code]').forEach(tr => {
+      tr.addEventListener('click', () => onClick({ '代码': tr.dataset.code, '名称': tr.dataset.name }));
+    });
+  }
 }
 
 async function loadSectorHeatmap() {
@@ -3891,7 +3894,7 @@ async function loadFundBoardStocks(name) {
     if (!json.success) { body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '查询失败') + '</div>'; return; }
     if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到数据</div>'; return; }
     title.textContent = '「' + name + '」（共 ' + (json.total || json.data.length) + ' 条）';
-    _renderWencaiTable(body, json.data, row => `selectFund('${row['代码']}','${(row['名称']||'').replace(/'/g,"\\'")}')`);
+    _renderWencaiTable(body, json.data, row => selectFund(row['代码'], row['名称']));
   } catch (e) {
     body.innerHTML = '<div class="empty-state">请求失败，请稍后重试</div>';
   }
@@ -3913,7 +3916,7 @@ async function fundSearch() {
     const json = await resp.json();
     if (!json.success || !json.data?.length) { body.innerHTML = '<div class="empty-state">未找到结果</div>'; return; }
     title.textContent = '搜索: ' + keyword + '（' + json.total + ' 条）';
-    _renderWencaiTable(body, json.data, row => `selectFund('${row['代码']}','${(row['名称']||'').replace(/'/g,"\\'")}')`);
+    _renderWencaiTable(body, json.data, row => selectFund(row['代码'], row['名称']));
   } catch (e) {
     body.innerHTML = '<div class="empty-state">搜索失败，请稍后重试</div>';
   }
@@ -3955,7 +3958,7 @@ async function selectFund(code, name) {
       ['成交额', info['成交额']], ['换手率', info['换手率'] != null ? info['换手率'] + '%' : '-'],
     ].filter(r => r[1] != null);
     infoEl.innerHTML = '<div style="font-size:13px;">'
-      + infoRows.map(r => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span style="color:var(--ink-3);font-size:12px;">${r[0]}</span><span style="font-size:13px;font-family:var(--mono);">${r[1]}</span></div>`).join('')
+      + infoRows.map(r => `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span style="color:var(--ink-3);font-size:12px;">${escapeHtml(r[0])}</span><span style="font-size:13px;font-family:var(--mono);">${escapeHtml(r[1])}</span></div>`).join('')
       + '</div>';
 
     // 渲染 K 线图
@@ -4098,13 +4101,13 @@ function _renderCryptoTable(container, data) {
     const mcap = c.market_cap ? (c.market_cap >= 1e12 ? (c.market_cap/1e12).toFixed(2)+'T' : c.market_cap >= 1e9 ? (c.market_cap/1e9).toFixed(2)+'B' : (c.market_cap/1e6).toFixed(2)+'M') : '-';
     const vol = c.volume_24h ? (c.volume_24h >= 1e9 ? (c.volume_24h/1e9).toFixed(2)+'B' : (c.volume_24h/1e6).toFixed(2)+'M') : '-';
     html += '<tr style="border-bottom:1px solid var(--border);">';
-    html += '<td style="padding:8px;color:var(--ink-3);">' + (c.rank || '-') + '</td>';
-    html += '<td style="padding:8px;font-weight:500;">' + c.name + '</td>';
-    html += '<td style="padding:8px;color:var(--ink-3);">' + c.code + '</td>';
-    html += '<td style="padding:8px;text-align:right;font-weight:500;">' + (c.price ? c.price.toLocaleString() : '-') + '</td>';
-    html += '<td style="padding:8px;text-align:right;color:' + color + ';">' + sign + change.toFixed(2) + '%</td>';
-    html += '<td style="padding:8px;text-align:right;color:var(--ink-3);">$' + mcap + '</td>';
-    html += '<td style="padding:8px;text-align:right;color:var(--ink-3);">$' + vol + '</td>';
+    html += '<td style="padding:8px;color:var(--ink-3);">' + escapeHtml(c.rank || '-') + '</td>';
+    html += '<td style="padding:8px;font-weight:500;">' + escapeHtml(c.name) + '</td>';
+    html += '<td style="padding:8px;color:var(--ink-3);">' + escapeHtml(c.code) + '</td>';
+    html += '<td style="padding:8px;text-align:right;font-weight:500;">' + escapeHtml(c.price ? c.price.toLocaleString() : '-') + '</td>';
+    html += '<td style="padding:8px;text-align:right;color:' + color + ';">' + escapeHtml(sign + change.toFixed(2) + '%') + '</td>';
+    html += '<td style="padding:8px;text-align:right;color:var(--ink-3);">$' + escapeHtml(mcap) + '</td>';
+    html += '<td style="padding:8px;text-align:right;color:var(--ink-3);">$' + escapeHtml(vol) + '</td>';
     html += '</tr>';
   });
   html += '</tbody></table>';
@@ -4154,7 +4157,7 @@ async function loadFuturesBoardStocks(name) {
     if (!json.success) { body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '查询失败') + '</div>'; return; }
     if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到数据</div>'; return; }
     title.textContent = '「' + name + '」（共 ' + (json.total || json.data.length) + ' 条）';
-    _renderWencaiTable(body, json.data, row => `selectFutures('${row['代码']}','${(row['名称']||'').replace(/'/g,"\\'")}')`);
+    _renderWencaiTable(body, json.data, row => selectFutures(row['代码'], row['名称']));
   } catch (e) {
     body.innerHTML = '<div class="empty-state">请求失败，请稍后重试</div>';
   }
@@ -4176,7 +4179,7 @@ async function futuresSearch() {
     const json = await resp.json();
     if (!json.success || !json.data?.length) { body.innerHTML = '<div class="empty-state">未找到结果</div>'; return; }
     title.textContent = '搜索: ' + keyword + '（' + json.total + ' 条）';
-    _renderWencaiTable(body, json.data, row => `selectFutures('${row['代码']}','${(row['名称']||'').replace(/'/g,"\\'")}')`);
+    _renderWencaiTable(body, json.data, row => selectFutures(row['代码'], row['名称']));
   } catch (e) {
     body.innerHTML = '<div class="empty-state">搜索失败，请稍后重试</div>';
   }
@@ -4248,20 +4251,20 @@ async function selectFutures(code, name) {
     let h = '<table class="data-table"><thead><tr><th>合约</th><th>成交量前5</th><th>增减</th><th>持买前5</th><th>增减</th><th>持卖前5</th><th>增减</th></tr></thead><tbody>';
     rank.forEach(r => {
       h += `<tr>
-        <td style="font-weight:500;">${r['合约'] || '-'}</td>
-        <td class="num">${r['成交量前5'] ?? '-'}</td>
-        <td class="num ${r['成交量增减'] > 0 ? 'up' : r['成交量增减'] < 0 ? 'down' : ''}">${r['成交量增减'] != null ? (r['成交量增减'] >= 0 ? '+' : '') + r['成交量增减'] : '-'}</td>
-        <td class="num">${r['持买量前5'] ?? '-'}</td>
-        <td class="num ${r['持买增减'] > 0 ? 'up' : r['持买增减'] < 0 ? 'down' : ''}">${r['持买增减'] != null ? (r['持买增减'] >= 0 ? '+' : '') + r['持买增减'] : '-'}</td>
-        <td class="num">${r['持卖量前5'] ?? '-'}</td>
-        <td class="num ${r['持卖增减'] > 0 ? 'up' : r['持卖增减'] < 0 ? 'down' : ''}">${r['持卖增减'] != null ? (r['持卖增减'] >= 0 ? '+' : '') + r['持卖增减'] : '-'}</td>
+        <td style="font-weight:500;">${escapeHtml(r['合约'] || '-')}</td>
+        <td class="num">${escapeHtml(r['成交量前5'] ?? '-')}</td>
+        <td class="num ${r['成交量增减'] > 0 ? 'up' : r['成交量增减'] < 0 ? 'down' : ''}">${escapeHtml(r['成交量增减'] != null ? (r['成交量增减'] >= 0 ? '+' : '') + r['成交量增减'] : '-')}</td>
+        <td class="num">${escapeHtml(r['持买量前5'] ?? '-')}</td>
+        <td class="num ${r['持买增减'] > 0 ? 'up' : r['持买增减'] < 0 ? 'down' : ''}">${escapeHtml(r['持买增减'] != null ? (r['持买增减'] >= 0 ? '+' : '') + r['持买增减'] : '-')}</td>
+        <td class="num">${escapeHtml(r['持卖量前5'] ?? '-')}</td>
+        <td class="num ${r['持卖增减'] > 0 ? 'up' : r['持卖增减'] < 0 ? 'down' : ''}">${escapeHtml(r['持卖增减'] != null ? (r['持卖增减'] >= 0 ? '+' : '') + r['持卖增减'] : '-')}</td>
       </tr>`;
     });
     h += '</tbody></table>';
     rankEl.innerHTML = h;
   } else {
     const err = rankResult.status === 'fulfilled' ? (rankResult.value.error || '暂无数据') : '加载失败';
-    rankEl.innerHTML = '<div class="empty-state">' + err + '</div>';
+    rankEl.innerHTML = '<div class="empty-state">' + escapeHtml(err) + '</div>';
   }
 }
 
@@ -4332,8 +4335,8 @@ async function openStockModal(code, name) {
       const color = up ? 'var(--red)' : 'var(--green)';
       const arrow = up ? '▲' : '▼';
       html += '<div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px;">'
-        + `<span style="font-size:24px;font-weight:700;color:${color};">${price}</span>`
-        + `<span style="font-size:13px;color:${color};">${arrow} ${change} (${pct}%)</span></div>`;
+        + `<span style="font-size:24px;font-weight:700;color:${color};">${escapeHtml(price)}</span>`
+        + `<span style="font-size:13px;color:${color};">${escapeHtml(arrow + ' ' + change + ' (' + pct + '%)')}</span></div>`;
       html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;font-size:13px;margin-bottom:14px;">';
       const items = [
         ['今开', q['今开']], ['昨收', q['昨收']], ['最高', q['最高']], ['最低', q['最低']],
@@ -4342,7 +4345,7 @@ async function openStockModal(code, name) {
         ['成交量', q['成交量'] != null ? q['成交量'] + '手' : '-'],
       ];
       items.forEach(([k, v]) => {
-        html += `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);"><span style="color:var(--ink-3);font-size:12px;">${k}</span><span style="font-family:var(--mono);">${v ?? '-'}</span></div>`;
+        html += `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);"><span style="color:var(--ink-3);font-size:12px;">${escapeHtml(k)}</span><span style="font-family:var(--mono);">${escapeHtml(v ?? '-')}</span></div>`;
       });
       html += '</div>';
     } else {
@@ -4359,7 +4362,7 @@ async function openStockModal(code, name) {
         ['法人代表', p['法人代表']], ['主营业务', p['主营业务']],
       ];
       profItems.forEach(([k, v]) => {
-        if (v) html += `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);font-size:12px;"><span style="color:var(--ink-3);">${k}</span><span style="max-width:60%;text-align:right;">${v}</span></div>`;
+        if (v) html += `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border);font-size:12px;"><span style="color:var(--ink-3);">${escapeHtml(k)}</span><span style="max-width:60%;text-align:right;">${escapeHtml(v)}</span></div>`;
       });
       html += '</div>';
     }
@@ -4440,7 +4443,7 @@ function watchlistAdd() {
       if (j.success) { inp.value = ''; loadWatchlist(); }
       else alert('添加失败: ' + (j.error || '未知错误'));
     })
-    .catch(e => { alert('请求失败，请稍后重试); });
+    .catch(e => { alert('请求失败，请稍后重试'); });
 }
 
 function watchlistDel(id) {
@@ -4532,7 +4535,7 @@ async function loadSim() {
           '<td>' + escapeHtml(h.price) + '</td>' +
           '<td>' + escapeHtml(h.close_price) + '</td>' +
           '<td>' + escapeHtml(h.quantity) + '</td>' +
-          '<td style="color:' + (h.pnl>0?'#ef4444':'#22c55e') + '">' + escapeHtml((h.pnl>=0?'+':'') + h.pnl.toFixed(2)) + '</td>' +
+          '<td style="color:' + (h.pnl>0?'#ef4444':'#22c55e') + '">' + escapeHtml(h.pnl != null ? ((h.pnl>=0?'+':'') + h.pnl.toFixed(2)) : '-') + '</td>' +
           '<td>' + escapeHtml(h.closed_at||'') + '</td>' +
           '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(h.note||'') + '</td>' +
         '</tr>';
@@ -4572,7 +4575,7 @@ async function simOpen() {
       document.getElementById('sim-modal').style.display = 'none';
       loadSim();
     } else alert(j.error);
-  } catch(e) { alert('请求失败，请稍后重试); }
+  } catch(e) { alert('请求失败，请稍后重试'); }
 }
 
 function simCloseForm(id) {

@@ -430,7 +430,7 @@ class StockService:
     # ─── 3. K线历史数据 ───
 
     async def get_kline(self, symbol: str, period: str = "day", count: int = 120, indicators: str = "") -> dict:
-        """获取前复权 K 线数据。A 股用腾讯 API，港股/美股用 AKShare。period: day/week/month"""
+        """获取前复权 K 线数据。A 股/港股/美股均用 AKShare。period: day/week/month"""
         market = detect_market(symbol)  # 先识别市场（normalize 会补零破坏港股代码）
         original = str(symbol).strip()  # 保留原始代码（港股需要 5 位）
         norm = normalize_symbol(symbol)
@@ -472,28 +472,27 @@ class StockService:
                             "volume": int(float(item["volume"])),
                         })
                 else:
-                    # A 股日/周/月：腾讯 API（count 上限 2000，超出会导致接口返回空）
-                    exchange = get_exchange(norm)
-                    api_count = 2000 if count >= 99999 else min(count, 2000)
-                    url = (
-                        f"http://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
-                        f"?param={exchange}{norm},{period},2005-01-01,,{api_count},qfq"
+                    # A 股日/周/月：AKShare（腾讯 API 每请求仅返回 ~640 条，历史数据不足）
+                    period_map = {"day": "daily", "week": "weekly", "month": "monthly"}
+                    ak_period = period_map.get(period, "daily")
+                    df = await asyncio.to_thread(
+                        _patch_requests, ak.stock_zh_a_hist,
+                        symbol=norm, period=ak_period,
+                        start_date="20050101", end_date="20300101", adjust="qfq",
                     )
-                    r = await asyncio.to_thread(_get, url, timeout=10)
-                    resp_data = r.json().get("data", {})
-                    if not isinstance(resp_data, dict):
+                    if df is None or df.empty:
                         return {"success": False, "error": "暂无K线数据"}
-                    data = resp_data.get(f"{exchange}{norm}", {})
-                    klines = data.get("qfqday") or data.get("qfqweek") or data.get("qfqmonth") or data.get("day") or []
+                    if count < 99999:
+                        df = df.tail(count)
                     records = []
-                    for k in klines:
+                    for _, row in df.iterrows():
                         records.append({
-                            "date": k[0],
-                            "open": float(k[1]),
-                            "close": float(k[2]),
-                            "high": float(k[3]),
-                            "low": float(k[4]),
-                            "volume": float(k[5]) if len(k) > 5 else 0,
+                            "date": str(row["日期"])[:10],
+                            "open": _clean(row.get("开盘")),
+                            "close": _clean(row.get("收盘")),
+                            "high": _clean(row.get("最高")),
+                            "low": _clean(row.get("最低")),
+                            "volume": _clean(row.get("成交量")),
                         })
 
             elif market == "hk":
