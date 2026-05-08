@@ -983,6 +983,14 @@ textarea.form-input {
 .heatmap-item .sector-name { font-size: 12px; }
 .heatmap-item .sector-change { font-size: 14px; font-weight: 700; font-family: var(--mono); }
 
+.board-grid { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px; }
+.board-chip {
+  background: #F8F8FA; border: 1px solid var(--border); color: var(--ink);
+  cursor: pointer; padding: 10px 14px; border-radius: var(--r-xs);
+  font-size: 13px; font-weight: 500; transition: all var(--t) var(--ease);
+}
+.board-chip:hover { border-color: var(--blue); background: var(--blue-s); }
+
 .data-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 13px; table-layout: auto; }
 .data-table th {
   padding: 10px 14px; text-align: left; color: var(--ink-3); font-weight: 600;
@@ -2000,6 +2008,28 @@ textarea.form-input {
 
 <script>
 /* ============================================================
+   SECURITY HELPERS
+   ============================================================ */
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+function safeUrl(url) {
+  if (!url) return '#';
+  const u = String(url).trim().toLowerCase();
+  if (u.startsWith('javascript:') || u.startsWith('data:') || u.startsWith('vbscript:')) return '#';
+  return url;
+}
+function safeAttr(str) {
+  return escapeHtml(str).replace(/`/g, '&#96;');
+}
+
+/* ============================================================
    TOAST SYSTEM
    ============================================================ */
 function showToast(message, type = 'info', duration = 3500) {
@@ -2007,7 +2037,7 @@ function showToast(message, type = 'info', duration = 3500) {
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
   const icons = { success: '✓', error: '✕', info: 'ℹ' };
-  toast.innerHTML = `<span>${icons[type] || ''}</span><span>${message}</span>`;
+  toast.innerHTML = `<span>${icons[type] || ''}</span><span>${escapeHtml(message)}</span>`;
   container.appendChild(toast);
   setTimeout(() => {
     toast.classList.add('out');
@@ -2191,7 +2221,7 @@ async function saveConfig() {
   try {
     const data = await (await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })).json();
     showToast(data.success ? '配置已保存' : '保存失败', data.success ? 'success' : 'error');
-  } catch(e) { showToast('保存失败: ' + e.message, 'error'); }
+  } catch(e) { showToast('保存失败，请稍后重试', 'error'); }
 }
 
 /* ============================================================
@@ -2234,18 +2264,18 @@ function renderBloggerManageList() {
   el.innerHTML = `<div class="blogger-grid">` + bloggerList.map(b => {
     const fresh = getFreshnessBadge(b.article_time);
     return `
-    <div class="blogger-card" id="blogger-card-${b.id}">
+    <div class="blogger-card" id="blogger-card-${escapeHtml(b.id)}">
       <div class="blogger-card-avatar">
-        ${b.avatar ? `<img src="${b.avatar}" onerror="this.parentElement.innerHTML='${b.name[0]}'">` : b.name[0]}
+        ${b.avatar ? `<img src="${safeUrl(b.avatar)}" onerror="this.parentElement.textContent='${escapeHtml(b.name[0])}'">` : escapeHtml(b.name[0])}
       </div>
-      <div class="blogger-card-name">${b.name}</div>
-      <div class="blogger-card-id">${b.user_name || b.biz || '—'}</div>
-      <div class="blogger-card-article" title="${b.article_title || '暂无文章'}">
-        ${b.article_title || '<span style="color:var(--ink-3);">暂无文章信息</span>'}
+      <div class="blogger-card-name">${escapeHtml(b.name)}</div>
+      <div class="blogger-card-id">${escapeHtml(b.user_name || b.biz || '—')}</div>
+      <div class="blogger-card-article" title="${escapeHtml(b.article_title || '暂无文章')}">
+        ${b.article_title ? escapeHtml(b.article_title) : '<span style="color:var(--ink-3);">暂无文章信息</span>'}
       </div>
       <div class="blogger-card-footer">
         ${fresh}
-        <button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:transparent;" onclick="removeBlogger('${b.id}')">删除</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:transparent;" onclick="removeBlogger('${escapeHtml(b.id)}')">删除</button>
       </div>
     </div>`;
   }).join('') + `</div>`;
@@ -2280,24 +2310,24 @@ function refreshBloggerCheckList() {
     const fresh = getFreshnessBadge(b.article_time);
     const title = b.article_title || '暂无文章';
     return `
-    <div class="check-row" onclick="event.target.tagName!=='INPUT'&&event.target.tagName!=='BUTTON'&&document.querySelector('#check-${b.id}').click()">
-      <input type="checkbox" id="check-${b.id}" value="${b.id}" class="blogger-checkbox">
+    <div class="check-row" onclick="event.target.tagName!=='INPUT'&&event.target.tagName!=='BUTTON'&&document.querySelector('#check-${escapeHtml(b.id)}').click()">
+      <input type="checkbox" id="check-${escapeHtml(b.id)}" value="${escapeHtml(b.id)}" class="blogger-checkbox">
       <div class="check-avatar">
-        ${b.avatar ? `<img src="${b.avatar}" onerror="this.parentElement.innerHTML='${b.name[0]}'">` : b.name[0]}
+        ${b.avatar ? `<img src="${safeUrl(b.avatar)}" onerror="this.parentElement.textContent='${escapeHtml(b.name[0])}'">` : escapeHtml(b.name[0])}
       </div>
       <div class="check-info">
-        <div class="check-name">${b.name}</div>
+        <div class="check-name">${escapeHtml(b.name)}</div>
         <div class="check-meta">
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;" title="${title}">${title}</span>
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px;" title="${escapeHtml(title)}">${escapeHtml(title)}</span>
           ${fresh}
-          <button class="btn-quick-update" onclick="event.stopPropagation();showQuickUpdate('${b.id}')">更新</button>
+          <button class="btn-quick-update" onclick="event.stopPropagation();showQuickUpdate('${escapeHtml(b.id)}')">更新</button>
         </div>
       </div>
     </div>
-    <div class="quick-update-row" id="quick-update-${b.id}">
+    <div class="quick-update-row" id="quick-update-${escapeHtml(b.id)}">
       <input type="text" class="form-input quick-url-input" placeholder="粘贴该博主最新文章链接" style="font-size:12px;padding:7px 11px;">
-      <button class="btn btn-red btn-sm" onclick="doQuickUpdate('${b.id}')">确认</button>
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('quick-update-${b.id}').classList.remove('open')">取消</button>
+      <button class="btn btn-red btn-sm" onclick="doQuickUpdate('${escapeHtml(b.id)}')">确认</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('quick-update-${escapeHtml(b.id)}').classList.remove('open')">取消</button>
     </div>`;
   }).join('');
 
@@ -2335,7 +2365,7 @@ async function doQuickUpdate(id) {
       refreshBloggerCheckList(); renderBloggerManageList();
       showToast(`已更新「${data.blogger.name}」的文章链接`, 'success');
     } else { showToast(data.error || '更新失败', 'error'); }
-  } catch(e) { showToast('更新失败: ' + e.message, 'error'); }
+  } catch(e) { showToast('更新失败，请稍后重试', 'error'); }
   finally { btn.disabled = false; btn.textContent = '确认'; }
 }
 
@@ -2361,10 +2391,10 @@ async function identifyBlogger() {
       document.getElementById('previewName').textContent = data.name;
       document.getElementById('previewBiz').textContent = data.user_name || data.biz || '';
       const avatarEl = document.getElementById('previewAvatar');
-      avatarEl.innerHTML = data.avatar ? `<img src="${data.avatar}" onerror="this.parentElement.textContent='${data.name[0]}'">` : data.name[0];
+      avatarEl.innerHTML = data.avatar ? `<img src="${safeUrl(data.avatar)}" onerror="this.parentElement.textContent='${escapeHtml(data.name[0])}'">` : escapeHtml(data.name[0]);
       document.getElementById('identifyResult').classList.add('show');
     } else { showToast('识别失败: ' + (data.error || '未知错误'), 'error'); }
-  } catch(e) { showToast('请求失败: ' + e.message, 'error'); }
+  } catch(e) { showToast('请求失败，请稍后重试', 'error'); }
   finally { btn.disabled = false; btn.innerHTML = '识别并添加'; }
 }
 
@@ -2378,7 +2408,7 @@ async function confirmAddBlogger() {
     cancelIdentify();
     document.getElementById('identifyUrl').value = '';
     await loadBloggers();
-  } catch(e) { showToast('添加失败: ' + e.message, 'error'); }
+  } catch(e) { showToast('添加失败，请稍后重试', 'error'); }
 }
 
 function cancelIdentify() {
@@ -2406,7 +2436,7 @@ async function autoRefreshBloggers() {
         showToast('博主文章状态已刷新', 'success');
       }
     } else { showToast('刷新失败', 'error'); }
-  } catch(e) { showToast('刷新失败: ' + e.message, 'error'); }
+  } catch(e) { showToast('刷新失败，请稍后重试', 'error'); }
   finally {
     bar.classList.remove('active');
     isRefreshing = false;
@@ -2505,7 +2535,7 @@ function handleWsMessage(msg) {
       if (!curEl) {
         const li = document.createElement('li');
         li.className = 'article-row'; li.id = `article-${msg.current}`;
-        li.innerHTML = `<span class="a-dot loading"></span><div class="a-info"><div class="a-title">${msg.message}</div><div class="a-meta">正在抓取...</div></div>`;
+        li.innerHTML = `<span class="a-dot loading"></span><div class="a-info"><div class="a-title">${escapeHtml(msg.message)}</div><div class="a-meta">正在抓取...</div></div>`;
         listEl.appendChild(li);
         li.scrollIntoView && (listEl.parentElement.scrollTop = listEl.parentElement.scrollHeight);
       } else {
@@ -2618,7 +2648,10 @@ function finish() {
 function renderMarkdown(text) {
   let html = text
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" referrerpolicy="no-referrer">')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+      const safe = safeUrl(url);
+      return safe === '#' ? '' : '<img src="' + escapeHtml(safe) + '" alt="' + escapeHtml(alt) + '" referrerpolicy="no-referrer">';
+    })
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
@@ -2709,13 +2742,13 @@ function handleMpLoginMessage(msg) {
   switch (msg.type) {
     case 'status': { const s = document.getElementById('qrStatusText'); if(s) s.textContent = msg.message; break; }
     case 'qrcode':
-      body.innerHTML = `<img src="${msg.image}" alt="扫码登录"><p style="font-size:13px;color:var(--ink-2);margin-top:8px;font-weight:500;" id="qrScanStatus">${msg.message}</p>`;
+      body.innerHTML = `<img src="${safeUrl(msg.image)}" alt="扫码登录"><p style="font-size:13px;color:var(--ink-2);margin-top:8px;font-weight:500;" id="qrScanStatus">${escapeHtml(msg.message)}</p>`;
       footer.style.display = 'block'; break;
     case 'waiting': { const s = document.getElementById('qrScanStatus'); if(s && !s.dataset.scanned) s.textContent = msg.message; break; }
     case 'scanned': { const s = document.getElementById('qrScanStatus'); if(s){s.textContent=msg.message;s.style.color='var(--green)';s.dataset.scanned='1';} break; }
     case 'success':
       _mpLoggedIn = true;
-      body.innerHTML = `<div style="text-align:center;"><div style="font-size:48px;margin-bottom:12px;">✅</div><p style="color:var(--green);font-size:15px;font-weight:600;">${msg.message}</p><p style="color:var(--ink-3);font-size:12px;margin-top:8px;">Token: ${msg.token} | Cookie长度: ${msg.cookie_len}</p></div>`;
+      body.innerHTML = `<div style="text-align:center;"><div style="font-size:48px;margin-bottom:12px;">✅</div><p style="color:var(--green);font-size:15px;font-weight:600;">${escapeHtml(msg.message)}</p><p style="color:var(--ink-3);font-size:12px;margin-top:8px;">Token: ${escapeHtml(msg.token)} | Cookie长度: ${escapeHtml(msg.cookie_len)}</p></div>`;
       footer.style.display = 'none';
       document.getElementById('mpStatus').textContent = '✓ 已授权';
       document.getElementById('mpStatus').style.color = 'var(--green)';
@@ -2731,7 +2764,7 @@ function handleMpLoginMessage(msg) {
       }, 2500);
       break;
     case 'error':
-      body.innerHTML = `<div style="text-align:center;"><p style="color:var(--red);font-size:14px;">${msg.message}</p><button class="btn btn-red btn-sm" onclick="cancelMpLogin();startMpLogin();" style="margin-top:16px;">重试</button></div>`;
+      body.innerHTML = `<div style="text-align:center;"><p style="color:var(--red);font-size:14px;">${escapeHtml(msg.message)}</p><button class="btn btn-red btn-sm" onclick="cancelMpLogin();startMpLogin();" style="margin-top:16px;">重试</button></div>`;
       footer.style.display = 'none'; break;
     case 'cancelled': document.getElementById('qrModal').classList.remove('active'); break;
   }
@@ -2943,18 +2976,21 @@ async function searchStock() {
   el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span> 搜索中...</div>';
   try {
     const json = await (await fetch('/api/stock/search?keyword=' + encodeURIComponent(keyword))).json();
-    if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">' + (json.error || '未找到匹配的股票') + '</div>'; return; }
+    if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '未找到匹配的股票') + '</div>'; return; }
     el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:13px;">'
       + '<thead><tr style="border-bottom:1px solid var(--border);color:var(--ink-3);text-align:left;">'
       + '<th style="padding:6px 8px;">代码</th><th style="padding:6px 8px;">名称</th><th style="padding:6px 8px;">市场</th><th style="padding:6px 8px;"></th></tr></thead>'
       + '<tbody>' + json.data.map(s =>
-        `<tr style="border-bottom:1px solid var(--border);cursor:pointer;" onclick="selectStock('${s.code}','${s.name}','${s.market||'a'}')">`
-        + `<td style="padding:6px 8px;font-family:var(--mono);">${s.code}</td>`
-        + `<td style="padding:6px 8px;font-weight:500;">${s.name}</td>`
-        + `<td style="padding:6px 8px;color:var(--ink-3);">${({'a':'A股','us':'美股','hk':'港股'})[s.market] || s.market || ''}</td>`
+        `<tr style="border-bottom:1px solid var(--border);cursor:pointer;" data-code="${escapeHtml(s.code)}" data-name="${escapeHtml(s.name)}" data-market="${escapeHtml(s.market||'a')}">`
+        + `<td style="padding:6px 8px;font-family:var(--mono);">${escapeHtml(s.code)}</td>`
+        + `<td style="padding:6px 8px;font-weight:500;">${escapeHtml(s.name)}</td>`
+        + `<td style="padding:6px 8px;color:var(--ink-3);">${escapeHtml(({'a':'A股','us':'美股','hk':'港股'})[s.market] || s.market || '')}</td>`
         + `<td style="padding:6px 8px;"><button class="btn btn-primary btn-sm">查看详情</button></td></tr>`
       ).join('') + '</tbody></table>';
-  } catch (e) { el.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>'; }
+    el.querySelectorAll('tr[data-code]').forEach(tr => {
+      tr.addEventListener('click', () => selectStock(tr.dataset.code, tr.dataset.name, tr.dataset.market));
+    });
+  } catch (e) { el.innerHTML = '<div class="empty-state">请求失败，请稍后重试</div>'; }
 }
 
 /* --- 选中股票 → 根据市场差异化加载面板 --- */
@@ -3028,7 +3064,7 @@ async function refreshQuote() {
   body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
   try {
     const json = await (await fetch('/api/stock/quote/' + _stockCode)).json();
-    if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '获取行情失败') + '</div>'; return; }
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '获取行情失败') + '</div>'; return; }
     const d = json.data;
     const price = d['最新价'] ?? '-', change = d['涨跌额'] ?? 0, pct = d['涨跌幅'] ?? 0;
     const up = parseFloat(change) >= 0, c = up ? 'var(--red)' : 'var(--green)', arr = up ? '▲' : '▼';
@@ -3046,7 +3082,7 @@ async function refreshQuote() {
       + '</div>';
   } catch (e) { body.innerHTML = '<div class="empty-state">请求失败</div>'; }
 }
-function _qi(l,v){return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span style="color:var(--ink-3);font-size:12px;">${l}</span><span style="font-size:13px;font-family:var(--mono);">${v??'-'}</span></div>`;}
+function _qi(l,v){return `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);"><span style="color:var(--ink-3);font-size:12px;">${escapeHtml(l)}</span><span style="font-size:13px;font-family:var(--mono);">${escapeHtml(v??'-')}</span></div>`;}
 function _fn(n,u){if(n==null)return'-';const v=parseFloat(n);if(isNaN(v))return String(n);const s=u||'';if(v>=1e8)return(v/1e8).toFixed(2)+'亿'+s;if(v>=1e4)return(v/1e4).toFixed(2)+'万'+s;return v.toLocaleString()+s;}
 function _pct(v){return v!=null?v+'%':'-';}
 function _renderQuoteInline(d) {
@@ -3233,7 +3269,7 @@ async function loadProfile() {
   el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
   try {
     const json = await (await fetch('/api/stock/profile/' + _stockCode)).json();
-    if (!json.success) { el.innerHTML = '<div class="empty-state">' + (json.error||'加载失败') + '</div>'; return; }
+    if (!json.success) { el.innerHTML = '<div class="empty-state">' + escapeHtml(json.error||'加载失败') + '</div>'; return; }
     const d = json.data;
     const rows = [
       ['公司名称', d['公司名称']], ['所属行业', d['所属行业']], ['上市日期', d['上市日期']],
@@ -3255,7 +3291,7 @@ async function loadFinancial() {
       fetch('/api/stock/financial/' + _stockCode).then(r => r.json()),
       fetch('/api/stock/financial-rules').then(r => r.json()),
     ]);
-    if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">' + (json.error||'暂无数据') + '</div>'; return; }
+    if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">' + escapeHtml(json.error||'暂无数据') + '</div>'; return; }
     const cols = ['报告期','营业总收入','净利润','净利润同比增长率','基本每股收益','销售毛利率','净资产收益率','资产负债率'];
     const showCols = cols.filter(c => json.data[0][c] !== undefined);
     const shortLabel = {'营业总收入':'营收','净利润同比增长率':'净利润增速','基本每股收益':'EPS','净资产收益率':'ROE','销售毛利率':'毛利率','资产负债率':'负债率'};
@@ -3301,7 +3337,7 @@ async function loadMoneyFlow() {
   el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
   try {
     const json = await (await fetch('/api/stock/flow/' + _stockCode)).json();
-    if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">' + (json.error||'暂无数据') + '</div>'; return; }
+    if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">' + escapeHtml(json.error||'暂无数据') + '</div>'; return; }
     const cols = ['日期','收盘价','涨跌幅','主力净流入-净额','主力净流入-净占比'];
     const label = {'主力净流入-净额':'主力净额','主力净流入-净占比':'主力占比'};
     const colorCols = new Set(['涨跌幅','主力净流入-净额','主力净流入-净占比']);
@@ -3330,9 +3366,9 @@ async function loadShareholders() {
   el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
   try {
     const json = await (await fetch('/api/stock/shareholders/' + _stockCode)).json();
-    if (!json.success) { el.innerHTML = '<div class="empty-state">' + (json.error||'暂无数据') + '</div>'; return; }
+    if (!json.success) { el.innerHTML = '<div class="empty-state">' + escapeHtml(json.error||'暂无数据') + '</div>'; return; }
     const d = json.data;
-    el.innerHTML = `<div style="font-size:11px;color:var(--ink-3);margin-bottom:8px;">截止日期: ${d.date}</div>`
+    el.innerHTML = `<div style="font-size:11px;color:var(--ink-3);margin-bottom:8px;">截止日期: ${escapeHtml(d.date)}</div>`
       + '<table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
       + '<thead><tr style="border-bottom:1px solid var(--border);color:var(--ink-3);">'
       + '<th style="padding:5px 4px;text-align:left;font-weight:500;">#</th>'
@@ -3341,11 +3377,11 @@ async function loadShareholders() {
       + '<th style="padding:5px 4px;text-align:right;font-weight:500;">占比%</th>'
       + '<th style="padding:5px 4px;text-align:right;font-weight:500;">性质</th></tr></thead>'
       + '<tbody>' + d.holders.map(h => '<tr style="border-bottom:1px solid var(--border);">'
-        + `<td style="padding:5px 4px;color:var(--ink-3);">${h.rank}</td>`
-        + `<td style="padding:5px 4px;">${h.name}</td>`
-        + `<td style="padding:5px 4px;text-align:right;font-family:var(--mono);">${_fn(h.shares,'')}</td>`
-        + `<td style="padding:5px 4px;text-align:right;font-family:var(--mono);">${h.ratio ?? '-'}</td>`
-        + `<td style="padding:5px 4px;text-align:right;color:var(--ink-3);">${h.type ?? '-'}</td></tr>`
+        + `<td style="padding:5px 4px;color:var(--ink-3);">${escapeHtml(h.rank)}</td>`
+        + `<td style="padding:5px 4px;">${escapeHtml(h.name)}</td>`
+        + `<td style="padding:5px 4px;text-align:right;font-family:var(--mono);">${escapeHtml(_fn(h.shares,''))}</td>`
+        + `<td style="padding:5px 4px;text-align:right;font-family:var(--mono);">${escapeHtml(h.ratio ?? '-')}</td>`
+        + `<td style="padding:5px 4px;text-align:right;color:var(--ink-3);">${escapeHtml(h.type ?? '-')}</td></tr>`
       ).join('') + '</tbody></table>';
   } catch (e) { el.innerHTML = '<div class="empty-state">加载失败</div>'; }
 }
@@ -3359,8 +3395,8 @@ async function loadAnnouncements() {
     if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">暂无公告</div>'; return; }
     el.innerHTML = '<table class="data-table"><thead><tr><th>日期</th><th>公告标题</th></tr></thead><tbody>'
       + json.data.map(n =>
-        `<tr><td style="white-space:nowrap;color:var(--ink-3);font-size:12px;">${n.date||''}</td>`
-        + `<td><a href="${n.url||'#'}" target="_blank" style="color:var(--blue);text-decoration:none;font-size:13px;">${n.title||'无标题'}</a></td></tr>`
+        `<tr><td style="white-space:nowrap;color:var(--ink-3);font-size:12px;">${escapeHtml(n.date||'')}</td>`
+        + `<td><a href="${safeUrl(n.url)}" target="_blank" style="color:var(--blue);text-decoration:none;font-size:13px;">${escapeHtml(n.title||'无标题')}</a></td></tr>`
       ).join('')
       + '</tbody></table>';
   } catch (e) { el.innerHTML = '<div class="empty-state">加载失败</div>'; }
@@ -3374,10 +3410,10 @@ async function loadStockNews() {
     if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">暂无新闻</div>'; return; }
     el.innerHTML = json.data.map(n =>
       `<div style="padding:10px 0;border-bottom:1px solid var(--border);">`
-      + `<a href="${n.url||'#'}" target="_blank" style="font-size:13px;font-weight:500;color:var(--ink-1);text-decoration:none;line-height:1.5;">${n.title||'无标题'}</a>`
+      + `<a href="${safeUrl(n.url)}" target="_blank" style="font-size:13px;font-weight:500;color:var(--ink-1);text-decoration:none;line-height:1.5;">${escapeHtml(n.title||'无标题')}</a>`
       + `<div style="display:flex;gap:8px;margin-top:4px;font-size:11px;color:var(--ink-3);">`
-      + `<span>${n.source||''}</span><span>${n.time||''}</span></div>`
-      + (n.summary ? `<div style="font-size:12px;color:var(--ink-3);margin-top:4px;line-height:1.5;">${n.summary}</div>` : '')
+      + `<span>${escapeHtml(n.source||'')}</span><span>${escapeHtml(n.time||'')}</span></div>`
+      + (n.summary ? `<div style="font-size:12px;color:var(--ink-3);margin-top:4px;line-height:1.5;">${escapeHtml(n.summary)}</div>` : '')
       + `</div>`
     ).join('');
   } catch (e) { el.innerHTML = '<div class="empty-state">加载失败</div>'; }
@@ -3455,12 +3491,12 @@ async function _doWencaiQuery(query) {
       body: JSON.stringify({ query: query, perpage: 50 }),
     });
     const json = await resp.json();
-    if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '查询失败') + '</div>'; return; }
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '查询失败') + '</div>'; return; }
     if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到匹配的股票</div>'; return; }
     title.textContent = '查询: ' + query + '（共 ' + json.total + ' 条）';
     _renderWencaiTable(body, json.data);
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">请求失败，请稍后重试</div>';
   }
 }
 
@@ -3574,25 +3610,24 @@ async function loadSectorHeatmap() {
     _sectorsLoaded = true;
     _renderIndustryGrid(body, json.data);
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">加载失败，请稍后重试</div>';
   }
 }
 
 function _renderIndustryGrid(container, industries) {
-  let html = '<div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px;">';
+  let html = '<div class="board-grid">';
   industries.forEach(ind => {
     const name = ind.name || ind;
-    html += '<div class="heatmap-item" style="background:#F8F8FA;border:1px solid var(--border);color:var(--ink);cursor:pointer;padding:10px 14px;border-radius:var(--r-xs);font-size:13px;font-weight:500;transition:all var(--t) var(--ease);"'
-      + ' onclick="loadSectorStocks(\'' + String(name).replace(/'/g, "\\'") + '\')"'
-      + ' onmouseenter="this.style.borderColor=\'var(--blue)\';this.style.background=\'var(--blue-s)\'"'
-      + ' onmouseleave="this.style.borderColor=\'var(--border)\';this.style.background=\'#F8F8FA\'"'
-      + ' title="点击查看 ' + name + ' 成分股">'
-      + name
+    html += '<div class="board-chip" data-name="' + escapeHtml(name) + '">'
+      + escapeHtml(name)
       + '</div>';
   });
   html += '</div>';
   html += '<div style="font-size:11px;color:var(--ink-3);margin-top:8px;text-align:center;">点击任意行业查看成分股</div>';
   container.innerHTML = html;
+  container.querySelectorAll('.board-chip').forEach(chip => {
+    chip.addEventListener('click', () => loadSectorStocks(chip.dataset.name));
+  });
 }
 
 async function loadSectorStocks(name) {
@@ -3613,12 +3648,12 @@ async function loadSectorStocks(name) {
   try {
     const resp = await fetch('/api/iwencai/sector/' + encodeURIComponent(name));
     const json = await resp.json();
-    if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '查询失败') + '</div>'; return; }
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '查询失败') + '</div>'; return; }
     if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到成分股</div>'; return; }
     title.textContent = '「' + name + '」成分股（共 ' + json.total + ' 条）';
     _renderWencaiTable(body, json.data);
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">请求失败，请稍后重试</div>';
   }
 }
 
@@ -3636,12 +3671,12 @@ async function wencaiVisitsSearch() {
       body: JSON.stringify({ query: query, perpage: 50 }),
     });
     const json = await resp.json();
-    if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '查询失败') + '</div>'; return; }
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '查询失败') + '</div>'; return; }
     if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到符合条件的调研记录</div>'; return; }
     _visitsLoaded = true;
     _renderWencaiTable(body, json.data);
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">请求失败，请稍后重试</div>';
   }
 }
 
@@ -3717,7 +3752,7 @@ async function loadMarketBoards() {
     const resp = await fetch('/api/market/' + _currentMarket + '/boards');
     const json = await resp.json();
     if (!json.success) {
-      body.innerHTML = '<div class="empty-state">' + (json.error || '加载失败') + '</div>';
+      body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '加载失败') + '</div>';
       return;
     }
     if (!json.data?.length) {
@@ -3728,7 +3763,7 @@ async function loadMarketBoards() {
     if (title) title.textContent = MARKET_CONFIG.find(m => m.name === _currentMarket)?.label || '板块';
     _renderMarketGrid(body, json.data);
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">加载失败，请稍后重试</div>';
   }
 }
 
@@ -3748,25 +3783,24 @@ async function loadMarketSpot() {
     if (title) title.textContent = MARKET_CONFIG.find(m => m.name === _currentMarket)?.label || '行情';
     _renderWencaiTable(body, json.data);
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">加载失败，请稍后重试</div>';
   }
 }
 
 function _renderMarketGrid(container, items) {
-  let html = '<div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px;">';
+  let html = '<div class="board-grid">';
   items.forEach(item => {
     const name = item.name || item;
     const label = name + (item.count ? ' (' + item.count + ')' : '');
-    html += '<div style="background:#F8F8FA;border:1px solid var(--border);color:var(--ink);cursor:pointer;padding:10px 14px;border-radius:var(--r-xs);font-size:13px;font-weight:500;transition:all var(--t) var(--ease);"'
-      + ' onclick="loadMarketBoardStocks(\'' + String(name).replace(/'/g, "\\'") + '\')"'
-      + ' onmouseenter="this.style.borderColor=\'var(--blue)\';this.style.background=\'var(--blue-s)\'"'
-      + ' onmouseleave="this.style.borderColor=\'var(--border)\';this.style.background=\'#F8F8FA\'"'
-      + ' title="点击查看 ' + name + '">'
-      + label
+    html += '<div class="board-chip" data-name="' + escapeHtml(name) + '">'
+      + escapeHtml(label)
       + '</div>';
   });
   html += '</div>';
   container.innerHTML = html;
+  container.querySelectorAll('.board-chip').forEach(chip => {
+    chip.addEventListener('click', () => loadMarketBoardStocks(chip.dataset.name));
+  });
 }
 
 async function loadMarketBoardStocks(name) {
@@ -3781,12 +3815,12 @@ async function loadMarketBoardStocks(name) {
   try {
     const resp = await fetch('/api/market/' + _currentMarket + '/board/' + encodeURIComponent(name));
     const json = await resp.json();
-    if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '查询失败') + '</div>'; return; }
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '查询失败') + '</div>'; return; }
     if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到数据</div>'; return; }
     title.textContent = '「' + name + '」（共 ' + (json.total || json.data.length) + ' 条）';
     _renderWencaiTable(body, json.data);
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">请求失败，请稍后重试</div>';
   }
 }
 
@@ -3810,7 +3844,7 @@ async function marketSearch() {
     }
     _renderWencaiTable(body, json.data);
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">搜索失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">搜索失败，请稍后重试</div>';
   }
 }
 
@@ -3824,23 +3858,22 @@ async function loadFundBoards() {
     const resp = await fetch('/api/market/fund/boards');
     const json = await resp.json();
     if (!json.success || !json.data?.length) {
-      body.innerHTML = '<div class="empty-state">' + (json.error || '加载失败') + '</div>';
+      body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '加载失败') + '</div>';
       return;
     }
-    let html = '<div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px;">';
+    let html = '<div class="board-grid">';
     json.data.forEach(item => {
       const label = item.name + ' (' + item.count + ')';
-      html += '<div style="background:#F8F8FA;border:1px solid var(--border);color:var(--ink);cursor:pointer;padding:10px 14px;border-radius:var(--r-xs);font-size:13px;font-weight:500;transition:all var(--t) var(--ease);"'
-        + ' onclick="loadFundBoardStocks(\'' + item.name.replace(/'/g, "\\'") + '\')"'
-        + ' onmouseenter="this.style.borderColor=\'var(--blue)\';this.style.background=\'var(--blue-s)\'"'
-        + ' onmouseleave="this.style.borderColor=\'var(--border)\';this.style.background=\'#F8F8FA\'"'
-        + ' title="点击查看 ' + item.name + '">'
-        + label + '</div>';
+      html += '<div class="board-chip" data-name="' + escapeHtml(item.name) + '">'
+        + escapeHtml(label) + '</div>';
     });
     html += '</div>';
     body.innerHTML = html;
+    body.querySelectorAll('.board-chip').forEach(chip => {
+      chip.addEventListener('click', () => loadFundBoardStocks(chip.dataset.name));
+    });
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">加载失败，请稍后重试</div>';
   }
 }
 
@@ -3855,12 +3888,12 @@ async function loadFundBoardStocks(name) {
   try {
     const resp = await fetch('/api/market/fund/board/' + encodeURIComponent(name));
     const json = await resp.json();
-    if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '查询失败') + '</div>'; return; }
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '查询失败') + '</div>'; return; }
     if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到数据</div>'; return; }
     title.textContent = '「' + name + '」（共 ' + (json.total || json.data.length) + ' 条）';
     _renderWencaiTable(body, json.data, row => `selectFund('${row['代码']}','${(row['名称']||'').replace(/'/g,"\\'")}')`);
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">请求失败，请稍后重试</div>';
   }
 }
 
@@ -3882,7 +3915,7 @@ async function fundSearch() {
     title.textContent = '搜索: ' + keyword + '（' + json.total + ' 条）';
     _renderWencaiTable(body, json.data, row => `selectFund('${row['代码']}','${(row['名称']||'').replace(/'/g,"\\'")}')`);
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">搜索失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">搜索失败，请稍后重试</div>';
   }
 }
 
@@ -3909,7 +3942,7 @@ async function selectFund(code, name) {
   try {
     const json = await (await fetch('/api/fund/detail/' + code)).json();
     if (!json.success) {
-      document.getElementById('fundInfoBody').innerHTML = '<div class="empty-state">' + (json.error || '加载失败') + '</div>';
+      document.getElementById('fundInfoBody').innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '加载失败') + '</div>';
       return;
     }
     const { info, kline, holdings } = json.data;
@@ -3961,16 +3994,19 @@ async function selectFund(code, name) {
       let h = '<table class="data-table"><thead><tr><th>排名</th><th>代码</th><th>股票名称</th><th>持仓占比</th><th>持股数量</th><th>持仓市值</th></tr></thead><tbody>';
       holdings.forEach((r, i) => {
         const code = r.code || '';
-        const clickAttr = code ? ` style="cursor:pointer;color:var(--blue);" onclick="openStockModal('${code}','${(r.name||'').replace(/'/g,"\\'")}')"` : '';
-        h += `<tr><td class="num">${i + 1}</td><td style="font-family:var(--mono);font-size:12px;">${code || '-'}</td><td${clickAttr}>${r.name || '-'}</td><td class="num">${r.ratio != null ? r.ratio + '%' : '-'}</td><td class="num">${r.shares ?? '-'}</td><td class="num">${r.value ?? '-'}</td></tr>`;
+        const clickAttr = code ? ` style="cursor:pointer;color:var(--blue);" class="stock-link" data-code="${escapeHtml(code)}" data-name="${escapeHtml(r.name||'')}"` : '';
+        h += `<tr><td class="num">${i + 1}</td><td style="font-family:var(--mono);font-size:12px;">${escapeHtml(code || '-')}</td><td${clickAttr}>${escapeHtml(r.name || '-')}</td><td class="num">${escapeHtml(r.ratio != null ? r.ratio + '%' : '-')}</td><td class="num">${escapeHtml(r.shares ?? '-')}</td><td class="num">${escapeHtml(r.value ?? '-')}</td></tr>`;
       });
       h += '</tbody></table>';
       holdEl.innerHTML = h;
+      holdEl.querySelectorAll('.stock-link').forEach(td => {
+        td.addEventListener('click', () => openStockModal(td.dataset.code, td.dataset.name));
+      });
     } else {
       holdEl.innerHTML = '<div class="empty-state">暂无持仓数据</div>';
     }
   } catch (e) {
-    document.getElementById('fundInfoBody').innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
+    document.getElementById('fundInfoBody').innerHTML = '<div class="empty-state">加载失败，请稍后重试</div>';
   }
 }
 
@@ -4027,7 +4063,7 @@ async function loadCryptoSpot() {
     if (!json.success || !json.data?.length) { body.innerHTML = '<div class="empty-state">加载失败</div>'; return; }
     _renderCryptoTable(body, json.data);
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">加载失败，请稍后重试</div>';
   }
 }
 
@@ -4044,7 +4080,7 @@ async function cryptoSearch() {
     if (!json.success || !json.data?.length) { body.innerHTML = '<div class="empty-state">未找到结果</div>'; return; }
     _renderCryptoTable(body, json.data);
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">搜索失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">搜索失败，请稍后重试</div>';
   }
 }
 
@@ -4085,23 +4121,22 @@ async function loadFuturesBoards() {
     const resp = await fetch('/api/market/futures/boards');
     const json = await resp.json();
     if (!json.success || !json.data?.length) {
-      body.innerHTML = '<div class="empty-state">' + (json.error || '加载失败') + '</div>';
+      body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '加载失败') + '</div>';
       return;
     }
-    let html = '<div style="display:flex;flex-wrap:wrap;gap:8px;padding:4px;">';
+    let html = '<div class="board-grid">';
     json.data.forEach(item => {
       const label = item.name + ' (' + item.count + ')';
-      html += '<div style="background:#F8F8FA;border:1px solid var(--border);color:var(--ink);cursor:pointer;padding:10px 14px;border-radius:var(--r-xs);font-size:13px;font-weight:500;transition:all var(--t) var(--ease);"'
-        + ' onclick="loadFuturesBoardStocks(\'' + item.name.replace(/'/g, "\\'") + '\')"'
-        + ' onmouseenter="this.style.borderColor=\'var(--blue)\';this.style.background=\'var(--blue-s)\'"'
-        + ' onmouseleave="this.style.borderColor=\'var(--border)\';this.style.background=\'#F8F8FA\'"'
-        + ' title="点击查看 ' + item.name + '">'
-        + label + '</div>';
+      html += '<div class="board-chip" data-name="' + escapeHtml(item.name) + '">'
+        + escapeHtml(label) + '</div>';
     });
     html += '</div>';
     body.innerHTML = html;
+    body.querySelectorAll('.board-chip').forEach(chip => {
+      chip.addEventListener('click', () => loadFuturesBoardStocks(chip.dataset.name));
+    });
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">加载失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">加载失败，请稍后重试</div>';
   }
 }
 
@@ -4116,12 +4151,12 @@ async function loadFuturesBoardStocks(name) {
   try {
     const resp = await fetch('/api/market/futures/board/' + encodeURIComponent(name));
     const json = await resp.json();
-    if (!json.success) { body.innerHTML = '<div class="empty-state">' + (json.error || '查询失败') + '</div>'; return; }
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '查询失败') + '</div>'; return; }
     if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到数据</div>'; return; }
     title.textContent = '「' + name + '」（共 ' + (json.total || json.data.length) + ' 条）';
     _renderWencaiTable(body, json.data, row => `selectFutures('${row['代码']}','${(row['名称']||'').replace(/'/g,"\\'")}')`);
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">请求失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">请求失败，请稍后重试</div>';
   }
 }
 
@@ -4143,7 +4178,7 @@ async function futuresSearch() {
     title.textContent = '搜索: ' + keyword + '（' + json.total + ' 条）';
     _renderWencaiTable(body, json.data, row => `selectFutures('${row['代码']}','${(row['名称']||'').replace(/'/g,"\\'")}')`);
   } catch (e) {
-    body.innerHTML = '<div class="empty-state">搜索失败: ' + e.message + '</div>';
+    body.innerHTML = '<div class="empty-state">搜索失败，请稍后重试</div>';
   }
 }
 
@@ -4332,7 +4367,7 @@ async function openStockModal(code, name) {
     if (!html) html = '<div style="text-align:center;color:var(--ink-3);padding:20px;">暂无数据</div>';
     body.innerHTML = html;
   } catch (e) {
-    body.innerHTML = '<div style="text-align:center;color:var(--red);padding:20px;">加载失败: ' + e.message + '</div>';
+    body.innerHTML = '<div style="text-align:center;color:var(--red);padding:20px;">加载失败，请稍后重试</div>';
   }
 }
 
@@ -4354,7 +4389,7 @@ function loadWatchlist() {
     .then(r => r.json())
     .then(json => {
       if (!json.success) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--ink-3);">' + (json.error || '暂无数据') + '</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--ink-3);">' + escapeHtml(json.error || '暂无数据') + '</td></tr>';
         return;
       }
       if (!json.data || !json.data.length) {
@@ -4366,22 +4401,28 @@ function loadWatchlist() {
         const chg = q.change_pct != null ? (q.change_pct > 0 ? '+' : '') + parseFloat(q.change_pct).toFixed(2) + '%' : '-';
         const color = q.change_pct != null && q.change_pct > 0 ? '#ef4444' : q.change_pct != null && q.change_pct < 0 ? '#22c55e' : '';
         const vol = q.volume ? (q.volume / 100000000).toFixed(2) + '亿' : '-';
-        return '<tr onclick="openStockModal(\'' + w.symbol + '\',\'' + (w.name || '') + '\')" style="cursor:pointer;transition:background 0.15s">'
-          + '<td style="font-weight:500">' + w.symbol + '</td>'
-          + '<td>' + (w.name || '') + '</td>'
-          + '<td style="color:' + color + '">' + (q.price || '-') + '</td>'
-          + '<td style="color:' + color + '">' + chg + '</td>'
-          + '<td>' + vol + '</td>'
-          + '<td style="color:var(--ink-3);font-size:12px;">' + (w.note || '') + '</td>'
-          + '<td><button class="btn-watchlist-del" onclick="event.stopPropagation();watchlistDel(' + w.id + ')" title="删除"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button></td>'
+        return '<tr data-symbol="' + escapeHtml(w.symbol) + '" data-name="' + escapeHtml(w.name || '') + '" style="cursor:pointer;transition:background 0.15s">'
+          + '<td style="font-weight:500">' + escapeHtml(w.symbol) + '</td>'
+          + '<td>' + escapeHtml(w.name || '') + '</td>'
+          + '<td style="color:' + color + '">' + escapeHtml(q.price || '-') + '</td>'
+          + '<td style="color:' + color + '">' + escapeHtml(chg) + '</td>'
+          + '<td>' + escapeHtml(vol) + '</td>'
+          + '<td style="color:var(--ink-3);font-size:12px;">' + escapeHtml(w.note || '') + '</td>'
+          + '<td><button class="btn-watchlist-del" data-id="' + w.id + '" title="删除"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button></td>'
           + '</tr>';
       }).join('');
+      tbody.querySelectorAll('tr[data-symbol]').forEach(tr => {
+        tr.addEventListener('click', () => openStockModal(tr.dataset.symbol, tr.dataset.name));
+      });
+      tbody.querySelectorAll('.btn-watchlist-del').forEach(btn => {
+        btn.addEventListener('click', e => { e.stopPropagation(); watchlistDel(parseInt(btn.dataset.id)); });
+      });
       // Start auto-refresh
       _startWatchlistRefresh();
     })
     .catch(e => {
       console.error('watchlist load error:', e);
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);">加载失败: ' + e.message + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--red);">加载失败，请稍后重试</td></tr>';
     });
 }
 
@@ -4399,7 +4440,7 @@ function watchlistAdd() {
       if (j.success) { inp.value = ''; loadWatchlist(); }
       else alert('添加失败: ' + (j.error || '未知错误'));
     })
-    .catch(e => { alert('请求失败: ' + e.message); });
+    .catch(e => { alert('请求失败，请稍后重试); });
 }
 
 function watchlistDel(id) {
@@ -4455,18 +4496,24 @@ async function loadSim() {
         const dir = p.direction === 'long' ? '多' : '空';
         const dirColor = p.direction === 'long' ? '#ef4444' : '#22c55e';
         const pnlColor = p.unrealized_pnl > 0 ? '#ef4444' : p.unrealized_pnl < 0 ? '#22c55e' : '';
-        return '<tr onclick="openStockModal(\'' + p.symbol + '\',\'' + (p.name||p.symbol) + '\')" style="cursor:pointer">' +
-          '<td>' + p.symbol + '</td>' +
-          '<td style="color:' + dirColor + '">' + dir + '</td>' +
-          '<td>' + p.price + '</td>' +
-          '<td>' + (p.current_price||'-') + '</td>' +
-          '<td>' + p.quantity + '</td>' +
-          '<td style="color:' + pnlColor + '">' + upnl + '</td>' +
-          '<td>' + p.trade_date + '</td>' +
-          '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (p.note||'') + '</td>' +
-          '<td><button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();simCloseForm(' + p.id + ')" style="color:#ef4444">平仓</button></td>' +
+        return '<tr data-symbol="' + escapeHtml(p.symbol) + '" data-name="' + escapeHtml(p.name||p.symbol) + '" style="cursor:pointer">' +
+          '<td>' + escapeHtml(p.symbol) + '</td>' +
+          '<td style="color:' + dirColor + '">' + escapeHtml(dir) + '</td>' +
+          '<td>' + escapeHtml(p.price) + '</td>' +
+          '<td>' + escapeHtml(p.current_price||'-') + '</td>' +
+          '<td>' + escapeHtml(p.quantity) + '</td>' +
+          '<td style="color:' + pnlColor + '">' + escapeHtml(upnl) + '</td>' +
+          '<td>' + escapeHtml(p.trade_date) + '</td>' +
+          '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(p.note||'') + '</td>' +
+          '<td><button class="btn btn-ghost btn-xs sim-close-btn" data-id="' + p.id + '" style="color:#ef4444">平仓</button></td>' +
         '</tr>';
       }).join('');
+      tbody.querySelectorAll('tr[data-symbol]').forEach(tr => {
+        tr.addEventListener('click', () => openStockModal(tr.dataset.symbol, tr.dataset.name));
+      });
+      tbody.querySelectorAll('.sim-close-btn').forEach(btn => {
+        btn.addEventListener('click', e => { e.stopPropagation(); simCloseForm(parseInt(btn.dataset.id)); });
+      });
     } else {
       tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#666;padding:24px">暂无持仓</td></tr>';
     }
@@ -4480,14 +4527,14 @@ async function loadSim() {
       tbody.innerHTML = hist.data.map(h => {
         const dir = h.direction === 'long' ? '多' : '空';
         return '<tr>' +
-          '<td>' + h.symbol + '</td>' +
-          '<td>' + dir + '</td>' +
-          '<td>' + h.price + '</td>' +
-          '<td>' + h.close_price + '</td>' +
-          '<td>' + h.quantity + '</td>' +
-          '<td style="color:' + (h.pnl>0?'#ef4444':'#22c55e') + '">' + (h.pnl>=0?'+':'') + h.pnl.toFixed(2) + '</td>' +
-          '<td>' + (h.closed_at||'') + '</td>' +
-          '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (h.note||'') + '</td>' +
+          '<td>' + escapeHtml(h.symbol) + '</td>' +
+          '<td>' + escapeHtml(dir) + '</td>' +
+          '<td>' + escapeHtml(h.price) + '</td>' +
+          '<td>' + escapeHtml(h.close_price) + '</td>' +
+          '<td>' + escapeHtml(h.quantity) + '</td>' +
+          '<td style="color:' + (h.pnl>0?'#ef4444':'#22c55e') + '">' + escapeHtml((h.pnl>=0?'+':'') + h.pnl.toFixed(2)) + '</td>' +
+          '<td>' + escapeHtml(h.closed_at||'') + '</td>' +
+          '<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(h.note||'') + '</td>' +
         '</tr>';
       }).join('');
     } else {
@@ -4525,7 +4572,7 @@ async function simOpen() {
       document.getElementById('sim-modal').style.display = 'none';
       loadSim();
     } else alert(j.error);
-  } catch(e) { alert('请求失败: ' + e.message); }
+  } catch(e) { alert('请求失败，请稍后重试); }
 }
 
 function simCloseForm(id) {
