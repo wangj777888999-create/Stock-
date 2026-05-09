@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse
 
 from database import init_db, close_db
 from stock_service import StockService
-from state import config, CONFIG_FILE
+from state import config, CONFIG_FILE, blogger_mgr, scraper
 
 # 配置日志
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -75,6 +75,7 @@ from routers.sim import router as sim_router
 from routers.journal import router as journal_router
 from routers.verify import router as verify_router
 from routers.stats import router as stats_router
+from routers.articles import router as articles_router
 
 app.include_router(stock_router)
 app.include_router(market_router)
@@ -86,6 +87,7 @@ app.include_router(sim_router)
 app.include_router(journal_router)
 app.include_router(verify_router)
 app.include_router(stats_router)
+app.include_router(articles_router)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -111,10 +113,22 @@ async def _startup():
 
     asyncio.create_task(_preload_fund())
 
+    # 启动定时采集调度器
+    try:
+        from scheduler import start_scheduler
+        start_scheduler(blogger_mgr, scraper, config)
+    except Exception as e:
+        logger.warning(f"定时调度器启动失败: {e}")
+
 
 @app.on_event("shutdown")
 async def _shutdown():
     """关闭时清理数据库连接。"""
+    try:
+        from scheduler import stop_scheduler
+        stop_scheduler()
+    except Exception:
+        pass
     close_db()
     logger.info("数据库连接已关闭")
 

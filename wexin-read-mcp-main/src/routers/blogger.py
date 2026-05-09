@@ -77,47 +77,40 @@ async def _capture_qr_code(page, selector: str) -> str:
 
 
 async def _scrape_urls(ws: WebSocket, urls: list[str]) -> list[dict]:
-    """阶段1: 抓取文章列表"""
+    """阶段1: 并发抓取文章列表（最多 3 篇同时抓取）"""
     total = len(urls)
-    articles = []
+    urls = [u.strip() for u in urls if u.strip()]
 
-    await ws.send_json({"type": "phase", "phase": "scrape", "message": f"开始抓取 {total} 篇文章..."})
+    await ws.send_json({"type": "phase", "phase": "scrape", "message": f"开始并发抓取 {len(urls)} 篇文章..."})
 
-    for i, url in enumerate(urls, 1):
-        url = url.strip()
-        if not url:
-            continue
+    sem = asyncio.Semaphore(3)
+    done_count = 0
 
-        await ws.send_json({
-            "type": "progress", "current": i, "total": total,
-            "message": f"[{i}/{total}] 正在抓取: {url[:60]}...",
-        })
-
-        try:
+    async def _scrape_one(i: int, url: str) -> dict | None:
+        nonlocal done_count
+        async with sem:
             result = await scraper.fetch_article(url)
+            done_count += 1
             if result.get("success"):
-                articles.append(result)
                 await ws.send_json({
-                    "type": "article_done", "current": i, "total": total,
+                    "type": "article_done", "current": done_count, "total": total,
                     "title": result.get("title", "未知"),
                     "author": result.get("author", "未知"),
                     "status": "success",
                 })
+                return result
             else:
                 await ws.send_json({
-                    "type": "article_done", "current": i, "total": total,
+                    "type": "article_done", "current": done_count, "total": total,
                     "title": url[:50], "author": "", "status": "failed",
                     "error": result.get("error", "未知错误"),
                 })
-        except Exception as e:
-            await ws.send_json({
-                "type": "article_done", "current": i, "total": total,
-                "title": url[:50], "author": "", "status": "failed", "error": str(e),
-            })
+                return None
 
-        if i < total:
-            await asyncio.sleep(config.scrape_delay)
+    tasks = [_scrape_one(i, url) for i, url in enumerate(urls, 1)]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
+    articles = [r for r in results if r and isinstance(r, dict) and r.get("success")]
     return articles
 
 
@@ -316,22 +309,28 @@ async def websocket_mp_login(ws: WebSocket):
             if i % 3 == 0 and i > 0:
                 await ws.send_json({"type": "waiting", "elapsed": i, "message": f"等待扫码中... ({i}s)"})
 
-            # 检查是否已经登录成功（URL 变化或页面元素变化）
-            current_url = page.url
+            # 优先通过 URL 检测登录成功（最可靠）
+            try:
+                current_url = page.url
+            except Exception:
+                continue  # 页面导航中，下一轮再检查
             if "cgi-bin/home" in current_url or "token=" in current_url:
                 logged_in = True
                 break
 
-            # 检查是否进入了需要确认的阶段（已扫码待确认）
+            # 检查页面内容判断状态（导航中可能失败，不阻塞）
             try:
                 scan_status = await page.evaluate("""() => {
-                    // 检查是否有「已扫码」的提示
                     const body = document.body.innerText;
+                    if (body.includes('登录成功') || body.includes('欢迎')) return 'success';
                     if (body.includes('已扫码') || body.includes('请在手机上确认')) return 'scanned';
                     if (body.includes('二维码已失效') || body.includes('过期')) return 'expired';
                     return 'waiting';
                 }""")
-                if scan_status == "scanned" and i % 3 == 0:
+                if scan_status == "success":
+                    logged_in = True
+                    break
+                elif scan_status == "scanned" and i % 3 == 0:
                     await ws.send_json({"type": "scanned", "message": "已扫码，请在手机上确认登录"})
                 elif scan_status == "expired":
                     # 刷新二维码
@@ -345,7 +344,7 @@ async def websocket_mp_login(ws: WebSocket):
                     if qr_b64:
                         await ws.send_json({"type": "qrcode", "image": qr_b64, "message": "二维码已刷新，请重新扫码"})
             except Exception:
-                pass
+                pass  # 页面导航中，evaluate 可能失败，下一轮 URL 检查会兜底
 
         if not logged_in:
             # 最后再检查一次

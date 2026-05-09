@@ -1098,6 +1098,11 @@ textarea.form-input {
         <span>博主管理</span>
         <span class="nav-badge" id="bloggerCountBadge" style="display:none">0</span>
       </button>
+      <button class="nav-item" data-view="articles" onclick="switchView('articles', this)">
+        <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M6 7h8M6 10h8M6 13h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span>文章管理</span>
+        <span class="nav-badge" id="articleNewBadge" style="display:none">0</span>
+      </button>
       <button class="nav-item" data-view="stock" onclick="switchView('stock', this)">
         <svg viewBox="0 0 20 20" fill="none"><path d="M3 17V7l4-4 3 5 4-5 3 7v7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>股票查询</span>
@@ -1429,6 +1434,136 @@ textarea.form-input {
           </div>
         </div>
       </div><!-- /view-bloggers -->
+
+
+      <!-- ==================== VIEW: ARTICLES ==================== -->
+      <div id="view-articles" class="view">
+
+        <!-- Toolbar -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M6 7h8M6 10h8M6 13h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              采集文章管理
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <select id="articleFilterProcessed" class="form-input" style="width:auto;padding:4px 8px;font-size:12px;" onchange="loadArticles()">
+                <option value="-1">全部</option>
+                <option value="0" selected>未处理</option>
+                <option value="1">已处理</option>
+              </select>
+              <select id="articleFilterBlogger" class="form-input" style="width:auto;padding:4px 8px;font-size:12px;" onchange="loadArticles()">
+                <option value="">全部博主</option>
+              </select>
+              <button class="btn btn-primary btn-sm" onclick="scrapeNow()" id="scrapeNowBtn">
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M17 10a7 7 0 11-2.05-4.95M17 4v6h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                立即采集
+              </button>
+            </div>
+          </div>
+          <div class="card-body" style="padding:8px 16px;">
+            <div style="display:flex;gap:16px;font-size:12px;color:var(--ink-3);">
+              <span>当前筛选 <strong id="articleTotalCount">0</strong> 篇</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Auto-scrape Config -->
+        <div class="card">
+          <div class="card-header" style="cursor:pointer;" onclick="toggleConfigSection('schedulerConfigBody')">
+            <div class="card-title">
+              <svg viewBox="0 0 20 20" fill="none"><path d="M10 12a2 2 0 100-4 2 2 0 000 4z" stroke="currentColor" stroke-width="1.7"/><path d="M16.243 10a6.243 6.243 0 01-.09 1.082l1.598 1.248-1.5 2.598-1.935-.694a6.26 6.26 0 01-1.875 1.083l-.33 2.017h-3l-.33-2.017a6.26 6.26 0 01-1.875-1.083l-1.935.694-1.5-2.598 1.598-1.248A6.243 6.243 0 013.757 10c0-.367.031-.727.09-1.082L2.249 7.67l1.5-2.598 1.935.694A6.26 6.26 0 017.559 4.683l.33-2.017h3l.33 2.017a6.26 6.26 0 011.875 1.083l1.935-.694 1.5 2.598-1.598 1.248c.059.355.09.715.09 1.082z" stroke="currentColor" stroke-width="1.7"/></svg>
+              自动采集设置
+              <span id="schedulerStatusBadge" style="font-size:11px;padding:2px 8px;border-radius:10px;margin-left:8px;background:var(--ink-3)15;color:var(--ink-3);border:1px solid var(--ink-3)30;">--</span>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" style="transition:transform .2s;" id="schedulerConfigArrow"><path d="M7 8l3 3 3-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="card-body" id="schedulerConfigBody" style="display:none;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+              <!-- Left: enable + time -->
+              <div>
+                <div class="form-group" style="margin-bottom:12px;">
+                  <label class="form-label">启用自动采集</label>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;">
+                      <input type="checkbox" id="schedEnabled" checked style="width:16px;height:16px;accent-color:var(--red);">
+                      <span id="schedEnabledLabel">已启用</span>
+                    </label>
+                  </div>
+                </div>
+                <div class="form-group" style="margin-bottom:12px;">
+                  <label class="form-label">采集时间</label>
+                  <div style="display:flex;gap:6px;align-items:center;">
+                    <select id="schedHour" class="form-input" style="width:70px;padding:4px 8px;font-size:13px;"></select>
+                    <span style="font-size:16px;font-weight:600;">:</span>
+                    <select id="schedMinute" class="form-input" style="width:70px;padding:4px 8px;font-size:13px;"></select>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">每个博主采集篇数</label>
+                  <select id="schedArticleCount" class="form-input" style="width:100px;padding:4px 8px;font-size:13px;">
+                    <option value="1">1 篇</option>
+                    <option value="3" selected>3 篇</option>
+                    <option value="5">5 篇</option>
+                    <option value="10">10 篇</option>
+                  </select>
+                </div>
+              </div>
+              <!-- Right: days + status -->
+              <div>
+                <div class="form-group" style="margin-bottom:12px;">
+                  <label class="form-label">采集日期</label>
+                  <div id="schedDays" style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-subtle);">
+                      <input type="checkbox" value="mon" checked style="accent-color:var(--red);"> 周一
+                    </label>
+                    <label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-subtle);">
+                      <input type="checkbox" value="tue" checked style="accent-color:var(--red);"> 周二
+                    </label>
+                    <label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-subtle);">
+                      <input type="checkbox" value="wed" checked style="accent-color:var(--red);"> 周三
+                    </label>
+                    <label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-subtle);">
+                      <input type="checkbox" value="thu" checked style="accent-color:var(--red);"> 周四
+                    </label>
+                    <label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;padding:4px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-subtle);">
+                      <input type="checkbox" value="fri" checked style="accent-color:var(--red);"> 周五
+                    </label>
+                    <label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;padding:4px 10px;border-radius:8px;border:1px solid var(--border);">
+                      <input type="checkbox" value="sat" style="accent-color:var(--red);"> 周六
+                    </label>
+                    <label style="display:inline-flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;padding:4px 10px;border-radius:8px;border:1px solid var(--border);">
+                      <input type="checkbox" value="sun" style="accent-color:var(--red);"> 周日
+                    </label>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">下次执行时间</label>
+                  <div id="schedNextRun" style="font-size:13px;color:var(--ink-3);padding:4px 0;">--</div>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
+              <button class="btn btn-primary btn-sm" onclick="saveSchedulerConfig()">保存设置</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Article List -->
+        <div id="articleMgrList">
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2z" stroke="currentColor" stroke-width="1.5"/><path d="M7 7h10M7 11h10M7 15h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            暂无采集文章，点击"立即采集"开始
+          </div>
+        </div>
+
+        <!-- Pagination -->
+        <div id="articlePagination" style="display:none;text-align:center;padding:12px 0;">
+          <button class="btn btn-ghost btn-sm" onclick="loadArticles(_articlePage - 1)" id="articlePrevBtn">上一页</button>
+          <span id="articlePageInfo" style="margin:0 12px;font-size:13px;color:var(--ink-3);"></span>
+          <button class="btn btn-ghost btn-sm" onclick="loadArticles(_articlePage + 1)" id="articleNextBtn">下一页</button>
+        </div>
+      </div><!-- /view-articles -->
 
 
       <!-- ==================== VIEW: STOCK ==================== -->
@@ -2022,7 +2157,8 @@ function escapeHtml(str) {
 function safeUrl(url) {
   if (!url) return '#';
   const u = String(url).trim().toLowerCase();
-  if (u.startsWith('javascript:') || u.startsWith('data:') || u.startsWith('vbscript:')) return '#';
+  if (u.startsWith('javascript:') || u.startsWith('vbscript:')) return '#';
+  if (u.startsWith('data:') && !u.startsWith('data:image/')) return '#';
   return url;
 }
 function safeAttr(str) {
@@ -2044,6 +2180,7 @@ function showToast(message, type = 'info', duration = 3500) {
     setTimeout(() => toast.remove(), 300);
   }, duration);
 }
+const toast = showToast; // 全局别名
 
 /* ============================================================
    VIEW SWITCHING
@@ -2051,6 +2188,7 @@ function showToast(message, type = 'info', duration = 3500) {
 const topbarMeta = {
   task:     { title: '文章收集', sub: '从微信公众号抓取文章并生成分析报告' },
   bloggers: { title: '博主管理', sub: '添加、删除、刷新你关注的股票博主' },
+  articles: { title: '文章管理', sub: '自动采集文章 · AI 股票提及扫描 · 荐股管理' },
   config:   { title: '配置设置', sub: '邮箱 SMTP · 公众号授权 · AI API' },
   stock:    { title: '股票查询', sub: '搜索 A 股/美股/港股 · 实时行情' },
   fund:     { title: '基金', sub: 'ETF 板块分类 · 基金搜索 · 实时行情' },
@@ -2081,6 +2219,7 @@ function switchView(view, el) {
   }
   if (view === 'task') refreshBloggerCheckList();
   if (view === 'bloggers') { loadBloggers(); }
+  if (view === 'articles') { loadArticles(); }
   if (view === 'fund' && !_fundLoaded) { loadFundBoards(); _fundLoaded = true; }
   if (view === 'crypto') { loadCryptoSpot(); }
   if (view === 'futures') { loadFuturesBoards(); }
@@ -2092,7 +2231,23 @@ function switchView(view, el) {
    CONFIG ACCORDION
    ============================================================ */
 function toggleConfigSection(id) {
-  document.getElementById(id).classList.toggle('open');
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.classList.contains('card-body')) {
+    // card-body accordion: toggle display directly
+    if (el.style.display !== 'none') {
+      el.style.display = 'none';
+      const arrow = el.closest('.card')?.querySelector('[id$="ConfigArrow"]');
+      if (arrow) arrow.style.transform = '';
+    } else {
+      el.style.display = '';
+      const arrow = el.closest('.card')?.querySelector('[id$="ConfigArrow"]');
+      if (arrow) arrow.style.transform = 'rotate(180deg)';
+      if (id === 'schedulerConfigBody') loadSchedulerConfig();
+    }
+  } else {
+    el.classList.toggle('open');
+  }
 }
 
 /* ============================================================
@@ -4381,6 +4536,358 @@ function closeStockModal() {
 // ============================================================
 //  自选股 WATCHLIST
 // ============================================================
+
+/* ============================================================
+   ARTICLES MANAGEMENT
+   ============================================================ */
+let _articlePage = 1;
+const _articlePageSize = 20;
+
+async function loadArticles(page) {
+  if (page !== undefined) _articlePage = page;
+  if (_articlePage < 1) _articlePage = 1;
+
+  const filterEl = document.getElementById('articleFilterProcessed');
+  const bloggerEl = document.getElementById('articleFilterBlogger');
+  const listEl = document.getElementById('articleMgrList');
+  const totalEl = document.getElementById('articleTotalCount');
+  if (!listEl) { console.error('articleMgrList element not found'); return; }
+
+  const processed = filterEl ? filterEl.value : '-1';
+  const bloggerId = bloggerEl ? bloggerEl.value : '';
+
+  const params = new URLSearchParams({
+    page: String(_articlePage),
+    page_size: String(_articlePageSize),
+  });
+  if (Number(processed) >= 0) params.set('processed', processed);
+  if (bloggerId) params.set('blogger_id', bloggerId);
+
+  const url = '/api/articles?' + params.toString();
+  console.log('[loadArticles] fetching:', url);
+
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+    console.log('[loadArticles] response:', data.success, 'total:', data.total, 'articles:', (data.articles||[]).length);
+
+    if (!data.success) { showToast(data.error || '加载失败', 'error'); return; }
+
+    const articles = data.articles || [];
+    const total = data.total || 0;
+    const totalPages = Math.ceil(total / _articlePageSize) || 1;
+
+    if (totalEl) totalEl.textContent = String(total);
+
+    if (articles.length === 0) {
+      listEl.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none"><path d="M19 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V5a2 2 0 00-2-2z" stroke="currentColor" stroke-width="1.5"/><path d="M7 7h10M7 11h10M7 15h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>暂无文章</div>';
+    } else {
+      listEl.innerHTML = articles.map(a => renderArticleCard(a)).join('');
+    }
+
+    const pagEl = document.getElementById('articlePagination');
+    if (pagEl) {
+      if (totalPages > 1) {
+        pagEl.style.display = '';
+        document.getElementById('articlePrevBtn').disabled = _articlePage <= 1;
+        document.getElementById('articleNextBtn').disabled = _articlePage >= totalPages;
+        document.getElementById('articlePageInfo').textContent = _articlePage + ' / ' + totalPages;
+      } else {
+        pagEl.style.display = 'none';
+      }
+    }
+  } catch (e) {
+    console.error('[loadArticles] error:', e);
+    showToast('加载文章失败: ' + e.message, 'error');
+  }
+}
+
+function renderArticleCard(a) {
+  if (!a || !a.id) return '';
+  const mentions = a.mentions || [];
+  const date = (a.publish_time || a.created_at || '').slice(0, 16);
+  const processed = a.processed === 1;
+  const preview = (a.content_preview || '').slice(0, 100);
+
+  let mentionsHtml = '';
+  if (mentions.length > 0) {
+    mentionsHtml = '<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">' +
+      mentions.map(m => {
+        const conf = m.confidence || 'medium';
+        const color = conf === 'high' ? 'var(--red)' : conf === 'medium' ? 'var(--amber)' : 'var(--ink-3)';
+        return '<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:10px;font-size:11px;background:' + color + '15;color:' + color + ';border:1px solid ' + color + '30;">' +
+          escapeHtml(m.stock_name || m.stock_code || '?') +
+          (m.stock_code ? '<span style="opacity:.6;font-size:10px;">' + escapeHtml(m.stock_code) + '</span>' : '') +
+          '</span>';
+      }).join('') +
+      '</div>';
+  }
+
+  return '<div class="card" style="margin-bottom:8px;cursor:pointer;" onclick="toggleArticleDetail(' + a.id + ')">' +
+    '<div class="card-body" style="padding:12px 16px;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(a.title || '未知标题') + '</div>' +
+          '<div style="font-size:12px;color:var(--ink-3);margin-top:3px;display:flex;gap:12px;">' +
+            '<span>' + escapeHtml(a.author || a.blogger_id || '') + '</span>' +
+            '<span>' + escapeHtml(date) + '</span>' +
+            (mentions.length > 0 ? '<span style="color:var(--red);">提及 ' + mentions.length + ' 只股票</span>' : '') +
+          '</div>' +
+          (preview ? '<div style="font-size:12px;color:var(--ink-2);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(preview) + '</div>' : '') +
+          mentionsHtml +
+        '</div>' +
+        '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">' +
+          '<span style="font-size:11px;padding:2px 8px;border-radius:10px;' + (processed ? 'background:var(--green)15;color:var(--green);border:1px solid var(--green)30;' : 'background:var(--amber)15;color:var(--amber);border:1px solid var(--amber)30;') + '">' + (processed ? '已处理' : '未处理') + '</span>' +
+          (a.url ? '<a href="' + safeUrl(a.url) + '" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:11px;" onclick="event.stopPropagation()">原文</a>' : '') +
+          '<button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:11px;color:var(--red);" onclick="event.stopPropagation();deleteArticle(' + a.id + ')">删除</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="article-detail-' + a.id + '" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);"></div>' +
+    '</div></div>';
+}
+
+async function toggleArticleDetail(id) {
+  const el = document.getElementById('article-detail-' + id);
+  if (!el) return;
+  if (el.style.display !== 'none') { el.style.display = 'none'; return; }
+
+  try {
+    const resp = await fetch('/api/articles/' + id);
+    const data = await resp.json();
+    if (!data.success) { toast(data.error || '加载失败', 'red'); return; }
+
+    const a = data.article;
+    const mentions = a.mentions || [];
+    const content = (a.content || '').replace(/\n/g, '<br>');
+
+    let html = '<div style="font-size:13px;line-height:1.7;">';
+    if (content) {
+      html += '<div style="max-height:400px;overflow-y:auto;margin-bottom:12px;">' + content + '</div>';
+    }
+    if (mentions.length > 0) {
+      html += '<div style="margin-bottom:8px;font-weight:600;font-size:13px;">AI 提及股票:</div>';
+      html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+      mentions.forEach(m => {
+        html += '<div style="padding:8px 12px;background:var(--bg-subtle);border-radius:8px;font-size:12px;">' +
+          '<strong>' + escapeHtml(m.stock_name || '?') + '</strong> ' +
+          '<span style="color:var(--ink-3);font-family:monospace;">' + escapeHtml(m.stock_code || '') + '</span> ' +
+          '<span style="font-size:11px;opacity:.7;">(' + escapeHtml(m.confidence || '') + ')</span>' +
+          (m.context ? '<div style="margin-top:4px;color:var(--ink-2);">' + escapeHtml(m.context) + '</div>' : '') +
+          '</div>';
+      });
+      html += '</div>';
+    }
+    html += '<div style="margin-top:10px;display:flex;gap:8px;">';
+    html += '<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();markProcessed(' + a.id + ',1)">标记已处理</button>';
+    html += '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();markProcessed(' + a.id + ',0)">标记未处理</button>';
+    html += '</div></div>';
+
+    el.innerHTML = html;
+    el.style.display = '';
+  } catch (e) {
+    toast('加载详情失败: ' + e.message, 'red');
+  }
+}
+
+async function markProcessed(id, processed) {
+  try {
+    const resp = await fetch('/api/articles/' + id + '/processed?processed=' + processed, { method: 'PUT' });
+    const data = await resp.json();
+    if (data.success) {
+      toast(processed ? '已标记为已处理' : '已标记为未处理', 'green');
+      loadArticles();
+    } else {
+      toast('操作失败', 'red');
+    }
+  } catch (e) {
+    toast('操作失败: ' + e.message, 'red');
+  }
+}
+
+async function deleteArticle(id) {
+  if (!confirm('确定删除该文章?')) return;
+  try {
+    const resp = await fetch('/api/articles/' + id, { method: 'DELETE' });
+    const data = await resp.json();
+    if (data.success) {
+      toast('已删除', 'green');
+      loadArticles();
+    } else {
+      toast('删除失败', 'red');
+    }
+  } catch (e) {
+    toast('删除失败: ' + e.message, 'red');
+  }
+}
+
+async function scrapeNow() {
+  const btn = document.getElementById('scrapeNowBtn');
+  if (btn.disabled) return; // 防止重复点击
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner dark" style="width:12px;height:12px;"></span> 采集中...';
+  try {
+    const resp = await fetch('/api/articles/scrape-now', { method: 'POST' });
+    const data = await resp.json();
+    if (data.success) {
+      toast('采集完成，新增 ' + (data.count || 0) + ' 篇文章', 'green');
+      loadArticles();
+    } else {
+      const err = data.error || '未知错误';
+      if (err.includes('Cookie')) {
+        toast('Cookie 未配置，请先前往"文章收集"页面扫码登录', 'error');
+      } else {
+        toast('采集失败: ' + err, 'error');
+      }
+    }
+  } catch (e) {
+    toast('采集请求异常: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M17 10a7 7 0 11-2.05-4.95M17 4v6h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg> 立即采集';
+  }
+}
+
+// Populate blogger filter dropdown
+async function loadArticleBloggerFilter() {
+  try {
+    const resp = await fetch('/api/blogger/list');
+    const data = await resp.json();
+    const sel = document.getElementById('articleFilterBlogger');
+    if (!sel) return;
+    const bloggers = data.bloggers || [];
+    sel.innerHTML = '<option value="">全部博主</option>' +
+      bloggers.map(b => '<option value="' + escapeHtml(b.id || '') + '">' + escapeHtml(b.name || b.id || '') + '</option>').join('');
+  } catch (e) { /* ignore */ }
+}
+
+// Init on page load
+loadArticleBloggerFilter();
+
+// Track if scheduler config has been loaded
+let _schedulerConfigLoaded = false;
+
+/* ============================================================
+   SCHEDULER CONFIG
+   ============================================================ */
+function initSchedulerSelects() {
+  const hourSel = document.getElementById('schedHour');
+  const minSel = document.getElementById('schedMinute');
+  if (!hourSel || hourSel.options.length > 0) return;
+  for (let h = 0; h < 24; h++) {
+    hourSel.innerHTML += '<option value="' + h + '">' + String(h).padStart(2, '0') + '</option>';
+  }
+  for (let m = 0; m < 60; m += 5) {
+    minSel.innerHTML += '<option value="' + m + '">' + String(m).padStart(2, '0') + '</option>';
+  }
+}
+
+const DAY_MAP = { mon: 'mon', tue: 'tue', wed: 'wed', thu: 'thu', fri: 'fri', sat: 'sat', sun: 'sun' };
+const DAY_TO_CRON = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0 };
+
+function daysOfWeekToCron(checked) {
+  // checked = ['mon','tue',...]
+  if (checked.length === 5 && ['mon','tue','wed','thu','fri'].every(d => checked.includes(d))) return 'mon-fri';
+  if (checked.length === 7) return '*';
+  return checked.map(d => DAY_TO_CRON[d]).sort((a,b) => a-b).join(',');
+}
+
+function cronToDaysOfWeek(cron) {
+  if (cron === 'mon-fri') return ['mon','tue','wed','thu','fri'];
+  if (cron === '*') return ['mon','tue','wed','thu','fri','sat','sun'];
+  const map = {0:'sun',1:'mon',2:'tue',3:'wed',4:'thu',5:'fri',6:'sat'};
+  return cron.split(',').map(n => map[parseInt(n.trim())]).filter(Boolean);
+}
+
+async function loadSchedulerConfig() {
+  initSchedulerSelects();
+  try {
+    const resp = await fetch('/api/articles/scheduler-config');
+    const data = await resp.json();
+    if (!data.success) return;
+
+    const cfg = data.config || {};
+    document.getElementById('schedEnabled').checked = cfg.enabled !== false;
+    document.getElementById('schedEnabledLabel').textContent = cfg.enabled !== false ? '已启用' : '已禁用';
+    document.getElementById('schedHour').value = cfg.hour ?? 15;
+    document.getElementById('schedMinute').value = cfg.minute ?? 45;
+    document.getElementById('schedArticleCount').value = cfg.articles_per_blogger ?? 3;
+
+    const days = cronToDaysOfWeek(cfg.days_of_week || 'mon-fri');
+    document.querySelectorAll('#schedDays input[type=checkbox]').forEach(cb => {
+      cb.checked = days.includes(cb.value);
+    });
+
+    // Status badge
+    const badge = document.getElementById('schedulerStatusBadge');
+    if (data.running && cfg.enabled !== false) {
+      badge.textContent = '运行中';
+      badge.style.background = 'var(--green)15';
+      badge.style.color = 'var(--green)';
+      badge.style.borderColor = 'var(--green)30';
+    } else if (cfg.enabled === false) {
+      badge.textContent = '已禁用';
+      badge.style.background = 'var(--ink-3)15';
+      badge.style.color = 'var(--ink-3)';
+      badge.style.borderColor = 'var(--ink-3)30';
+    } else {
+      badge.textContent = '未运行';
+      badge.style.background = 'var(--amber)15';
+      badge.style.color = 'var(--amber)';
+      badge.style.borderColor = 'var(--amber)30';
+    }
+
+    // Next run
+    const nextEl = document.getElementById('schedNextRun');
+    if (data.next_run) {
+      const d = new Date(data.next_run);
+      nextEl.textContent = d.toLocaleString('zh-CN');
+    } else {
+      nextEl.textContent = cfg.enabled !== false ? '等待调度...' : '已禁用';
+    }
+  } catch (e) {
+    console.error('loadSchedulerConfig error:', e);
+  }
+}
+
+async function saveSchedulerConfig() {
+  const enabled = document.getElementById('schedEnabled').checked;
+  const hour = parseInt(document.getElementById('schedHour').value);
+  const minute = parseInt(document.getElementById('schedMinute').value);
+  const articlesPerBlogger = parseInt(document.getElementById('schedArticleCount').value);
+
+  const checkedDays = [];
+  document.querySelectorAll('#schedDays input[type=checkbox]:checked').forEach(cb => {
+    checkedDays.push(cb.value);
+  });
+  const daysOfWeek = checkedDays.length > 0 ? daysOfWeekToCron(checkedDays) : 'mon-fri';
+
+  try {
+    const resp = await fetch('/api/articles/scheduler-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled, hour, minute, days_of_week: daysOfWeek, articles_per_blogger: articlesPerBlogger }),
+    });
+    const data = await resp.json();
+    if (data.success) {
+      toast('采集设置已保存', 'green');
+      loadSchedulerConfig();
+    } else {
+      toast('保存失败', 'red');
+    }
+  } catch (e) {
+    toast('保存失败: ' + e.message, 'red');
+  }
+}
+
+// Toggle enabled label
+document.addEventListener('DOMContentLoaded', () => {
+  const cb = document.getElementById('schedEnabled');
+  if (cb) {
+    cb.addEventListener('change', () => {
+      document.getElementById('schedEnabledLabel').textContent = cb.checked ? '已启用' : '已禁用';
+    });
+  }
+});
 
 let _watchlistInterval = null;
 

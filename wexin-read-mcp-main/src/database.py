@@ -165,6 +165,21 @@ def init_db(db_path: str | None = None) -> None:
                 max_drawdown_pct  REAL,
                 holding_days      INTEGER
             );
+
+            CREATE TABLE IF NOT EXISTS scraped_articles (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                blogger_id      TEXT NOT NULL,
+                title           TEXT NOT NULL,
+                url             TEXT NOT NULL UNIQUE,
+                author          TEXT,
+                publish_time    TEXT,
+                content         TEXT,
+                cover_url       TEXT,
+                ai_mentions     TEXT,
+                scrape_date     TEXT NOT NULL DEFAULT (date('now')),
+                processed       INTEGER DEFAULT 0,
+                created_at      TEXT DEFAULT (datetime('now'))
+            );
         """)
 
         # 清理过期缓存

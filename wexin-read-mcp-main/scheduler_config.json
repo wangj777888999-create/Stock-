@@ -1,0 +1,7 @@
+{
+  "enabled": false,
+  "hour": 15,
+  "minute": 45,
+  "days_of_week": "mon-fri",
+  "articles_per_blogger": 3
+}
