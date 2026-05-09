@@ -168,8 +168,9 @@ window.StockPulse.api = {
 #### 数据流
 
 ```
-博主文章 → AI分析 → 提取荐股列表 → 用户确认/修正
-    → 存入 blogger_recommendations 表
+博主文章 → AI扫描 → 输出提及的股票候选列表（不做荐股判断）
+    → 前端展示候选列表
+    → 用户人工判断 → 手动创建荐股记录（入 blogger_calls 表）
     → 后台定时任务每日收盘后拉取价格
     → 计算四项指标 → 生成综合可信度分
     → 前端卡片排行榜展示
@@ -177,26 +178,12 @@ window.StockPulse.api = {
 
 #### 数据库设计
 
-**blogger_recommendations**
+**blogger_calls**（复用现有表，增量迁移新增字段）
 
-```sql
-CREATE TABLE blogger_recommendations (
-    id INTEGER PRIMARY KEY,
-    blogger_id INTEGER NOT NULL,
-    stock_code TEXT NOT NULL,
-    stock_name TEXT,
-    direction TEXT DEFAULT 'buy',
-    recommended_price REAL,
-    recommended_date TEXT,
-    target_price REAL,
-    article_url TEXT,
-    article_title TEXT,
-    ai_reason TEXT,
-    status TEXT DEFAULT 'active',      -- active/completed/expired
-    user_confirmed INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT (datetime('now'))
-);
-```
+现有字段不变，新增：
+- `ai_reason TEXT` — AI 提取的上下文/理由
+- `status TEXT DEFAULT 'pending'` — `pending`(待确认) / `confirmed`(已确认) / `rejected`(已驳回)
+- `user_confirmed INTEGER DEFAULT 0` — 兼容旧字段
 
 **recommendation_scores**
 
@@ -400,7 +387,7 @@ class NotificationConfig:
 
 | 序号 | 模块 | 主要内容 | 状态 |
 |------|------|---------|------|
-| M1 | 数据库 + AI 荐股提取 | 建表、analyzer prompt 增强、API 端点 | **待开始** |
+| M1 | 数据库 + AI 股票提及扫描 | blogger_calls 扩展字段、recommendation_scores 建表、extract_mentions 扫描、WebSocket 推送 | **已完成** |
 | M2 | 用户确认/修正流程 | 前端确认弹窗、修正接口、入库逻辑 | 待开始 |
 | M3 | 后台价格跟踪 | 每日收盘定时任务、价格拉取、指标计算 | 待开始 |
 | M4 | 综合评分算法 | 四项指标计算、综合分生成 | 待开始 |

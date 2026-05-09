@@ -154,6 +154,17 @@ def init_db(db_path: str | None = None) -> None:
                 note        TEXT,
                 created_at  TEXT DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS recommendation_scores (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                recommendation_id INTEGER NOT NULL REFERENCES blogger_calls(id),
+                check_date        TEXT NOT NULL,
+                current_price     REAL,
+                return_pct        REAL,
+                max_gain_pct      REAL,
+                max_drawdown_pct  REAL,
+                holding_days      INTEGER
+            );
         """)
 
         # 清理过期缓存
@@ -174,6 +185,9 @@ def _migrate():
         "ALTER TABLE watchlist ADD COLUMN tags TEXT DEFAULT ''",
         "ALTER TABLE watchlist ADD COLUMN alert_price REAL",
         "ALTER TABLE watchlist ADD COLUMN target_price REAL",
+        "ALTER TABLE blogger_calls ADD COLUMN ai_reason TEXT",
+        "ALTER TABLE blogger_calls ADD COLUMN status TEXT DEFAULT 'pending'",
+        "ALTER TABLE blogger_calls ADD COLUMN user_confirmed INTEGER DEFAULT 0",
     ]
     for sql in migrations:
         try:

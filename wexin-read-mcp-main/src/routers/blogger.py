@@ -479,12 +479,24 @@ async def websocket_task(ws: WebSocket):
             await ws.send_json({"type": "error", "message": "所有文章抓取失败，请检查链接"})
             return
 
+        # --- 阶段1.5: AI 股票提及扫描（不阻塞主流程） ---
+        mentions = []
+        try:
+            analyzer = ArticleAnalyzer(config)
+            scan_result = await analyzer.extract_mentions(articles)
+            if scan_result.get("success"):
+                mentions = scan_result.get("mentions", [])
+                logger.info(f"股票提及扫描完成: 发现 {len(mentions)} 条")
+        except Exception as e:
+            logger.warning(f"股票提及扫描失败（不影响主流程）: {e}")
+
         # --- 通知前端: 文章收集完成，等待用户选择 ---
         await ws.send_json({
             "type": "articles_collected",
             "count": len(articles),
             "total": len(urls),
             "message": f"成功抓取 {len(articles)}/{len(urls)} 篇文章，请选择输出方式",
+            "mentions": mentions,
         })
 
         # --- 等待用户选择: 仅汇总 or AI分析（可指定多个投资视角）---

@@ -1,6 +1,7 @@
 """文章内容分析模块 - 整合多篇文章并生成投资分析报告"""
 
 import asyncio
+import json
 import httpx
 import logging
 from datetime import datetime
@@ -212,3 +213,87 @@ class ArticleAnalyzer:
 
         lines.append("\n> 提示: 配置AI API密钥后可获得智能分析报告，而非简单汇总。")
         return {"success": True, "report": "\n".join(lines), "error": None}
+
+    async def extract_mentions(self, articles: list[dict]) -> dict:
+        """扫描文章中提及的股票，输出候选列表（不做荐股判断）。
+
+        Returns:
+            {"success": bool, "mentions": [{"stock_code": str, "stock_name": str,
+              "context": str, "confidence": str, "article_url": str}], "error": str|None}
+        """
+        if not articles:
+            return {"success": True, "mentions": [], "error": None}
+        if not self.config.ai.api_key:
+            return {"success": True, "mentions": [], "error": None}
+
+        articles_text = self._build_articles_text(articles)
+
+        prompt = f"""请扫描以下股票博主文章，列出所有被提及的 A 股/港股/美股的股票。
+
+规则：
+1. 只提取有明确股票名称或代码的提及（如"贵州茅台""600519""茅台"）
+2. 对于隐喻/暗语/不确定的提及也列出，但 confidence 标为 "low"
+3. 每条记录附上原文上下文（50 字以内），方便人工判断
+4. 不要做是否为"荐股"的判断，只做"提到了什么股票"的扫描
+
+输出严格的 JSON（不要 markdown 代码块）：
+{{"mentions": [{{"stock_code": "", "stock_name": "贵州茅台", "context": "原文片段", "confidence": "high", "article_url": ""}}]}}
+
+confidence 含义：
+- "high": 明确提到了股票名称或代码
+- "medium": 可推断但有歧义（如"白酒龙头"大概率是茅台）
+- "low": 隐喻/暗语/不确定
+
+文章内容：
+
+{articles_text}"""
+
+        system = "你是股票文本扫描助手，任务是从文章中提取所有被提及的股票名称。只做扫描，不做荐股判断。输出严格 JSON。"
+
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                response = await client.post(
+                    f"{self.config.ai.base_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.config.ai.api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": self.config.ai.model,
+                        "messages": [
+                            {"role": "system", "content": system},
+                            {"role": "user", "content": prompt},
+                        ],
+                        "temperature": 0.1,
+                        "max_tokens": 2048,
+                    },
+                )
+                response.raise_for_status()
+                data = response.json()
+                raw = data["choices"][0]["message"]["content"]
+
+            # 解析 JSON（兼容 markdown 代码块包裹的情况）
+            text = raw.strip()
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+                if text.endswith("```"):
+                    text = text[:-3]
+                text = text.strip()
+
+            parsed = json.loads(text)
+            mentions = parsed.get("mentions", [])
+
+            # 补充 article_url（AI 可能遗漏）
+            url_map = {a.get("title", ""): a.get("url", "") for a in articles}
+            for m in mentions:
+                if not m.get("article_url"):
+                    m["article_url"] = ""
+
+            return {"success": True, "mentions": mentions, "error": None}
+
+        except json.JSONDecodeError:
+            logger.warning(f"extract_mentions JSON 解析失败: {raw[:200]}")
+            return {"success": False, "mentions": [], "error": "AI 返回格式异常"}
+        except Exception as e:
+            logger.error(f"extract_mentions 失败: {e}")
+            return {"success": False, "mentions": [], "error": str(e)}
