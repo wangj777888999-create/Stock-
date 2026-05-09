@@ -169,11 +169,12 @@ window.StockPulse.api = {
 
 ```
 博主文章 → AI扫描 → 输出提及的股票候选列表（不做荐股判断）
-    → 前端展示候选列表
-    → 用户人工判断 → 手动创建荐股记录（入 blogger_calls 表）
-    → 后台定时任务每日收盘后拉取价格
-    → 计算四项指标 → 生成综合可信度分
-    → 前端卡片排行榜展示
+    → WebSocket 推送给前端（M1 ✅）
+    → 前端展示候选列表（M2）
+    → 用户人工判断 → 手动创建荐股记录（入 blogger_calls 表）（M2）
+    → 后台定时任务每日收盘后拉取价格（M3）
+    → 计算四项指标 → 生成综合可信度分（M4）
+    → 前端卡片排行榜展示（M5）
 ```
 
 #### 数据库设计
@@ -197,26 +198,32 @@ CREATE TABLE recommendation_scores (
     max_gain_pct REAL,
     max_drawdown_pct REAL,
     holding_days INTEGER,
-    FOREIGN KEY (recommendation_id) REFERENCES blogger_recommendations(id)
+    FOREIGN KEY (recommendation_id) REFERENCES blogger_calls(id)
 );
 ```
 
-#### AI 提取增强
+#### AI 股票提及扫描（M1 已完成）
 
-在现有 `analyzer.py` 中，给三个 AI 角色的 prompt 增加荐股提取输出字段：
+在 `analyzer.py` 新增 `extract_mentions()` 方法，扫描文章中提及的股票：
 
 ```json
 {
-  "recommendations": [
+  "mentions": [
     {
       "stock_code": "600519",
       "stock_name": "贵州茅台",
-      "direction": "buy",
-      "target_price": 1900,
-      "reason": "认为当前估值合理，消费复苏预期推动"
+      "context": "白酒龙头当前估值合理",
+      "confidence": "high",
+      "article_url": ""
     }
   ]
 }
+```
+
+- **不做荐股判断**，只做"文章提到了什么股票"的基础筛查
+- confidence: high（明确提到）/ medium（可推断）/ low（隐喻暗语）
+- 通过 WebSocket `articles_collected` 消息推送给前端
+- **前端展示待实现**（M2 范围）
 ```
 
 模式：**AI 提取 + 人工确认**。AI 先自动提取，前端弹出确认卡片，用户确认或修正后入库。
@@ -388,7 +395,7 @@ class NotificationConfig:
 | 序号 | 模块 | 主要内容 | 状态 |
 |------|------|---------|------|
 | M1 | 数据库 + AI 股票提及扫描 | blogger_calls 扩展字段、recommendation_scores 建表、extract_mentions 扫描、WebSocket 推送 | **已完成** |
-| M2 | 用户确认/修正流程 | 前端确认弹窗、修正接口、入库逻辑 | 待开始 |
+| M2 | 前端候选展示 + 手动创建荐股 | 扫描结果前端展示、用户手动从候选创建荐股记录、API 端点 | **待开始** |
 | M3 | 后台价格跟踪 | 每日收盘定时任务、价格拉取、指标计算 | 待开始 |
 | M4 | 综合评分算法 | 四项指标计算、综合分生成 | 待开始 |
 | M5 | 前端排行榜 + 详情页 | 博主卡片网格、详情页、荐股列表 | 待开始 |
