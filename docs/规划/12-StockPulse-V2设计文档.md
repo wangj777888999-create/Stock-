@@ -168,13 +168,18 @@ window.StockPulse.api = {
 #### 数据流
 
 ```
-博主文章 → AI扫描 → 输出提及的股票候选列表（不做荐股判断）
-    → WebSocket 推送给前端（M1 ✅）
-    → 前端展示候选列表（M2）
-    → 用户人工判断 → 手动创建荐股记录（入 blogger_calls 表）（M2）
-    → 后台定时任务每日收盘后拉取价格（M3）
-    → 计算四项指标 → 生成综合可信度分（M4）
-    → 前端卡片排行榜展示（M5）
+每日自动采集（后台定时）
+  → 遍历关注博主，抓取最新文章
+  → AI 扫描提及的股票
+  → 文章 + 扫描结果存入 scraped_articles 表
+
+文章管理页面（用户操作）
+  → 浏览抓取到的文章列表
+  → 查看每篇文章的 AI 扫描候选
+  → 人工判断 → 手动创建荐股记录（入 blogger_calls 表）
+  → 后台定时任务每日收盘后拉取价格（M3）
+  → 计算四项指标 → 生成综合可信度分（M4）
+  → 前端卡片排行榜展示（M5）
 ```
 
 #### 数据库设计
@@ -202,6 +207,83 @@ CREATE TABLE recommendation_scores (
 );
 ```
 
+**scraped_articles**（M2 新增，文章持久化 + AI 扫描结果）
+
+```sql
+CREATE TABLE IF NOT EXISTS scraped_articles (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    blogger_id      TEXT NOT NULL,
+    title           TEXT NOT NULL,
+    url             TEXT NOT NULL UNIQUE,
+    author          TEXT,
+    publish_time    TEXT,
+    content         TEXT,
+    cover_url       TEXT,
+    ai_mentions     TEXT,           -- JSON: extract_mentions() 的结果
+    scrape_date     TEXT NOT NULL DEFAULT (date('now')),
+    processed       INTEGER DEFAULT 0,  -- 1=已处理（已创建荐股或标记忽略）
+    created_at      TEXT DEFAULT (datetime('now'))
+);
+```
+
+#### 每日自动采集（M2）
+
+使用 `APScheduler` 实现每日定时任务：
+
+```
+每天 15:45（收盘后15分钟）
+  → 检查 Cookie 有效性（任一来源有效即继续）
+  → 遍历 bloggers.json 中所有博主
+  → 调用 blogger_mgr.fetch_recent_articles() 获取最新文章
+  → 过滤已抓取的（按 url 去重）
+  → 调用 scraper.fetch_article() 抓取新文章内容
+  → 调用 analyzer.extract_mentions() 扫描股票
+  → 存入 scraped_articles 表
+  → 日志记录采集结果
+```
+
+#### Cookie 双源降级策略（M2）
+
+获取文章列表时自动降级，用户无需手动配置读者端 Cookie：
+
+```
+路径1: 公众号后台 API（mp_cookie + mp_token）
+  → 通过扫码登录获取，有效期 1-2 天
+  → _fetch_via_mp_backend()
+
+路径2: getmsg API（自动用 mp_cookie 兜底）
+  → 扫码登录时已捕获 mp.weixin.qq.com 域下所有 Cookie
+  → mp_cookie 对 getmsg API 同样有效，无需单独配置读者端 Cookie
+  → 如果用户手动配置了 wechat_cookie，优先使用
+  → _fetch_via_getmsg()
+
+Cookie 过期处理：
+  → 两个 API 都返回 token/cookie 失效 → 跳过采集
+  → 在文章管理页面提示"Cookie 已过期，请重新扫码登录"
+  → 不会返回旧数据
+```
+
+#### 文章管理页面（M2）
+
+侧边栏新增"文章管理"入口，页面包含：
+
+**文章列表区**
+- 按时间倒序展示抓取的文章
+- 每条显示：标题、博主名、抓取日期、扫描到的股票数量
+- 未处理的文章高亮标记
+- 支持按博主、日期筛选
+
+**文章详情区**（点击文章后展开）
+- 文章内容预览
+- AI 扫描结果：候选股票列表（代码、名称、上下文、置信度）
+- 每个候选旁有"创建荐股"按钮
+- 可标记为"已处理"（无荐股或已处理完）
+
+**创建荐股表单**（点击"创建荐股"后弹出）
+- 预填：blogger_id、stock_code、stock_name、article_url、ai_reason
+- 用户填写：call_type (buy/sell)、call_price、target_price、call_date
+- 提交 → POST `/api/verify/blogger-call` → 存入 blogger_calls 表
+
 #### AI 股票提及扫描（M1 已完成）
 
 在 `analyzer.py` 新增 `extract_mentions()` 方法，扫描文章中提及的股票：
@@ -222,8 +304,9 @@ CREATE TABLE recommendation_scores (
 
 - **不做荐股判断**，只做"文章提到了什么股票"的基础筛查
 - confidence: high（明确提到）/ medium（可推断）/ low（隐喻暗语）
-- 通过 WebSocket `articles_collected` 消息推送给前端
-- **前端展示待实现**（M2 范围）
+- 通过 WebSocket `articles_collected` 消息推送给前端（手动抓取流程）
+- 每日自动采集时也会调用，结果存入 `scraped_articles.ai_mentions` 字段
+- **前端展示在 M2 文章管理页面实现**
 ```
 
 模式：**AI 提取 + 人工确认**。AI 先自动提取，前端弹出确认卡片，用户确认或修正后入库。
@@ -395,7 +478,7 @@ class NotificationConfig:
 | 序号 | 模块 | 主要内容 | 状态 |
 |------|------|---------|------|
 | M1 | 数据库 + AI 股票提及扫描 | blogger_calls 扩展字段、recommendation_scores 建表、extract_mentions 扫描、WebSocket 推送 | **已完成** |
-| M2 | 前端候选展示 + 手动创建荐股 | 扫描结果前端展示、用户手动从候选创建荐股记录、API 端点 | **待开始** |
+| M2 | 文章管理 + 自动采集 | scraped_articles 建表、每日自动抓取+扫描、文章管理页面、手动创建荐股 | **待开始** |
 | M3 | 后台价格跟踪 | 每日收盘定时任务、价格拉取、指标计算 | 待开始 |
 | M4 | 综合评分算法 | 四项指标计算、综合分生成 | 待开始 |
 | M5 | 前端排行榜 + 详情页 | 博主卡片网格、详情页、荐股列表 | 待开始 |
