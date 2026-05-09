@@ -353,8 +353,8 @@ class BloggerManager:
             if "token" in err.lower() or "登录" in err or "invalid" in err.lower():
                 logger.warning(f"公众号后台凭证已失效: {err}")
 
-        # ========== 优先路径2: 读者端 Cookie (方案B) ==========
-        cookie = self._get_wechat_cookie()
+        # ========== 优先路径2: getmsg API (读者端 Cookie 或 mp_cookie 兜底) ==========
+        cookie = self._get_wechat_cookie() or mp_cookie
         if cookie and biz:
             api_result = await self._fetch_via_getmsg(biz, cookie, count)
             if api_result["success"] and api_result["articles"]:
