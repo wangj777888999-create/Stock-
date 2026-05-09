@@ -1,8 +1,10 @@
 # StockPulse V2 设计文档
 
 > 创建日期：2026-05-08
-> 状态：待审批
-> 定位：求职作品集 + 个人投资自用工具
+> 最后更新：2026-05-09
+> 状态：进行中
+> 定位：产品方向求职作品集 + 个人投资自用工具
+> 方向：产品优先，前端暂不迁移 React，保留迁移钩子
 
 ---
 
@@ -14,18 +16,18 @@ StockPulse 是一个本地化的个人投资助手平台，核心工作流：监
 
 ### 1.2 核心问题
 
-- **前端**：4594 行单文件 SPA，难以维护，无法展示工程能力
+- **差异化未释放**：微信博主×AI 多角色×交易闭环的独特组合没有形成产品化能力
 - **AI 分析**：3 个角色硬编码，策略不可扩展，无容错机制
 - **通知**：仅邮件 SMTP，无主动推送能力
-- **差异化未释放**：微信博主×AI 多角色×交易闭环的独特组合没有形成产品化能力
+- **前端**：4594 行单文件 SPA，暂不重构，按 load/render 分离模式新增代码保持迁移就绪
 
 ### 1.3 目标
 
-通过 4 周集中冲刺，打造一个：
-1. 前端工程化（Vite + React + TS + shadcn/ui）
-2. 具有差异化产品能力（博主荐股 AI 评分系统）
-3. AI 分析能力升级（YAML 策略 + LLM 容错 + 交易日历）
-4. 多渠道通知推送（企微 + Telegram）
+按模块迭代推进，优先释放产品差异化能力：
+1. 博主荐股 AI 评分系统（核心差异化）
+2. AI 分析能力升级（YAML 策略 + LLM 容错 + 交易日历）
+3. 多渠道通知推送（企微 + Telegram）
+4. 前端代码保持迁移就绪（load/render 分离），未来按需迁移到 React
 
 ---
 
@@ -33,24 +35,73 @@ StockPulse 是一个本地化的个人投资助手平台，核心工作流：监
 
 | 层 | 选型 | 理由 |
 |---|---|---|
-| 前端框架 | Vite + React 18 + TypeScript | 业界主流，TradingView 生态 React 更成熟，作品集展示效果好 |
-| UI 组件库 | shadcn/ui + Tailwind CSS | 组件可控可定制，暗色主题天然支持，代码归自己所有 |
-| 状态管理 | Zustand | 轻量，和 shadcn/ui 搭配常见，无 Redux 模板代码 |
+| 前端框架 | **保持原生 JS**（当前阶段） | 产品功能优先，前端暂不迁移。代码按 load/render 分离模式编写，为未来迁移保留钩子 |
+| 前端框架（预留） | Vite + React 18 + TypeScript | 未来迁移目标。TradingView 生态 React 更成熟，作品集展示效果好 |
+| UI 组件库（预留） | shadcn/ui + Tailwind CSS | 组件可控可定制，暗色主题天然支持，代码归自己所有 |
+| 状态管理（预留） | Zustand | 轻量，和 shadcn/ui 搭配常见，无 Redux 模板代码 |
 | 后端 | 不变（FastAPI + SQLite） | 现有架构满足需求，不动 |
 | 字体 | 保留 Outfit + PingFang SC | 现有设计系统 |
 | 推送 | 企微 Webhook + Telegram Bot API | 纯 HTTP 调用，实现简单 |
 
-### 2.1 视觉风格迁移原则
+### 2.0 前端迁移就绪原则
 
-**迁移后视觉风格完全不变**。现有 CSS Token 系统（`--bg`, `--surface`, `--ink`, `--red/--green/--amber/--blue` 调色板、圆角阶梯、阴影系统、深色侧边栏）原封不动映射到 Tailwind theme config 和 shadcn/ui CSS 变量。改变的只是代码结构，像素级视觉效果不变。
+当前阶段不迁移 React，但新增代码必须遵循以下原则，确保未来迁移时可直接映射：
+
+1. **load/render 分离**：每个页面对应一对函数 `loadXxxPage()`（数据获取）和 `renderXxxPage()`（DOM 渲染），将来 `load` → React `useEffect` + API hook，`render` → React 组件 JSX
+2. **API 调用独立**：所有后端请求封装为独立函数（如 `apiGetBloggerRanking()`），不和 DOM 操作混写
+3. **状态集中管理**：页面状态挂在统一命名空间下（如 `window.StockPulse.pages.bloggerRanking`），将来直接映射为 Zustand store
+4. **事件处理分离**：事件绑定在 `load` 阶段统一注册，不在 HTML 内联 onclick
+5. **无全局变量泄漏**：新增变量全部挂在 `window.StockPulse` 命名空间下
+
+### 2.1 视觉风格一致性原则
+
+当前阶段：新增页面沿用现有 CSS Token 系统（`--bg`, `--surface`, `--ink`, `--red/--green/--amber/--blue` 调色板、圆角阶梯、阴影系统、深色侧边栏）。
+
+未来迁移时：现有 CSS Token 原封不动映射到 Tailwind theme config 和 shadcn/ui CSS 变量，像素级视觉效果不变。
 
 ---
 
 ## 三、模块设计
 
-### 3.1 前端工程化
+### 3.1 前端架构
 
-#### 目录结构
+#### 当前阶段：原生 JS + load/render 分离
+
+在 `index.html` 中按以下模式组织代码（每个新页面/功能）：
+
+```javascript
+// 命名空间初始化
+window.StockPulse = window.StockPulse || {};
+window.StockPulse.pages = window.StockPulse.pages || {};
+
+// 博主排行榜页面
+window.StockPulse.pages.bloggerRanking = {
+  state: { bloggers: [], sortBy: 'score', filter: 'all' },
+
+  // 数据获取（将来 → React useEffect + API hook）
+  async loadBloggerRanking() {
+    const data = await apiGetBloggerRanking();
+    this.state.bloggers = data;
+    this.renderBloggerRanking();
+  },
+
+  // DOM 渲染（将来 → React 组件 JSX）
+  renderBloggerRanking() {
+    const container = document.getElementById('blogger-ranking-content');
+    // ... DOM 操作
+  },
+
+  // 事件处理（将来 → React event handler）
+  init() {
+    document.getElementById('sort-select').addEventListener('change', (e) => {
+      this.state.sortBy = e.target.value;
+      this.renderBloggerRanking();
+    });
+  }
+};
+```
+
+#### 未来迁移目标目录结构
 
 ```
 wexin-read-mcp-main/frontend/
@@ -83,12 +134,32 @@ wexin-read-mcp-main/frontend/
 └── index.html
 ```
 
+迁移映射关系：
+| 当前原生 JS | 未来 React |
+|------------|-----------|
+| `loadXxxPage()` | `useEffect` + API hook |
+| `renderXxxPage()` | 组件 JSX |
+| `window.StockPulse.pages.xxx.state` | Zustand store |
+| `apiGet*()` / `apiPost*()` | `lib/api.ts` typed client |
+| `addEventListener` | React event handler |
+
+#### API 层规范
+
+所有后端请求封装为独立函数，挂在 `window.StockPulse.api` 下：
+
+```javascript
+window.StockPulse.api = {
+  async getBloggerRanking() { /* GET /api/blogger/ranking */ },
+  async getBloggerDetail(id) { /* GET /api/blogger/{id}/detail */ },
+  async confirmRecommendation(id, data) { /* POST /api/blogger/recommendations/{id}/confirm */ },
+  // ... 与后端路由一一对应
+};
+```
+
 #### 关键实现细节
 
-- **API 层**：封装 typed API client（`lib/api.ts`），与后端 FastAPI 路由一一对应
-- **TradingView Charts**：用 `lightweight-charts` React 包装，封装成 `<KLineChart>` 组件
-- **迁移策略**：页面逐个迁移，先做骨架布局 + 1 个页面跑通，再逐页迁移
-- **代理配置**：Vite devServer proxy 转发到后端 FastAPI
+- **TradingView Charts**：当前直接使用 CDN 版 lightweight-charts，未来封装为 React `<KLineChart>` 组件
+- **迁移策略**：按 load/render 分离编写的页面，逐个迁移到 React 组件
 
 ---
 
@@ -323,19 +394,23 @@ class NotificationConfig:
 
 ## 四、执行计划与弹性机制
 
-### 4.1 四周冲刺计划
+### 4.1 模块迭代计划
 
-| 周次 | 主线任务 | 弹性插槽 |
-|------|---------|---------|
-| 第1周 | 前端工程化：项目搭建 + 骨架布局 + 2-3个核心页面迁移 | 2天 |
-| 第2周 | 博主荐股评分系统：数据表 + AI提取 + 后台跟踪 + 卡片页 | 2天 |
-| 第3周 | AI分析升级 + 通知推送：YAML策略 + LLM容错 + 交易日历 + 企微/Telegram | 2天 |
-| 第4周 | 联调 + 收尾 + README更新 | 全周弹性 |
+按模块逐步推进，每完成一个模块更新本文档进度。
 
-### 4.2 弹性机制运作方式
+| 序号 | 模块 | 主要内容 | 状态 |
+|------|------|---------|------|
+| M1 | 数据库 + AI 荐股提取 | 建表、analyzer prompt 增强、API 端点 | **待开始** |
+| M2 | 用户确认/修正流程 | 前端确认弹窗、修正接口、入库逻辑 | 待开始 |
+| M3 | 后台价格跟踪 | 每日收盘定时任务、价格拉取、指标计算 | 待开始 |
+| M4 | 综合评分算法 | 四项指标计算、综合分生成 | 待开始 |
+| M5 | 前端排行榜 + 详情页 | 博主卡片网格、详情页、荐股列表 | 待开始 |
+| M6 | AI 分析升级 | YAML 策略 DSL、LLM 容错、交易日历 | 待开始 |
+| M7 | 通知推送 | 企微 Webhook + Telegram Bot、事件监控 | 待开始 |
 
-- 每周末回顾进度，评估新想法是否纳入下周主线或排入插槽
-- 某阶段提前完成 → 插槽自动变为"新功能探索时间"
+### 4.2 弹性机制
+
+- 每完成一个模块回顾进度，评估是否调整后续优先级
 - 新想法记录在 `docs/规划/` 下，标注优先级和影响范围
 - 重大方向调整需更新本文档后继续
 
@@ -345,36 +420,37 @@ class NotificationConfig:
 
 | 风险 | 影响 | 缓解 |
 |------|------|------|
-| 前端迁移工作量超预期 | 第1周延期，挤压后续 | 先迁移 2-3 个核心页面即可，剩余页面后续迭代 |
+| 原生 JS 代码可维护性下降 | 新增功能与旧代码耦合 | 严格按 load/render 分离 + 命名空间隔离新增代码 |
 | AKShare/腾讯行情 API 变动 | 荐股价格跟踪失败 | 现有双源回退机制 + 数据源错误日志 |
 | AI 提取荐股准确率不足 | 评分数据质量差 | "AI提取+人工确认"机制兜底 |
 | LLM API 不稳定 | 分析流程中断 | LLM 容错 + json-repair，非阻塞 |
 | 企微/Telegram API 配置复杂 | 通知功能无法上线 | 先确保邮件通知可用，企微/Telegram 作为可选增强 |
+| 前端未来迁移成本 | 代码不符合迁移映射 | 新增代码强制按命名空间 + load/render 模式编写 |
 
 ---
 
 ## 六、验收标准
 
-### 6.1 前端工程化
-- [ ] Vite + React + TS 项目搭建完成，开发服务器可启动
-- [ ] 现有 9 个页面至少迁移 3 个为 React 组件
-- [ ] 视觉风格与原版一致（CSS Token 映射完成）
-- [ ] TradingView K 线图在 React 中正常渲染
+### 6.1 前端迁移就绪
+- [ ] 新增页面代码按 `load/render` 分离模式编写
+- [ ] API 调用封装为独立函数，不和 DOM 操作混写
+- [ ] 页面状态挂在 `window.StockPulse.pages.*` 下
+- [ ] 无新增全局变量泄漏
 
-### 6.2 博主荐股评分系统
-- [ ] 数据库表创建完成
+### 6.2 博主荐股评分系统（M1-M5）
+- [ ] 数据库表创建完成（blogger_recommendations + recommendation_scores）
 - [ ] AI 分析流程可提取荐股信息
 - [ ] 用户可确认/修正荐股记录
 - [ ] 后台定时任务每日更新价格
 - [ ] 博主排行榜卡片页可展示
 - [ ] 详情页展示四项指标和荐股明细
 
-### 6.3 AI 分析升级
+### 6.3 AI 分析升级（M6）
 - [ ] YAML 策略文件可加载和使用
 - [ ] LLM 返回格式错误时自动修复
 - [ ] 非交易日自动跳过行情获取
 
-### 6.4 通知与事件监控
+### 6.4 通知与事件监控（M7）
 - [ ] 企微机器人可推送消息
 - [ ] Telegram Bot 可推送消息
 - [ ] 价格预警事件可触发推送
