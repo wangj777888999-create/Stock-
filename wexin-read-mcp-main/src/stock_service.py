@@ -550,6 +550,7 @@ class StockService:
                             data = r.json()
                             kdata_node = data.get("data", {}).get(f"{exchange_prefix}{norm}", {})
                             kdata = kdata_node.get(tencent_period, []) or \
+                                    kdata_node.get(f"qfq{tencent_period}", []) or \
                                     kdata_node.get("qfqday", []) or \
                                     kdata_node.get("day", [])
                             if kdata:
