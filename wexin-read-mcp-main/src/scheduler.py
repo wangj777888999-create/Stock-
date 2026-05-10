@@ -27,8 +27,8 @@ def _load_config() -> dict:
 
 
 async def auto_scrape_job(blogger_mgr, scraper, config):
-    """每日自动采集：抓取新文章 → AI扫描 → 存库"""
-    from database import get_db
+    """每日自动采集：抓取新文章 → 存库 → AI扫描"""
+    from article_storage import save_articles, get_existing_urls, update_mentions
     from analyzer import ArticleAnalyzer
 
     logger.info("=== 自动采集开始 ===")
@@ -48,7 +48,6 @@ async def auto_scrape_job(blogger_mgr, scraper, config):
     scfg = _load_config()
     articles_count = scfg.get("articles_per_blogger", 3)
 
-    db = get_db()
     analyzer = ArticleAnalyzer(config)
     total_new = 0
     errors = []
@@ -68,12 +67,7 @@ async def auto_scrape_job(blogger_mgr, scraper, config):
             articles_meta = result.get("articles", [])
 
             # 过滤已抓取的（按 url 去重）
-            existing_urls = set()
-            rows = db.execute(
-                "SELECT url FROM scraped_articles WHERE blogger_id = ?", (blogger_id,)
-            ).fetchall()
-            for row in rows:
-                existing_urls.add(row[0])
+            existing_urls = get_existing_urls(blogger_id)
 
             new_urls = [a for a in articles_meta if a.get("url") not in existing_urls]
             if not new_urls:
@@ -97,43 +91,26 @@ async def auto_scrape_job(blogger_mgr, scraper, config):
             if not scraped_articles:
                 continue
 
-            # AI 扫描
-            scan_result = await analyzer.extract_mentions(scraped_articles)
-            mentions = scan_result.get("mentions", []) if scan_result.get("success") else []
+            # 统一存储（先存文章，mentions 后补）
+            save_result = save_articles(scraped_articles, blogger_id=blogger_id)
+            total_new += save_result["inserted"]
+            logger.info(f"[{blogger_name}] 新增 {save_result['inserted']} 篇文章")
 
-            # 按 article_url 分组 mentions
-            mentions_by_url = {}
-            for m in mentions:
-                article_url = m.get("article_url", "")
-                if article_url:
-                    mentions_by_url.setdefault(article_url, []).append(m)
-
-            # 存入数据库
-            for article in scraped_articles:
-                url = article.get("url", "")
-                article_mentions = mentions_by_url.get(url, [])
-                try:
-                    db.execute(
-                        """INSERT OR IGNORE INTO scraped_articles
-                           (blogger_id, title, url, author, publish_time, content, cover_url, ai_mentions)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (
-                            blogger_id,
-                            article.get("title", "未知标题"),
-                            url,
-                            article.get("author", ""),
-                            article.get("publish_time", article.get("date", "")),
-                            article.get("content", ""),
-                            article.get("cover_url", ""),
-                            json.dumps(article_mentions, ensure_ascii=False),
-                        ),
-                    )
-                    total_new += 1
-                except Exception as e:
-                    logger.warning(f"存储文章失败: {e}")
-
-            db.commit()
-            logger.info(f"[{blogger_name}] 新增 {len(scraped_articles)} 篇文章")
+            # AI 扫描后更新 mentions
+            try:
+                scan_result = await analyzer.extract_mentions(scraped_articles)
+                if scan_result.get("success"):
+                    mentions = scan_result.get("mentions", [])
+                    mentions_by_url = {}
+                    for m in mentions:
+                        article_url = m.get("article_url", "")
+                        if article_url:
+                            mentions_by_url.setdefault(article_url, []).append(m)
+                    for url, url_mentions in mentions_by_url.items():
+                        update_mentions(url, url_mentions)
+                    logger.info(f"[{blogger_name}] AI 扫描完成: {len(mentions)} 条提及")
+            except Exception as e:
+                logger.warning(f"[{blogger_name}] AI 扫描失败（不影响存储）: {e}")
 
         except Exception as e:
             logger.error(f"[{blogger_name}] 采集异常: {e}", exc_info=True)

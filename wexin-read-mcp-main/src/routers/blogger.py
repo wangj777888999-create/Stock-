@@ -76,8 +76,11 @@ async def _capture_qr_code(page, selector: str) -> str:
         return ""
 
 
-async def _scrape_urls(ws: WebSocket, urls: list[str]) -> list[dict]:
-    """阶段1: 并发抓取文章列表（最多 3 篇同时抓取）"""
+async def _scrape_urls(ws: WebSocket, urls: list[str], url_to_blogger: dict[str, str] | None = None) -> list[dict]:
+    """阶段1: 并发抓取文章列表（最多 3 篇同时抓取）。
+    url_to_blogger 用于将 blogger_id 附加到每个 article dict 上。"""
+    from article_storage import MANUAL_BLOGGER_ID
+
     total = len(urls)
     urls = [u.strip() for u in urls if u.strip()]
 
@@ -92,6 +95,11 @@ async def _scrape_urls(ws: WebSocket, urls: list[str]) -> list[dict]:
             result = await scraper.fetch_article(url)
             done_count += 1
             if result.get("success"):
+                # 附加 blogger_id
+                if url_to_blogger:
+                    result["blogger_id"] = url_to_blogger.get(url, MANUAL_BLOGGER_ID)
+                else:
+                    result["blogger_id"] = MANUAL_BLOGGER_ID
                 await ws.send_json({
                     "type": "article_done", "current": done_count, "total": total,
                     "title": result.get("title", "未知"),
@@ -114,9 +122,11 @@ async def _scrape_urls(ws: WebSocket, urls: list[str]) -> list[dict]:
     return articles
 
 
-async def _resolve_blogger_urls(ws: WebSocket, blogger_ids: list[str], mode: str = "latest_n", count: int = 5, period: str | None = None) -> list[str]:
-    """将选中的博主ID解析为文章URL列表（并发获取，信号量限流）"""
+async def _resolve_blogger_urls(ws: WebSocket, blogger_ids: list[str], mode: str = "latest_n", count: int = 5, period: str | None = None) -> tuple[list[str], dict[str, str]]:
+    """将选中的博主ID解析为文章URL列表（并发获取，信号量限流）。
+    返回 (urls, url_to_blogger_id) 二元组。"""
     all_urls = []
+    url_to_blogger: dict[str, str] = {}
     total = len(blogger_ids)
 
     await ws.send_json({"type": "phase", "phase": "resolve", "message": f"正在获取 {total} 位博主的最新文章..."})
@@ -128,16 +138,16 @@ async def _resolve_blogger_urls(ws: WebSocket, blogger_ids: list[str], mode: str
         if not blogger:
             await ws.send_json({"type": "log", "level": "warning", "message": f"博主 {bid} 不存在，跳过"})
             continue
-        bloggers_to_fetch.append(blogger)
+        bloggers_to_fetch.append((bid, blogger))
 
     if not bloggers_to_fetch:
-        return all_urls
+        return all_urls, url_to_blogger
 
     # 并发获取，信号量控制最多3个同时请求避免限频
     sem = asyncio.Semaphore(3)
     results = [None] * len(bloggers_to_fetch)
 
-    async def fetch_one(idx, blogger):
+    async def fetch_one(idx, bid, blogger):
         async with sem:
             name = blogger.get("name", "未知")
             await ws.send_json({
@@ -145,21 +155,24 @@ async def _resolve_blogger_urls(ws: WebSocket, blogger_ids: list[str], mode: str
                 "message": f"[{idx+1}/{total}] 正在获取「{name}」的最新文章...",
             })
             result = await blogger_mgr.fetch_recent_articles(blogger, count=count, mode=mode, period=period)
-            results[idx] = (blogger, result)
+            results[idx] = (bid, blogger, result)
 
     # 并发执行
-    tasks = [fetch_one(i, b) for i, b in enumerate(bloggers_to_fetch)]
+    tasks = [fetch_one(i, b, bg) for i, (b, bg) in enumerate(bloggers_to_fetch)]
     await asyncio.gather(*tasks, return_exceptions=True)
 
     # 收集结果
     for item in results:
         if not item:
             continue
-        blogger, result = item
+        bid, blogger, result = item
         name = blogger.get("name", "未知")
         if isinstance(result, dict) and result.get("success") and result.get("articles"):
             urls = [a["url"] for a in result["articles"] if a.get("url")]
             all_urls.extend(urls)
+            for a in result["articles"]:
+                if a.get("url"):
+                    url_to_blogger[a["url"]] = bid
             titles = ", ".join(a.get("title", "")[:20] for a in result["articles"][:3] if a.get("title"))
             await ws.send_json({
                 "type": "log", "level": "success",
@@ -172,7 +185,7 @@ async def _resolve_blogger_urls(ws: WebSocket, blogger_ids: list[str], mode: str
                 "message": f"「{name}」获取失败: {err}",
             })
 
-    return all_urls
+    return all_urls, url_to_blogger
 
 
 # ---------- 博主管理API ----------
@@ -442,6 +455,7 @@ async def websocket_task(ws: WebSocket):
 
         # --- 确定要抓取的URL列表 ---
         urls = []
+        url_to_blogger: dict[str, str] = {}
         if mode == "bloggers":
             blogger_ids = data.get("blogger_ids", [])
             extra_urls = data.get("extra_urls", [])
@@ -452,7 +466,7 @@ async def websocket_task(ws: WebSocket):
                 await ws.send_json({"type": "error", "message": "请选择至少一个博主或输入文章链接"})
                 return
             if blogger_ids:
-                urls = await _resolve_blogger_urls(ws, blogger_ids, mode=scrape_mode, count=scrape_count, period=scrape_period)
+                urls, url_to_blogger = await _resolve_blogger_urls(ws, blogger_ids, mode=scrape_mode, count=scrape_count, period=scrape_period)
             # 合并手动补充的链接
             for u in extra_urls:
                 u = u.strip()
@@ -472,7 +486,7 @@ async def websocket_task(ws: WebSocket):
                 return
 
         # --- 阶段1: 抓取文章内容 ---
-        articles = await _scrape_urls(ws, urls)
+        articles = await _scrape_urls(ws, urls, url_to_blogger)
 
         if not articles:
             await ws.send_json({"type": "error", "message": "所有文章抓取失败，请检查链接"})
@@ -480,23 +494,92 @@ async def websocket_task(ws: WebSocket):
 
         # --- 阶段1.5: AI 股票提及扫描（不阻塞主流程） ---
         mentions = []
+        mentions_by_url: dict[str, list] = {}
         try:
             analyzer = ArticleAnalyzer(config)
             scan_result = await analyzer.extract_mentions(articles)
             if scan_result.get("success"):
                 mentions = scan_result.get("mentions", [])
+                for m in mentions:
+                    article_url = m.get("article_url", "")
+                    if article_url:
+                        mentions_by_url.setdefault(article_url, []).append(m)
                 logger.info(f"股票提及扫描完成: 发现 {len(mentions)} 条")
         except Exception as e:
             logger.warning(f"股票提及扫描失败（不影响主流程）: {e}")
 
-        # --- 通知前端: 文章收集完成，等待用户选择 ---
+        # --- 阶段1.6: 发送文章列表供前端勾选 ---
+        from article_storage import make_preview
+
+        article_previews = []
+        for a in articles:
+            article_previews.append({
+                "url": a.get("url", ""),
+                "title": a.get("title", "未知标题"),
+                "author": a.get("author", ""),
+                "publish_time": a.get("publish_time", a.get("date", "")),
+                "content_preview": make_preview(a.get("content", "")),
+            })
+
         await ws.send_json({
             "type": "articles_collected",
             "count": len(articles),
             "total": len(urls),
-            "message": f"成功抓取 {len(articles)}/{len(urls)} 篇文章，请选择输出方式",
+            "message": f"成功抓取 {len(articles)}/{len(urls)} 篇文章，请选择要存储的文章",
+            "articles": article_previews,
             "mentions": mentions,
         })
+
+        # --- 等待用户勾选要存储的文章 ---
+        # Review fix: 超时300秒，默认全存；断线直接退出
+        selected_urls_set: set[str] | None = None
+        try:
+            select_msg = await asyncio.wait_for(ws.receive_json(), timeout=300)
+            if "selected_urls" in select_msg:
+                raw = select_msg["selected_urls"]
+                if raw is None or (isinstance(raw, list) and len(raw) == 0):
+                    # 新版前端用户主动不选任何文章
+                    selected_urls_set = set()
+                else:
+                    selected_urls_set = set(raw)
+            # selected_urls 缺失 → 旧版前端，默认全部存储
+        except asyncio.TimeoutError:
+            logger.info("用户勾选超时(300s)，默认全部存储")
+            # selected_urls_set 保持 None，后续按全存处理
+        except WebSocketDisconnect:
+            logger.info("用户勾选阶段断开连接")
+            return
+
+        # 存储选中的文章
+        if selected_urls_set is not None and len(selected_urls_set) == 0:
+            # 用户主动不选任何文章，跳过存储
+            await ws.send_json({"type": "log", "level": "info", "message": "未选择任何文章，跳过存储"})
+        else:
+            if selected_urls_set is not None:
+                selected_articles = [a for a in articles if a.get("url") in selected_urls_set]
+            else:
+                # 前向兼容：默认全部存储
+                selected_articles = articles
+
+            if selected_articles:
+                await ws.send_json({
+                    "type": "phase", "phase": "save",
+                    "message": f"正在存储 {len(selected_articles)} 篇文章...",
+                })
+                from article_storage import save_articles
+                # 按 blogger_id 分组存储
+                by_blogger: dict[str, list[dict]] = {}
+                for a in selected_articles:
+                    bid = a.get("blogger_id", "__manual__")
+                    by_blogger.setdefault(bid, []).append(a)
+                total_saved = 0
+                for bid, group in by_blogger.items():
+                    result = save_articles(group, blogger_id=bid, ai_mentions=mentions_by_url)
+                    total_saved += result["inserted"]
+                await ws.send_json({
+                    "type": "log", "level": "success",
+                    "message": f"已存储 {total_saved} 篇文章到数据库",
+                })
 
         # --- 等待用户选择: 仅汇总 or AI分析（可指定多个投资视角）---
         choice = await ws.receive_json()

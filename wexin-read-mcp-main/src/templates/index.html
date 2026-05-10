@@ -632,6 +632,24 @@ textarea.form-input {
 .choice-option-desc  { font-size: 11px; color: var(--ink-3); }
 
 /* ============================================================
+   ARTICLE SELECT
+   ============================================================ */
+.article-select-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  transition: background var(--t);
+}
+.article-select-item:hover { background: var(--surface-2); }
+.article-select-item:last-child { border-bottom: none; }
+.article-select-item input[type=checkbox] {
+  margin-top: 3px; width: 16px; height: 16px; cursor: pointer; flex-shrink: 0;
+}
+.article-select-info { flex: 1; min-width: 0; }
+.article-select-title { font-size: 13px; font-weight: 600; color: var(--ink); line-height: 1.4; }
+.article-select-meta { font-size: 11px; color: var(--ink-3); margin-top: 3px; }
+.article-select-preview { font-size: 11.5px; color: var(--ink-2); margin-top: 4px; line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* ============================================================
    REPORT
    ============================================================ */
 .report-wrap { display: none; }
@@ -1281,6 +1299,18 @@ textarea.form-input {
               <ul id="articleList" style="list-style:none;"></ul>
             </div>
           </div>
+        </div>
+
+        <!-- Article Selection Panel -->
+        <div class="choice-panel" id="articleSelectPanel" style="display:none;">
+          <div class="choice-title" id="selectTitle">选择要存储的文章</div>
+          <div class="choice-sub" id="selectSub">默认全选，取消勾选以过滤广告文章</div>
+          <div style="display:flex;gap:8px;margin:12px 0;">
+            <button class="btn btn-sm" onclick="toggleAllArticles(true)" style="font-size:12px;padding:4px 12px;border-radius:6px;cursor:pointer;">全选</button>
+            <button class="btn btn-sm" onclick="toggleAllArticles(false)" style="font-size:12px;padding:4px 12px;border-radius:6px;cursor:pointer;">取消全选</button>
+          </div>
+          <div id="articleSelectList" style="max-height:400px;overflow-y:auto;margin:8px 0;"></div>
+          <button class="btn btn-primary" onclick="confirmArticleSelection()" style="margin-top:12px;width:100%;padding:10px;border-radius:8px;cursor:pointer;font-weight:600;">确认收集</button>
         </div>
 
         <!-- Choice Panel -->
@@ -2660,6 +2690,7 @@ function startTask() {
   document.getElementById('progressBar').classList.remove('green');
   document.getElementById('reportPreview').classList.remove('active');
   document.getElementById('choicePanel').classList.remove('active');
+  document.getElementById('articleSelectPanel').style.display = 'none';
   setFlowStep(1);
 
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -2718,10 +2749,19 @@ function handleWsMessage(msg) {
     }
     case 'articles_collected':
       document.getElementById('progressBar').style.width = '100%';
-      document.getElementById('choiceText').textContent = `成功收集 ${msg.count}/${msg.total} 篇文章`;
-      document.getElementById('choicePanel').classList.add('active');
-      document.getElementById('phaseStatus').textContent = '等待选择输出方式...';
+      document.getElementById('phaseStatus').textContent = '请选择要存储的文章';
       addLog(msg.message, 'success');
+      // 渲染文章勾选列表
+      if (msg.articles && msg.articles.length) {
+        renderArticleSelectList(msg.articles);
+        document.getElementById('articleSelectPanel').style.display = 'block';
+        document.getElementById('selectTitle').textContent = `选择要存储的文章 (${msg.count}/${msg.total})`;
+      } else {
+        // 无文章列表（旧版本后端），直接进入选择面板
+        document.getElementById('choiceText').textContent = `成功收集 ${msg.count}/${msg.total} 篇文章`;
+        document.getElementById('choicePanel').classList.add('active');
+        document.getElementById('phaseStatus').textContent = '等待选择输出方式...';
+      }
       break;
     case 'report':
       currentReport = msg.report;
@@ -2749,6 +2789,41 @@ function handleWsMessage(msg) {
       document.getElementById('phaseStatus').textContent = '出错: ' + msg.message;
       showToast(msg.message, 'error'); finish(); break;
   }
+}
+
+// 文章勾选面板
+let pendingArticles = [];
+
+function renderArticleSelectList(articles) {
+  pendingArticles = articles;
+  const container = document.getElementById('articleSelectList');
+  container.innerHTML = articles.map((a, i) => {
+    const meta = [a.author, a.publish_time].filter(Boolean).join(' · ');
+    return `<div class="article-select-item">
+      <input type="checkbox" checked data-url="${(a.url||'').replace(/"/g,'&quot;')}" id="artSel${i}">
+      <div class="article-select-info">
+        <div class="article-select-title">${a.title||'未知标题'}</div>
+        ${meta ? `<div class="article-select-meta">${meta}</div>` : ''}
+        ${a.content_preview ? `<div class="article-select-preview">${a.content_preview}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleAllArticles(checked) {
+  document.querySelectorAll('#articleSelectList input[type=checkbox]').forEach(cb => cb.checked = checked);
+}
+
+function confirmArticleSelection() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) { showToast('连接已断开，请重新开始', 'error'); return; }
+  const selectedUrls = Array.from(document.querySelectorAll('#articleSelectList input[type=checkbox]:checked'))
+    .map(cb => cb.dataset.url);
+  document.getElementById('articleSelectPanel').style.display = 'none';
+  document.getElementById('choiceText').textContent = `已选择 ${selectedUrls.length} 篇文章`;
+  document.getElementById('choicePanel').classList.add('active');
+  document.getElementById('phaseStatus').textContent = '等待选择输出方式...';
+  addLog(`已选择 ${selectedUrls.length} 篇文章待存储`, 'info');
+  ws.send(JSON.stringify({ selected_urls: selectedUrls }));
 }
 
 function continueTask(analyze, personas) {
