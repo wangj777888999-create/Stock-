@@ -3197,6 +3197,7 @@ let _klineSeries = null;
 let _klineVolSeries = null;
 let _klineMacdChart = null;
 let _klineRsiChart = null;
+let _klineResizeObserver = null;
 
 /* --- 搜索 --- */
 async function searchStock() {
@@ -3345,11 +3346,17 @@ function _disposeKlineSubCharts() {
   if (rsiWrap) rsiWrap.style.display = 'none';
 }
 
+function _disposeMainChart() {
+  if (_klineResizeObserver) { _klineResizeObserver.disconnect(); _klineResizeObserver = null; }
+  if (_klineChart) { try { _klineChart.remove(); } catch(e){} _klineChart = null; _klineSeries = null; _klineVolSeries = null; }
+}
+
 async function loadKline(period) {
   if (!_stockCode) return;
   const container = document.getElementById('klineChart');
   const isIntraday = ['1min','5min','15min','30min','60min'].includes(period);
   const showIndicators = ['day','week','month'].includes(period);
+  _disposeMainChart();
   _disposeKlineSubCharts();
   try {
     const url = isIntraday
@@ -3408,7 +3415,8 @@ async function loadKline(period) {
       fixRightEdge: true,
     });
 
-    new ResizeObserver(() => { if (_klineChart) _klineChart.applyOptions({ width: container.clientWidth }); }).observe(container);
+    _klineResizeObserver = new ResizeObserver(() => { if (_klineChart) _klineChart.applyOptions({ width: container.clientWidth }); });
+    _klineResizeObserver.observe(container);
 
     // --- Indicator sub-charts (MACD + RSI) ---
     if (showIndicators && json.indicators) {

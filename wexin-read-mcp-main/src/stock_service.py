@@ -96,6 +96,41 @@ def _clean(v):
     return v
 
 
+# ─── K 线列名别名映射（防御 AKShare 版本漂移）───
+KLINE_COL_ALIASES = {
+    "date":   ["日期", "date", "Date", "交易日"],
+    "open":   ["开盘", "open", "Open", "开盘价"],
+    "close":  ["收盘", "close", "Close", "收盘价"],
+    "high":   ["最高", "high", "High", "最高价"],
+    "low":    ["最低", "low", "Low", "最低价"],
+    "volume": ["成交量", "volume", "Volume", "成交量(手)"],
+}
+
+
+def _resolve_col(df_columns, aliases):
+    """从候选列名列表中找到 DataFrame 实际存在的列名，找不到返回 None。"""
+    for name in aliases:
+        if name in df_columns:
+            return name
+    return None
+
+
+def _extract_kline_row(row, col_map):
+    """用已解析的列映射从行中提取 OHLCV，任一关键列缺失则返回 None。"""
+    date_col = col_map.get("date")
+    date_val = row.get(date_col) if date_col else None
+    if date_val is None:
+        return None
+    return {
+        "date": str(date_val)[:10],
+        "open": _clean(row.get(col_map.get("open"))),
+        "close": _clean(row.get(col_map.get("close"))),
+        "high": _clean(row.get(col_map.get("high"))),
+        "low": _clean(row.get(col_map.get("low"))),
+        "volume": _clean(row.get(col_map.get("volume"))),
+    }
+
+
 def _aggregate_kline(df, period: str):
     """将日线数据聚合为周线或月线。df 需有 date/open/high/low/close/volume 列。"""
     import pandas as pd
@@ -475,73 +510,99 @@ class StockService:
                     # A 股日/周/月：AKShare（腾讯 API 每请求仅返回 ~640 条，历史数据不足）
                     period_map = {"day": "daily", "week": "weekly", "month": "monthly"}
                     ak_period = period_map.get(period, "daily")
-                    df = await asyncio.to_thread(
-                        _patch_requests, ak.stock_zh_a_hist,
-                        symbol=norm, period=ak_period,
-                        start_date="20050101", end_date="20300101", adjust="qfq",
-                    )
+                    try:
+                        df = await asyncio.wait_for(
+                            asyncio.to_thread(
+                                _patch_requests, ak.stock_zh_a_hist,
+                                symbol=norm, period=ak_period,
+                                start_date="20050101", end_date="20300101", adjust="qfq",
+                            ),
+                            timeout=15.0,
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning(f"AKShare 请求超时 ({symbol})")
+                        return {"success": False, "error": "行情数据源请求超时，请稍后重试"}
                     if df is None or df.empty:
                         return {"success": False, "error": "暂无K线数据"}
+                    col_map = {f: _resolve_col(df.columns, a) for f, a in KLINE_COL_ALIASES.items()}
+                    missing = [f for f, c in col_map.items() if c is None]
+                    if missing:
+                        logger.error(f"K线列名映射失败 ({symbol}): 缺少 {missing}，实际列={list(df.columns)}")
+                        return {"success": False, "error": f"数据源列名变更，缺少: {missing}"}
                     if count < 99999:
                         df = df.tail(count)
                     records = []
                     for _, row in df.iterrows():
-                        records.append({
-                            "date": str(row["日期"])[:10],
-                            "open": _clean(row.get("开盘")),
-                            "close": _clean(row.get("收盘")),
-                            "high": _clean(row.get("最高")),
-                            "low": _clean(row.get("最低")),
-                            "volume": _clean(row.get("成交量")),
-                        })
+                        rec = _extract_kline_row(row, col_map)
+                        if rec:
+                            records.append(rec)
 
             elif market == "hk":
                 # 港股：AKShare stock_hk_hist
                 period_map = {"day": "daily", "week": "weekly", "month": "monthly"}
                 ak_period = period_map.get(period, "daily")
-                df = await asyncio.to_thread(
-                    _patch_requests, ak.stock_hk_hist,
-                    symbol=original, period=ak_period,
-                    start_date="20100101", end_date="20300101", adjust="qfq",
-                )
+                try:
+                    df = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            _patch_requests, ak.stock_hk_hist,
+                            symbol=original, period=ak_period,
+                            start_date="20100101", end_date="20300101", adjust="qfq",
+                        ),
+                        timeout=15.0,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"AKShare 请求超时 ({symbol})")
+                    return {"success": False, "error": "行情数据源请求超时，请稍后重试"}
                 if df is None or df.empty:
                     return {"success": False, "error": "暂无K线数据"}
+                col_map = {f: _resolve_col(df.columns, a) for f, a in KLINE_COL_ALIASES.items()}
+                missing = [f for f, c in col_map.items() if c is None]
+                if missing:
+                    logger.error(f"K线列名映射失败 ({symbol}): 缺少 {missing}，实际列={list(df.columns)}")
+                    return {"success": False, "error": f"数据源列名变更，缺少: {missing}"}
                 if count < 99999:
                     df = df.tail(count)
                 records = []
                 for _, row in df.iterrows():
-                    records.append({
-                        "date": str(row["日期"])[:10],
-                        "open": _clean(row.get("开盘")),
-                        "close": _clean(row.get("收盘")),
-                        "high": _clean(row.get("最高")),
-                        "low": _clean(row.get("最低")),
-                        "volume": _clean(row.get("成交量")),
-                    })
+                    rec = _extract_kline_row(row, col_map)
+                    if rec:
+                        records.append(rec)
 
             else:
                 # 美股：AKShare stock_us_daily（仅支持日线）
-                df = await asyncio.to_thread(
-                    _patch_requests, ak.stock_us_daily,
-                    symbol=norm, adjust="qfq",
-                )
+                try:
+                    df = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            _patch_requests, ak.stock_us_daily,
+                            symbol=norm, adjust="qfq",
+                        ),
+                        timeout=15.0,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(f"AKShare 请求超时 ({symbol})")
+                    return {"success": False, "error": "行情数据源请求超时，请稍后重试"}
                 if df is None or df.empty:
                     return {"success": False, "error": "暂无K线数据"}
+                # 美股列名已是英文，但仍走统一映射
+                col_map = {f: _resolve_col(df.columns, a) for f, a in KLINE_COL_ALIASES.items()}
+                missing = [f for f, c in col_map.items() if c is None]
+                if missing:
+                    logger.error(f"K线列名映射失败 ({symbol}): 缺少 {missing}，实际列={list(df.columns)}")
+                    return {"success": False, "error": f"数据源列名变更，缺少: {missing}"}
                 # 日线：直接取最近 count 条；周/月：需要聚合
                 if period in ("week", "month"):
-                    df = _aggregate_kline(df, period)
+                    # 聚合需要英文列名
+                    agg_df = df.rename(columns={col_map[k]: k for k in ("date","open","high","low","close","volume") if col_map.get(k)})
+                    agg_df = _aggregate_kline(agg_df, period)
+                    col_map = {f: _resolve_col(agg_df.columns, a) for f, a in KLINE_COL_ALIASES.items()}
+                    df = agg_df
                 if count < 99999:
                     df = df.tail(count)
                 records = []
                 for _, row in df.iterrows():
-                    records.append({
-                        "date": str(row["date"])[:10],
-                        "open": _clean(row.get("open")),
-                        "close": _clean(row.get("close")),
-                        "high": _clean(row.get("high")),
-                        "low": _clean(row.get("low")),
-                        "volume": _clean(row.get("volume")),
-                    })
+                    rec = _extract_kline_row(row, col_map)
+                    if rec:
+                        records.append(rec)
 
             # 计算技术指标
             ind_data = {}
@@ -559,7 +620,13 @@ class StockService:
                 if "boll" in requested:
                     ind_data["boll"] = calc_boll(close_prices)
 
-            resp = {"success": True, "data": records}
+            # 验证记录有效性：防止全 None 数据被缓存
+            valid_records = [r for r in records if r.get("close") is not None and r.get("open") is not None]
+            if not valid_records:
+                logger.error(f"K线记录全部无效 ({symbol})，不写缓存")
+                return {"success": False, "error": "K线数据解析失败，所有OHLC字段为空"}
+
+            resp = {"success": True, "data": valid_records}
             if ind_data:
                 resp["indicators"] = ind_data
             cache.set(cache_key, resp, TTL_DAILY)

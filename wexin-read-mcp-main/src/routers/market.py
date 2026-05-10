@@ -1,5 +1,5 @@
 """多市场板块路由 — 港股/美股/基金/期货"""
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from market import get_provider
 
 router = APIRouter()
@@ -53,7 +53,7 @@ async def api_fund_detail(code: str):
 
 
 @router.get("/api/futures/kline/{symbol}")
-async def api_futures_kline(symbol: str, count: int = 120, all_history: bool = False):
+async def api_futures_kline(symbol: str, count: int = Query(default=120, ge=1, le=1000), all_history: bool = False):
     """期货 K 线"""
     provider = get_provider("futures")
     if not provider:
