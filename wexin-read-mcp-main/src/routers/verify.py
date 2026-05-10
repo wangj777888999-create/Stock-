@@ -97,8 +97,9 @@ async def import_csv(file: UploadFile):
     content = await file.read()
     reader = csv.DictReader(io.StringIO(content.decode("utf-8")))
     imported, skipped = 0, 0
+    errors = []
     db = get_db()
-    for row in reader:
+    for line_num, row in enumerate(reader, start=2):  # 第1行是表头
         try:
             db.execute(
                 "INSERT INTO real_trades (symbol, market, direction, price, quantity, fee, trade_date, source) VALUES (?,?,?,?,?,?,?,'csv_import')",
@@ -106,7 +107,11 @@ async def import_csv(file: UploadFile):
                  float(row.get("price",0)), float(row.get("quantity",0)), float(row.get("fee",0)), row.get("trade_date","")),
             )
             imported += 1
-        except Exception:
+        except Exception as e:
             skipped += 1
+            errors.append(f"第{line_num}行: {e}")
     db.commit()
+    if errors:
+        import logging
+        logging.getLogger(__name__).warning(f"CSV导入跳过{skipped}行: {'; '.join(errors[:5])}")
     return {"success": True, "imported": imported, "skipped": skipped}

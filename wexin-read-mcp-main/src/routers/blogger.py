@@ -485,6 +485,28 @@ async def websocket_task(ws: WebSocket):
                 await ws.send_json({"type": "error", "message": "请输入至少一个链接"})
                 return
 
+        # URL 协议白名单校验（防止 file:// / javascript: / 内网访问）
+        ALLOWED_SCHEMES = {"http", "https"}
+        ALLOWED_HOSTS = {"mp.weixin.qq.com", "mp.weixin.qq.com"}
+        validated_urls = []
+        for u in urls:
+            from urllib.parse import urlparse
+            parsed = urlparse(u)
+            if parsed.scheme not in ALLOWED_SCHEMES:
+                logger.warning(f"拒绝非 HTTP(S) 协议 URL: {u[:60]}")
+                continue
+            if parsed.hostname and not any(
+                parsed.hostname == h or parsed.hostname.endswith("." + h)
+                for h in ALLOWED_HOSTS
+            ):
+                logger.warning(f"拒绝非微信域名 URL: {u[:60]}")
+                continue
+            validated_urls.append(u)
+        urls = validated_urls
+        if not urls:
+            await ws.send_json({"type": "error", "message": "所有链接均不合法，仅支持 mp.weixin.qq.com 域名"})
+            return
+
         # --- 阶段1: 抓取文章内容 ---
         articles = await _scrape_urls(ws, urls, url_to_blogger)
 

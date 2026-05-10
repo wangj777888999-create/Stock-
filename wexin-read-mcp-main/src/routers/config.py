@@ -82,7 +82,7 @@ async def get_config():
         "ai_model": config.ai.model,
         "wechat_cookie": "******" if config.wechat.cookie else "",
         "mp_cookie": "******" if config.wechat.mp_cookie else "",
-        "mp_token": config.wechat.mp_token or "",
+        "mp_token": "******" if config.wechat.mp_token else "",
     }
 
 
@@ -140,7 +140,9 @@ async def test_mp_credentials():
         else:
             return {"success": False, "status": "失效", "message": f"凭证无效(ret={ret})，请重新登录 mp.weixin.qq.com 获取"}
     except Exception as e:
-        return {"success": False, "status": "错误", "message": f"测试失败: {str(e)}"}
+        import logging
+        logging.getLogger(__name__).error(f"测试公众号凭证异常: {e}", exc_info=True)
+        return {"success": False, "status": "错误", "message": "测试失败，请检查网络连接后重试"}
 
 
 @router.get("/api/config/mp-login-status")
@@ -181,4 +183,6 @@ async def get_mp_login_status():
         else:
             return {"logged_in": False, "status": "失效", "message": "登录已失效，请重新扫码登录"}
     except Exception as e:
-        return {"logged_in": False, "status": "错误", "message": f"检测失败: {str(e)}"}
+        import logging
+        logging.getLogger(__name__).error(f"检测登录状态异常: {e}", exc_info=True)
+        return {"logged_in": False, "status": "错误", "message": "检测失败，请检查网络连接后重试"}

@@ -123,14 +123,18 @@ async def _startup():
 
 @app.on_event("shutdown")
 async def _shutdown():
-    """关闭时清理数据库连接。"""
+    """关闭时清理资源。"""
     try:
         from scheduler import stop_scheduler
         stop_scheduler()
     except Exception:
         pass
+    try:
+        await scraper.cleanup()
+    except Exception:
+        pass
     close_db()
-    logger.info("数据库连接已关闭")
+    logger.info("应用已关闭")
 
 
 if __name__ == "__main__":

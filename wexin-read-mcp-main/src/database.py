@@ -207,8 +207,10 @@ def _migrate():
     for sql in migrations:
         try:
             _db.execute(sql)
-        except sqlite3.OperationalError:
-            pass
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" not in str(e).lower():
+                logger.error(f"数据库迁移失败: {sql} — {e}")
+                raise
 
 
 def close_db() -> None:

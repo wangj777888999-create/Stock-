@@ -108,7 +108,15 @@ class ArticleAnalyzer:
 
         # 并行调用多个 persona
         tasks = [self._run_persona(p, articles_text, today) for p in personas]
-        results = await asyncio.gather(*tasks, return_exceptions=False)
+        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
+        # 将异常转为错误结构，避免单个 persona 失败导致全部丢失
+        results = []
+        for i, r in enumerate(raw_results):
+            if isinstance(r, Exception):
+                logger.error(f"Persona {personas[i].name} 分析失败: {r}")
+                results.append({"success": False, "report": "", "error": str(r)})
+            else:
+                results.append(r)
 
         # 拼装为单份多视角报告
         return self._assemble_report(personas, results, today, len(articles))
@@ -183,7 +191,12 @@ class ArticleAnalyzer:
                 )
                 response.raise_for_status()
                 data = response.json()
-                report = data["choices"][0]["message"]["content"]
+                choices = data.get("choices", [])
+                if not choices:
+                    return {"success": False, "report": "", "error": "AI返回空结果（配额耗尽或内容被过滤）"}
+                report = choices[0].get("message", {}).get("content", "")
+                if not report:
+                    return {"success": False, "report": "", "error": "AI返回内容为空"}
                 return {"success": True, "report": report, "error": None}
 
         except Exception as e:
@@ -270,7 +283,12 @@ confidence 含义：
                 )
                 response.raise_for_status()
                 data = response.json()
-                raw = data["choices"][0]["message"]["content"]
+                choices = data.get("choices", [])
+                if not choices:
+                    return {"success": False, "mentions": [], "error": "AI返回空结果"}
+                raw = choices[0].get("message", {}).get("content", "")
+                if not raw:
+                    return {"success": False, "mentions": [], "error": "AI返回内容为空"}
 
             # 解析 JSON（兼容 markdown 代码块包裹的情况）
             text = raw.strip()
