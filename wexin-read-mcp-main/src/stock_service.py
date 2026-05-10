@@ -507,7 +507,9 @@ class StockService:
                             "volume": int(float(item["volume"])),
                         })
                 else:
-                    # A 股日/周/月：AKShare（腾讯 API 每请求仅返回 ~640 条，历史数据不足）
+                    # A 股日/周/月：优先 AKShare，失败时降级到腾讯 API
+                    records = None
+                    # --- 方案 A：AKShare ---
                     period_map = {"day": "daily", "week": "weekly", "month": "monthly"}
                     ak_period = period_map.get(period, "daily")
                     try:
@@ -519,23 +521,55 @@ class StockService:
                             ),
                             timeout=15.0,
                         )
-                    except asyncio.TimeoutError:
-                        logger.warning(f"AKShare 请求超时 ({symbol})")
-                        return {"success": False, "error": "行情数据源请求超时，请稍后重试"}
-                    if df is None or df.empty:
+                        if df is not None and not df.empty:
+                            col_map = {f: _resolve_col(df.columns, a) for f, a in KLINE_COL_ALIASES.items()}
+                            missing = [f for f, c in col_map.items() if c is None]
+                            if missing:
+                                logger.error(f"K线列名映射失败 ({symbol}): 缺少 {missing}，实际列={list(df.columns)}")
+                            else:
+                                if count < 99999:
+                                    df = df.tail(count)
+                                records = []
+                                for _, row in df.iterrows():
+                                    rec = _extract_kline_row(row, col_map)
+                                    if rec:
+                                        records.append(rec)
+                    except (asyncio.TimeoutError, Exception) as e:
+                        logger.warning(f"AKShare 获取K线失败 ({symbol})，尝试腾讯API降级: {e}")
+
+                    # --- 方案 B：腾讯 API 降级 ---
+                    if not records:
+                        exchange_prefix = get_exchange(norm)
+                        tencent_period = {"day": "day", "week": "week", "month": "month"}[period]
+                        tencent_url = (
+                            f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+                            f"?param={exchange_prefix}{norm},{tencent_period},,,{min(count, 640)},qfq"
+                        )
+                        try:
+                            r = await asyncio.to_thread(_get, tencent_url, timeout=10)
+                            data = r.json()
+                            kdata_node = data.get("data", {}).get(f"{exchange_prefix}{norm}", {})
+                            kdata = kdata_node.get(tencent_period, []) or \
+                                    kdata_node.get("qfqday", []) or \
+                                    kdata_node.get("day", [])
+                            if kdata:
+                                records = []
+                                for item in kdata:
+                                    # 腾讯格式: [date, open, close, high, low, volume]
+                                    records.append({
+                                        "date": item[0],
+                                        "open": float(item[1]) if item[1] else None,
+                                        "close": float(item[2]) if item[2] else None,
+                                        "high": float(item[3]) if item[3] else None,
+                                        "low": float(item[4]) if item[4] else None,
+                                        "volume": float(item[5]) if len(item) > 5 and item[5] else None,
+                                    })
+                                logger.info(f"腾讯API降级成功 ({symbol})，获取 {len(records)} 条")
+                        except Exception as e2:
+                            logger.error(f"腾讯API降级也失败 ({symbol}): {e2}")
+
+                    if not records:
                         return {"success": False, "error": "暂无K线数据"}
-                    col_map = {f: _resolve_col(df.columns, a) for f, a in KLINE_COL_ALIASES.items()}
-                    missing = [f for f, c in col_map.items() if c is None]
-                    if missing:
-                        logger.error(f"K线列名映射失败 ({symbol}): 缺少 {missing}，实际列={list(df.columns)}")
-                        return {"success": False, "error": f"数据源列名变更，缺少: {missing}"}
-                    if count < 99999:
-                        df = df.tail(count)
-                    records = []
-                    for _, row in df.iterrows():
-                        rec = _extract_kline_row(row, col_map)
-                        if rec:
-                            records.append(rec)
 
             elif market == "hk":
                 # 港股：AKShare stock_hk_hist
