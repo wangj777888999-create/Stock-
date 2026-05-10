@@ -3352,8 +3352,9 @@ async function loadKline(period) {
   const showIndicators = ['day','week','month'].includes(period);
   _disposeKlineSubCharts();
   try {
-    const count = isIntraday ? 480 : 99999;
-    const url = `/api/stock/kline/${_stockCode}?period=${period}&count=${count}` + (showIndicators ? '&indicators=rsi,macd' : '');
+    const url = isIntraday
+      ? `/api/stock/kline/${_stockCode}?period=${period}&count=480`
+      : `/api/stock/kline/${_stockCode}?period=${period}&all_history=true` + (showIndicators ? '&indicators=rsi,macd' : '');
     const json = await (await fetch(url)).json();
     if (!json.success || !json.data?.length) { container.innerHTML = '<div class="empty-state" style="padding:40px;">暂无K线数据</div>'; return; }
 
@@ -4435,7 +4436,7 @@ async function selectFutures(code, name) {
 
   // 并行加载 K 线和龙虎榜
   const [klineResult, rankResult] = await Promise.allSettled([
-    fetch('/api/futures/kline/' + code + '?count=99999').then(r => r.json()),
+    fetch('/api/futures/kline/' + code + '?all_history=true').then(r => r.json()),
     fetch('/api/futures/rank/' + code).then(r => r.json()),
   ]);
 

@@ -53,12 +53,13 @@ async def api_fund_detail(code: str):
 
 
 @router.get("/api/futures/kline/{symbol}")
-async def api_futures_kline(symbol: str, count: int = 120):
+async def api_futures_kline(symbol: str, count: int = 120, all_history: bool = False):
     """期货 K 线"""
     provider = get_provider("futures")
     if not provider:
         return {"success": False, "error": "期货服务不可用"}
-    return await provider.get_kline(symbol, count=count)
+    effective_count = 99999 if all_history else count
+    return await provider.get_kline(symbol, count=effective_count)
 
 
 @router.get("/api/futures/rank/{symbol}")

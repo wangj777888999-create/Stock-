@@ -39,11 +39,18 @@ async def api_stock_quote(symbol: str, auto: int = 0):
 
 
 @router.get("/api/stock/kline/{symbol}")
-async def api_stock_kline(symbol: str, period: str = "day", count: int = Query(default=120, ge=1, le=1000), indicators: str = ""):
+async def api_stock_kline(
+    symbol: str,
+    period: str = "day",
+    count: int = Query(default=120, ge=1, le=1000),
+    all_history: bool = False,
+    indicators: str = "",
+):
+    effective_count = 99999 if all_history else count
     market = detect_market(symbol)
     if market in ("kr", "jp"):
-        return await global_stock_service.get_kline(symbol, market, period, count)
-    return await stock_service.get_kline(symbol, period, count, indicators=indicators)
+        return await global_stock_service.get_kline(symbol, market, period, effective_count)
+    return await stock_service.get_kline(symbol, period, effective_count, indicators=indicators)
 
 
 @router.get("/api/stock/profile/{symbol}")
