@@ -96,6 +96,32 @@ def detect_market(code: str) -> str:
     return "a"
 
 
+# ─── NaN 清洗 ───
+
+import math
+
+
+def _clean(v):
+    """Convert NaN/NaT to None, Timestamp to str, numpy types to Python native."""
+    if v is None:
+        return None
+    if isinstance(v, pd.Timestamp):
+        return str(v)
+    try:
+        if pd.isna(v):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(v, float) and math.isnan(v):
+        return None
+    if hasattr(v, "item"):
+        try:
+            v = v.item()
+        except (ValueError, TypeError):
+            pass
+    return v
+
+
 # ─── TTL 缓存 ───
 
 TTL_REALTIME = 30
