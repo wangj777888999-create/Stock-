@@ -105,7 +105,6 @@ async def _startup():
     asyncio.create_task(StockService.preload_stock_list())
 
     async def _preload_fund():
-        """后台预加载基金 ETF 数据。"""
         try:
             from market.fund import _get_etf_df
             await _get_etf_df()
@@ -113,7 +112,40 @@ async def _startup():
         except Exception as e:
             logger.warning(f"基金数据预加载失败（首次访问时重试）: {e}")
 
+    async def _preload_sector_boards():
+        """预热板块列表（行业 + 概念），填充 L1+L2 缓存。"""
+        try:
+            from state import get_sector_service
+            svc = get_sector_service()
+            await asyncio.gather(
+                svc._get_boards_single("industry"),
+                svc._get_boards_single("concept"),
+            )
+            logger.info("板块列表预热完成")
+        except Exception as e:
+            logger.warning(f"板块列表预热失败（首次访问时重试）: {e}")
+
+    async def _preload_watchlist_quotes():
+        """预热自选股实时行情。"""
+        try:
+            from database import get_db
+            from stock_service import StockService as SS
+            db = get_db()
+            rows = db.execute("SELECT symbol FROM watchlist LIMIT 30").fetchall()
+            if not rows:
+                return
+            svc = SS()
+            await asyncio.gather(
+                *[svc.get_realtime_quote(r[0]) for r in rows],
+                return_exceptions=True,
+            )
+            logger.info(f"自选股行情预热完成（{len(rows)} 只）")
+        except Exception as e:
+            logger.warning(f"自选股预热失败: {e}")
+
     asyncio.create_task(_preload_fund())
+    asyncio.create_task(_preload_sector_boards())
+    asyncio.create_task(_preload_watchlist_quotes())
 
     # 启动定时采集调度器
     try:
