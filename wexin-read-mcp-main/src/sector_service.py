@@ -9,7 +9,7 @@ import re
 from typing import Literal
 
 import pandas as pd
-from stock_utils import _clean, cache, TTL_DAILY, TTL_REALTIME
+from stock_utils import _clean, cache, TTL_BOARDS, TTL_DAILY, TTL_KLINE, TTL_REALTIME
 from http_client import patch_requests
 
 logger = logging.getLogger(__name__)
@@ -353,7 +353,7 @@ class SectorService:
             df = await asyncio.to_thread(_fetch_boards_eastmoney, board_type)
             if df is not None and not df.empty:
                 data = _normalize_boards(df, board_type)
-                cache.set(ck, data, TTL_DAILY)
+                cache.set(ck, data, TTL_BOARDS)
                 return data
         except Exception as e:
             logger.warning(f"东方财富 {board_type} 板块失败: {e}")
@@ -368,7 +368,7 @@ class SectorService:
                 df = await asyncio.to_thread(_fetch_boards_ths, board_type)
             if df is not None and not df.empty:
                 data = _normalize_boards(df, board_type)
-                cache.set(ck, data, TTL_DAILY)
+                cache.set(ck, data, TTL_BOARDS)
                 return data
         except Exception as e:
             logger.warning(f"同花顺 {board_type} 板块也失败: {e}")
@@ -412,7 +412,7 @@ class SectorService:
                 if df is not None and not df.empty:
                     data = _normalize_stocks(df)
                     resp = {"success": True, "data": data, "total": len(data)}
-                    cache.set(ck, resp, TTL_REALTIME)
+                    cache.set(ck, resp, TTL_DAILY)
                     return resp
             except Exception as e:
                 logger.warning(f"东方财富成分股失败({board_name}): {e}")
@@ -424,7 +424,7 @@ class SectorService:
                 if df is not None and not df.empty:
                     data = _normalize_stocks(df)
                     resp = {"success": True, "data": data, "total": len(data)}
-                    cache.set(ck, resp, TTL_REALTIME)
+                    cache.set(ck, resp, TTL_DAILY)
                     return resp
             except Exception as e:
                 logger.warning(f"同花顺成分股也失败({board_name}): {e}")
@@ -464,7 +464,7 @@ class SectorService:
                     if count > 0:
                         data = data[-count:]
                     resp = {"success": True, "data": data, "total": len(data)}
-                    cache.set(ck, resp, TTL_DAILY)
+                    cache.set(ck, resp, TTL_KLINE)
                     return resp
             except Exception as e:
                 logger.warning(f"东方财富K线失败({board_name}): {e}")
@@ -478,7 +478,7 @@ class SectorService:
                     if count > 0:
                         data = data[-count:]
                     resp = {"success": True, "data": data, "total": len(data)}
-                    cache.set(ck, resp, TTL_DAILY)
+                    cache.set(ck, resp, TTL_KLINE)
                     return resp
             except Exception as e:
                 logger.warning(f"同花顺K线也失败({board_name}): {e}")

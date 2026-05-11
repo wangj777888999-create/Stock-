@@ -124,10 +124,12 @@ def _clean(v):
 
 # ─── TTL 缓存 ───
 
-TTL_REALTIME = 30
-TTL_REALTIME_REFRESH = 5
-TTL_DAILY = 300
-TTL_COMPANY = 86400
+TTL_REALTIME = 30          # 实时行情（30s）
+TTL_REALTIME_REFRESH = 5   # 强制刷新（5s）
+TTL_DAILY = 300            # 日内聚合行情（5min，盘中仍在变化）
+TTL_KLINE = 3600           # K 线历史（1h，日内不变）
+TTL_BOARDS = 1800          # 板块列表/成分股（30min）
+TTL_COMPANY = 86400        # 公司基本面（24h）
 
 
 # ─── 持久化缓存（SQLite）───

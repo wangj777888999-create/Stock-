@@ -26,6 +26,7 @@ import akshare as ak
 from stock_utils import (
     TTL_COMPANY,
     TTL_DAILY,
+    TTL_KLINE,
     TTL_REALTIME,
     TTL_REALTIME_REFRESH,
     cache,
@@ -664,7 +665,7 @@ class StockService:
             resp = {"success": True, "data": valid_records}
             if ind_data:
                 resp["indicators"] = ind_data
-            cache.set(cache_key, resp, TTL_DAILY)
+            cache.set(cache_key, resp, TTL_KLINE)
             return resp
         except Exception as e:
             logger.error(f"获取K线失败 {symbol}: {e}")
