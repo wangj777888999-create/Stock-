@@ -88,6 +88,8 @@ app.include_router(journal_router)
 app.include_router(verify_router)
 app.include_router(stats_router)
 app.include_router(articles_router)
+from routers.sector import router as sector_router
+app.include_router(sector_router)
 
 
 @app.get("/", response_class=HTMLResponse)

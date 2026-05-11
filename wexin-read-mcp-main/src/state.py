@@ -13,3 +13,11 @@ config = AppConfig.from_env()
 scraper = WeixinScraper()
 blogger_mgr = BloggerManager(scraper, config)
 CONFIG_FILE = Path(__file__).parent.parent / "user_config.json"
+
+from sector_service import SectorService
+
+sector_svc = SectorService()
+
+
+def get_sector_service() -> SectorService:
+    return sector_svc
