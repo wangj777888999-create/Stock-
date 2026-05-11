@@ -69,14 +69,55 @@ def _fetch_stocks_ths(board_name: str, board_type: str) -> pd.DataFrame:
     raise NotImplementedError("akshare 无同花顺板块成分股接口")
 
 
+def _fetch_stocks_pywencai(board_name: str, board_type: str) -> pd.DataFrame:
+    """pywencai（同花顺问财）板块成分股 — 第三降级源。
+
+    返回的 DataFrame 已将关键列重命名，可直接传入 _normalize_stocks。
+    """
+    import pywencai
+    query = f"{board_name}{'行业' if board_type == 'industry' else '概念'}"
+    df = pywencai.get(query=query, perpage=100)
+    if df is None or df.empty:
+        raise ValueError(f"pywencai 未返回 {board_name} 成分股数据")
+
+    # 将 pywencai 日期后缀列名标准化（如"市盈率(pe)[20260511]"→"市盈率"），
+    # 使 _normalize_stocks 的模糊匹配能正确提取。
+    # 注意：不处理 code 列（code 是纯6位代码，但"股票代码"优先级更高且值已含后缀，
+    #       统一在 _normalize_stocks 的 suffix-strip 步骤处理）
+    rename: dict = {}
+    seen_targets: set = set()
+    for col in df.columns:
+        cs = str(col)
+        if cs.startswith("总市值") and "总市值" not in seen_targets:
+            rename[col] = "总市值"; seen_targets.add("总市值")
+        elif cs.startswith("流通市值") and "流通市值" not in seen_targets:
+            rename[col] = "流通市值"; seen_targets.add("流通市值")
+        elif ("市盈率" in cs or "pe" in cs.lower()) and "市盈率" not in seen_targets:
+            rename[col] = "市盈率"; seen_targets.add("市盈率")
+        elif cs.startswith("换手率") and "换手率" not in seen_targets:
+            rename[col] = "换手率"; seen_targets.add("换手率")
+
+    if rename:
+        df = df.rename(columns=rename)
+
+    logger.info(f"pywencai 获取 {board_name} 成分股 {len(df)} 只")
+    return df
+
+
 def _fetch_kline_eastmoney(board_name: str, board_type: str, period: str) -> pd.DataFrame:
     """东方财富板块 K 线。"""
     import akshare as ak
+    from datetime import datetime, timedelta
     ak_period = PERIOD_MAP.get(period, "日k")
-    if board_type == "industry":
-        df = patch_requests(ak.stock_board_industry_hist_em, symbol=board_name, period=ak_period)
+    end_date = datetime.now().strftime("%Y%m%d")
+    if period == "daily":
+        start_date = (datetime.now() - timedelta(days=730)).strftime("%Y%m%d")
     else:
-        df = patch_requests(ak.stock_board_concept_hist_em, symbol=board_name, period=ak_period)
+        start_date = (datetime.now() - timedelta(days=3650)).strftime("%Y%m%d")
+    if board_type == "industry":
+        df = patch_requests(ak.stock_board_industry_hist_em, symbol=board_name, period=ak_period, start_date=start_date, end_date=end_date, adjust="")
+    else:
+        df = patch_requests(ak.stock_board_concept_hist_em, symbol=board_name, period=ak_period, start_date=start_date, end_date=end_date, adjust="")
     logger.info(f"东方财富获取 {board_name} {period} K线 {len(df)} 条")
     return df
 
@@ -194,8 +235,6 @@ def _normalize_boards(df: pd.DataFrame, board_type: str) -> list[dict]:
 def _normalize_stocks(df: pd.DataFrame) -> list[dict]:
     """标准化成分股列表为统一输出格式。"""
     results = []
-    # 东方财富列名: 代码, 名称, 最新价, 涨跌幅, 成交量, 成交额
-    # 同花顺列名: 代码, 名称
     col_map = {}
     for c in df.columns:
         cs = str(c)
@@ -211,15 +250,40 @@ def _normalize_stocks(df: pd.DataFrame) -> list[dict]:
             col_map.setdefault("volume", c)
         elif cs == "成交额" or "成交额" in cs:
             col_map.setdefault("turnover", c)
+        elif "市盈率" in cs:
+            col_map.setdefault("pe", c)
+        elif "流通市值" in cs:
+            col_map.setdefault("circ_mv", c)
+        elif cs == "总市值" or "总市值" in cs:
+            col_map.setdefault("total_mv", c)
+        elif "换手率" in cs:
+            col_map.setdefault("turnover_rate", c)
+        elif cs == "最高" or "最高" in cs:
+            col_map.setdefault("high", c)
+        elif cs == "最低" or "最低" in cs:
+            col_map.setdefault("low", c)
 
     for _, row in df.iterrows():
+        raw_symbol = str(_clean(row.get(col_map.get("symbol", df.columns[0]))) or "")
+        # 去掉交易所后缀（如 000001.SZ → 000001），pywencai 数据会带后缀
+        if "." in raw_symbol:
+            prefix, suffix = raw_symbol.rsplit(".", 1)
+            if suffix.isalpha() and len(suffix) <= 3:
+                raw_symbol = prefix
+
         item = {
-            "symbol": str(_clean(row.get(col_map.get("symbol", df.columns[0]))) or ""),
+            "symbol": raw_symbol,
             "name": _clean(row.get(col_map.get("name", ""))) or "",
             "price": _clean(row.get(col_map.get("price"))) if "price" in col_map else None,
             "change_pct": _clean(row.get(col_map.get("change_pct"))) if "change_pct" in col_map else None,
             "volume": _clean(row.get(col_map.get("volume"))) if "volume" in col_map else None,
             "turnover": _clean(row.get(col_map.get("turnover"))) if "turnover" in col_map else None,
+            "pe": _clean(row.get(col_map.get("pe"))) if "pe" in col_map else None,
+            "circ_mv": _clean(row.get(col_map.get("circ_mv"))) if "circ_mv" in col_map else None,
+            "total_mv": _clean(row.get(col_map.get("total_mv"))) if "total_mv" in col_map else None,
+            "turnover_rate": _clean(row.get(col_map.get("turnover_rate"))) if "turnover_rate" in col_map else None,
+            "high": _clean(row.get(col_map.get("high"))) if "high" in col_map else None,
+            "low": _clean(row.get(col_map.get("low"))) if "low" in col_map else None,
         }
         results.append(item)
 
@@ -417,30 +481,30 @@ class SectorService:
             except Exception as e:
                 logger.warning(f"东方财富成分股失败({board_name}): {e}")
 
-            # 备选: 同花顺
-            logger.info(f"切换到同花顺获取 {board_name} 成分股")
+            # 备选2: pywencai（问财）
+            logger.info(f"切换到 pywencai 获取 {board_name} 成分股")
             try:
-                df = await asyncio.to_thread(_fetch_stocks_ths, board_name, board_type)
+                df = await asyncio.to_thread(_fetch_stocks_pywencai, board_name, board_type)
                 if df is not None and not df.empty:
                     data = _normalize_stocks(df)
-                    resp = {"success": True, "data": data, "total": len(data)}
+                    resp = {"success": True, "data": data, "total": len(data), "source": "pywencai"}
                     cache.set(ck, resp, TTL_REALTIME)
                     return resp
             except Exception as e:
-                logger.warning(f"同花顺成分股也失败({board_name}): {e}")
+                logger.warning(f"pywencai 成分股也失败({board_name}): {e}")
 
+            return {"success": False, "error": f"板块 '{board_name}' 成分股数据不可用（三源均失败）"}
+
+        except Exception:
+            logger.exception(f"get_board_stocks error({board_name})")
             return {"success": False, "error": f"板块 '{board_name}' 成分股数据不可用"}
-
-        except Exception as e:
-            logger.error(f"get_board_stocks error: {e}")
-            return {"success": False, "error": str(e)}
 
     async def get_board_kline(
         self,
         board_name: str,
         board_type: str = "industry",
         period: str = "daily",
-        count: int = 100,
+        count: int = 500,
     ) -> dict:
         """获取板块 K 线数据。
 

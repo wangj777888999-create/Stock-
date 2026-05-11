@@ -29,20 +29,28 @@ _patch_lock = threading.Lock()
 def patch_requests(func, **kwargs):
     """在绕过代理的环境下调用函数（主要用于 AKShare）。
 
-    AKShare 内部用 requests.get/post 请求数据，
-    此函数临时将 requests.get/post 替换为走连接池的版本，
-    调用完成后恢复，避免影响其他库。
-    加 threading.Lock 防止并发调用时全局函数互相覆盖。
+    同时 patch requests.get/post 和 requests.Session 类，
+    覆盖内部新建 Session 的调用路径（如东方财富成分股接口）。
     """
     import requests as _requests
 
     with _patch_lock:
         orig_get = _requests.get
         orig_post = _requests.post
+        orig_Session = _requests.Session
+
+        class _NoProxySession(_requests.Session):
+            def __init__(self):
+                super().__init__()
+                self.trust_env = False
+                self.proxies = {"http": None, "https": None}
+
         _requests.get = session.get
         _requests.post = session.post
+        _requests.Session = _NoProxySession
         try:
             return func(**kwargs)
         finally:
             _requests.get = orig_get
             _requests.post = orig_post
+            _requests.Session = orig_Session
