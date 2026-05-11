@@ -5,36 +5,20 @@
 
 import asyncio
 import logging
-import os
 import re
 from typing import Literal
 
 import pandas as pd
 from stock_utils import _clean, cache, TTL_DAILY, TTL_REALTIME
+from http_client import patch_requests
 
 logger = logging.getLogger(__name__)
 
 # ─── 常量 ───
 
-PROXY_KEYS = ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY")
-
 PERIOD_MAP = {"daily": "日k", "weekly": "周k", "monthly": "月k"}
 
 BoardType = Literal["industry", "concept"]
-
-
-# ─── 代理环境工具 ───
-
-def _no_proxy_env():
-    """返回被清除的代理环境变量（用于 restore）。"""
-    saved = {k: os.environ.pop(k) for k in PROXY_KEYS if k in os.environ}
-    return saved
-
-
-def _restore_env(saved):
-    """恢复之前清除的代理环境变量。"""
-    for k, v in saved.items():
-        os.environ[k] = v
 
 
 # ─── 数据源层（同步函数，通过 asyncio.to_thread 调用） ───
@@ -42,77 +26,73 @@ def _restore_env(saved):
 def _fetch_boards_eastmoney(board_type: str) -> pd.DataFrame:
     """东方财富板块列表。"""
     import akshare as ak
-    saved = _no_proxy_env()
-    try:
-        if board_type == "industry":
-            df = ak.stock_board_industry_name_em()
-        else:
-            df = ak.stock_board_concept_name_em()
-        logger.info(f"东方财富获取 {board_type} 板块 {len(df)} 个")
-        return df
-    finally:
-        _restore_env(saved)
+    if board_type == "industry":
+        df = patch_requests(ak.stock_board_industry_name_em)
+    else:
+        df = patch_requests(ak.stock_board_concept_name_em)
+    logger.info(f"东方财富获取 {board_type} 板块 {len(df)} 个")
+    return df
 
 
 def _fetch_boards_ths(board_type: str) -> pd.DataFrame:
-    """同花顺板块列表（备选）。"""
+    """同花顺板块列表（备选，仅 name/code）。"""
     import akshare as ak
-    saved = _no_proxy_env()
-    try:
-        if board_type == "industry":
-            df = ak.stock_board_industry_name_ths()
-        else:
-            df = ak.stock_board_concept_name_ths()
-        logger.info(f"同花顺获取 {board_type} 板块 {len(df)} 个")
-        return df
-    finally:
-        _restore_env(saved)
+    if board_type == "industry":
+        df = patch_requests(ak.stock_board_industry_name_ths)
+    else:
+        df = patch_requests(ak.stock_board_concept_name_ths)
+    logger.info(f"同花顺获取 {board_type} 板块 {len(df)} 个")
+    return df
+
+
+def _fetch_boards_ths_summary() -> pd.DataFrame:
+    """同花顺行业板块行情汇总（含涨跌幅、成交额、领涨股等）。"""
+    import akshare as ak
+    df = patch_requests(ak.stock_board_industry_summary_ths)
+    logger.info(f"同花顺行业板块汇总 {len(df)} 个")
+    return df
 
 
 def _fetch_stocks_eastmoney(board_name: str, board_type: str) -> pd.DataFrame:
     """东方财富板块成分股。"""
     import akshare as ak
-    saved = _no_proxy_env()
-    try:
-        if board_type == "industry":
-            df = ak.stock_board_industry_cons_em(symbol=board_name)
-        else:
-            df = ak.stock_board_concept_cons_em(symbol=board_name)
-        logger.info(f"东方财富获取 {board_name} 成分股 {len(df)} 只")
-        return df
-    finally:
-        _restore_env(saved)
+    if board_type == "industry":
+        df = patch_requests(ak.stock_board_industry_cons_em, symbol=board_name)
+    else:
+        df = patch_requests(ak.stock_board_concept_cons_em, symbol=board_name)
+    logger.info(f"东方财富获取 {board_name} 成分股 {len(df)} 只")
+    return df
 
 
 def _fetch_stocks_ths(board_name: str, board_type: str) -> pd.DataFrame:
-    """同花顺板块成分股（备选）。"""
-    import akshare as ak
-    saved = _no_proxy_env()
-    try:
-        if board_type == "industry":
-            df = ak.stock_board_industry_cons_ths(symbol=board_name)
-        else:
-            df = ak.stock_board_concept_cons_ths(symbol=board_name)
-        logger.info(f"同花顺获取 {board_name} 成分股 {len(df)} 只")
-        return df
-    finally:
-        _restore_env(saved)
+    """同花顺板块成分股（akshare 无此接口，始终失败）。"""
+    raise NotImplementedError("akshare 无同花顺板块成分股接口")
 
 
 def _fetch_kline_eastmoney(board_name: str, board_type: str, period: str) -> pd.DataFrame:
     """东方财富板块 K 线。"""
     import akshare as ak
-    saved = _no_proxy_env()
-    try:
-        ak_period = PERIOD_MAP.get(period, "日k")
-        if board_type == "industry":
-            df = ak.stock_board_industry_hist_em(symbol=board_name, period=ak_period)
-        else:
-            df = ak.stock_board_concept_hist_em(symbol=board_name, period=ak_period)
-        logger.info(f"东方财富获取 {board_name} {period} K线 {len(df)} 条")
-        return df
-    finally:
-        _restore_env(saved)
+    ak_period = PERIOD_MAP.get(period, "日k")
+    if board_type == "industry":
+        df = patch_requests(ak.stock_board_industry_hist_em, symbol=board_name, period=ak_period)
+    else:
+        df = patch_requests(ak.stock_board_concept_hist_em, symbol=board_name, period=ak_period)
+    logger.info(f"东方财富获取 {board_name} {period} K线 {len(df)} 条")
+    return df
+
+
+def _fetch_kline_ths(board_name: str, board_type: str, count: int) -> pd.DataFrame:
+    """同花顺板块 K 线（备选）。"""
+    import akshare as ak
+    from datetime import datetime, timedelta
+    end = datetime.now().strftime("%Y%m%d")
+    start = (datetime.now() - timedelta(days=count * 2)).strftime("%Y%m%d")
+    if board_type == "industry":
+        df = patch_requests(ak.stock_board_industry_index_ths, symbol=board_name, start_date=start, end_date=end)
+    else:
+        df = patch_requests(ak.stock_board_concept_index_ths, symbol=board_name, start_date=start, end_date=end)
+    logger.info(f"同花顺获取 {board_name} K线 {len(df)} 条")
+    return df
 
 
 # ─── 标准化层 ───
@@ -123,7 +103,26 @@ def _extract_lead_stock_symbol(lead_stock_field) -> str | None:
         return None
     text = str(lead_stock_field)
     match = re.search(r"(\d{6})", text)
-    return match.group(1) if match else None
+    if match:
+        return match.group(1)
+    # 如果没有代码（如同花顺只给名称），尝试从全局股票列表查找
+    return _lookup_symbol_by_name(text)
+
+
+def _lookup_symbol_by_name(name: str) -> str | None:
+    """通过股票名称查找代码（使用预加载的股票列表）。"""
+    if not name or name == "--":
+        return None
+    try:
+        from stock_service import StockService
+        df = StockService._stock_list_cache
+        if df is not None and not df.empty:
+            matches = df[df["名称"] == name]
+            if not matches.empty:
+                return str(matches.iloc[0]["代码"])
+    except Exception:
+        pass
+    return None
 
 
 def _normalize_boards(df: pd.DataFrame, board_type: str) -> list[dict]:
@@ -139,17 +138,18 @@ def _normalize_boards(df: pd.DataFrame, board_type: str) -> list[dict]:
     col_lead = None
 
     for c in df.columns:
-        if "板块名称" in str(c) or "名称" in str(c):
+        cs = str(c)
+        if col_name is None and ("板块名称" in cs or cs == "板块" or cs == "名称" or "概念名称" in cs):
             col_name = c
-        elif "涨跌幅" in str(c):
+        elif col_change is None and "涨跌幅" in cs:
             col_change = c
-        elif "总成交额" in str(c) or "成交额" in str(c):
+        elif col_turnover is None and ("总成交额" in cs or "成交额" in cs or "总市值" in cs):
             col_turnover = c
-        elif "上涨" in str(c) and "家" in str(c):
+        elif col_up is None and "上涨" in cs and "家" in cs:
             col_up = c
-        elif "下跌" in str(c) and "家" in str(c):
+        elif col_down is None and "下跌" in cs and "家" in cs:
             col_down = c
-        elif "领涨" in str(c):
+        elif col_lead is None and "领涨" in cs:
             col_lead = c
 
     # 降级: 如果没有"板块名称"列，尝试首列或 index
@@ -230,6 +230,7 @@ def _normalize_kline(df: pd.DataFrame) -> list[dict]:
     """标准化 K 线数据为统一输出格式。"""
     results = []
     # 东方财富列名: 日期, 开盘, 收盘, 最高, 最低, 成交量, 成交额, 涨跌幅
+    # 同花顺列名: 日期, 开盘价, 最高价, 最低价, 收盘价, 成交量, 成交额
     col_map = {}
     for c in df.columns:
         cs = str(c)
@@ -250,19 +251,35 @@ def _normalize_kline(df: pd.DataFrame) -> list[dict]:
         elif "涨跌幅" in cs:
             col_map.setdefault("change_pct", c)
 
+    has_change_pct = "change_pct" in col_map
+    prev_close = None
+
     for _, row in df.iterrows():
         date_val = _clean(row.get(col_map.get("date", df.columns[0])))
+        close_val = _clean(row.get(col_map.get("close"))) if "close" in col_map else None
+
+        # 如果数据源没有涨跌幅列，从收盘价计算
+        if has_change_pct:
+            change_pct = _clean(row.get(col_map.get("change_pct")))
+        elif close_val is not None and prev_close is not None and prev_close != 0:
+            change_pct = round((float(close_val) - float(prev_close)) / float(prev_close) * 100, 2)
+        else:
+            change_pct = None
+
         item = {
             "date": str(date_val)[:10] if date_val else "",
             "open": _clean(row.get(col_map.get("open"))) if "open" in col_map else None,
-            "close": _clean(row.get(col_map.get("close"))) if "close" in col_map else None,
+            "close": close_val,
             "high": _clean(row.get(col_map.get("high"))) if "high" in col_map else None,
             "low": _clean(row.get(col_map.get("low"))) if "low" in col_map else None,
             "volume": _clean(row.get(col_map.get("volume"))) if "volume" in col_map else None,
             "turnover": _clean(row.get(col_map.get("turnover"))) if "turnover" in col_map else None,
-            "change_pct": _clean(row.get(col_map.get("change_pct"))) if "change_pct" in col_map else None,
+            "change_pct": change_pct,
         }
         results.append(item)
+
+        if close_val is not None:
+            prev_close = float(close_val)
 
     return results
 
@@ -344,7 +361,11 @@ class SectorService:
         # 备选: 同花顺
         logger.info(f"切换到同花顺获取 {board_type} 板块")
         try:
-            df = await asyncio.to_thread(_fetch_boards_ths, board_type)
+            if board_type == "industry":
+                # 同花顺行业汇总有完整行情数据（涨跌幅、成交额、领涨股）
+                df = await asyncio.to_thread(_fetch_boards_ths_summary)
+            else:
+                df = await asyncio.to_thread(_fetch_boards_ths, board_type)
             if df is not None and not df.empty:
                 data = _normalize_boards(df, board_type)
                 cache.set(ck, data, TTL_DAILY)
@@ -435,15 +456,34 @@ class SectorService:
             return cached
 
         try:
-            df = await asyncio.to_thread(_fetch_kline_eastmoney, board_name, board_type, period)
-            if df is not None and not df.empty:
-                data = _normalize_kline(df)
-                if count > 0:
-                    data = data[-count:]
-                resp = {"success": True, "data": data, "total": len(data)}
-                cache.set(ck, resp, TTL_DAILY)
-                return resp
-            return {"success": False, "error": f"板块 '{board_name}' K线数据为空"}
+            # 主源: 东方财富
+            try:
+                df = await asyncio.to_thread(_fetch_kline_eastmoney, board_name, board_type, period)
+                if df is not None and not df.empty:
+                    data = _normalize_kline(df)
+                    if count > 0:
+                        data = data[-count:]
+                    resp = {"success": True, "data": data, "total": len(data)}
+                    cache.set(ck, resp, TTL_DAILY)
+                    return resp
+            except Exception as e:
+                logger.warning(f"东方财富K线失败({board_name}): {e}")
+
+            # 备选: 同花顺
+            logger.info(f"切换到同花顺获取 {board_name} K线")
+            try:
+                df = await asyncio.to_thread(_fetch_kline_ths, board_name, board_type, count or 120)
+                if df is not None and not df.empty:
+                    data = _normalize_kline(df)
+                    if count > 0:
+                        data = data[-count:]
+                    resp = {"success": True, "data": data, "total": len(data)}
+                    cache.set(ck, resp, TTL_DAILY)
+                    return resp
+            except Exception as e:
+                logger.warning(f"同花顺K线也失败({board_name}): {e}")
+
+            return {"success": False, "error": f"板块 '{board_name}' K线数据不可用"}
 
         except Exception as e:
             logger.error(f"get_board_kline error: {e}")
