@@ -5255,6 +5255,270 @@ function simCloseForm(id) {
   });
 }
 
+// ==================== 板块功能 JS ====================
+
+let _sectorCurrentType = 'industry';
+let _sectorData = [];
+let _sectorCurrentBoardName = '';
+let _sectorCurrentBoardType = 'industry';
+let _sectorKlineChart = null;
+let _sectorKlineResizeObserver = null;
+
+function formatTurnover(val) {
+  if (val == null) return '-';
+  if (val >= 1e12) return (val / 1e12).toFixed(2) + '万亿';
+  if (val >= 1e8)  return (val / 1e8).toFixed(2) + '亿';
+  if (val >= 1e4)  return (val / 1e4).toFixed(2) + '万';
+  return val.toFixed(0);
+}
+
+function switchSectorTab(type, el) {
+  document.querySelectorAll('[id^="sectorTab"]').forEach(btn => btn.classList.remove('active'));
+  if (el) el.classList.add('active');
+  _sectorCurrentType = type;
+  hideSectorDetail();
+  loadSectorBoards();
+}
+
+async function loadSectorBoards() {
+  const heatmapBody = document.getElementById('sectorHeatmapBody');
+  const listBody = document.getElementById('sectorListBody');
+  if (!heatmapBody || !listBody) return;
+  heatmapBody.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
+  listBody.innerHTML = '';
+
+  try {
+    const resp = await fetch('/api/sector/boards?board_type=' + _sectorCurrentType + '&sort_by=change_pct&limit=100');
+    const json = await resp.json();
+    if (!json.success || !json.data?.length) {
+      const msg = escapeHtml(json.error || '加载失败');
+      heatmapBody.innerHTML = '<div class="empty-state">' + msg + '</div>';
+      return;
+    }
+    _sectorData = json.data;
+    renderSectorHeatmap(json.data);
+    renderSectorListTable(json.data);
+  } catch (e) {
+    heatmapBody.innerHTML = '<div class="empty-state">加载失败，请稍后重试</div>';
+  }
+}
+
+function renderSectorHeatmap(boards) {
+  const container = document.getElementById('sectorHeatmapBody');
+  if (!container) return;
+  if (!boards.length) { container.innerHTML = '<div class="empty-state">暂无数据</div>'; return; }
+
+  const turnovers = boards.map(b => b.turnover || 0).filter(t => t > 0);
+  const maxTurnover = turnovers.length ? Math.max(...turnovers) : 1;
+
+  const getColor = (pct) => {
+    if (pct == null) return 'rgba(148,163,184,0.5)';
+    const abs = Math.min(Math.abs(pct), 10);
+    const intensity = abs / 10;
+    if (pct > 0) return 'rgba(239,68,68,' + (0.15 + intensity * 0.7) + ')';
+    if (pct < 0) return 'rgba(34,197,94,' + (0.15 + intensity * 0.7) + ')';
+    return 'rgba(148,163,184,0.3)';
+  };
+
+  let html = '<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:flex-end;">';
+  boards.forEach(b => {
+    const pct = b.change_pct || 0;
+    const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+    const turnoverRatio = maxTurnover > 0 ? (b.turnover || 0) / maxTurnover : 0;
+    const baseSize = 60 + turnoverRatio * 80;
+    const color = getColor(pct);
+    const textColor = pct >= 0 ? '#dc2626' : '#16a34a';
+    html += '<div onclick="loadSectorBoardDetail(\'' + escapeHtml(b.type) + '\',\'' + escapeHtml(b.name) + '\')"'
+      + ' style="flex:0 0 ' + baseSize + 'px;height:' + (baseSize * 0.7) + 'px;background:' + color + ';border-radius:6px;'
+      + 'display:flex;flex-direction:column;justify-content:center;align-items:center;cursor:pointer;'
+      + 'padding:4px;overflow:hidden;transition:transform 0.15s;"'
+      + ' onmouseover="this.style.transform=\'scale(1.05)\'" onmouseout="this.style.transform=\'scale(1)\'">'
+      + '<div style="font-size:11px;font-weight:600;color:#1e293b;text-align:center;line-height:1.2;'
+      + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;">' + escapeHtml(b.name) + '</div>'
+      + '<div style="font-size:12px;font-weight:700;margin-top:2px;color:' + textColor + '">' + pctStr + '</div>'
+      + '</div>';
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function renderSectorListTable(boards) {
+  const container = document.getElementById('sectorListBody');
+  if (!container) return;
+  if (!boards.length) { container.innerHTML = '<div class="empty-state">暂无数据</div>'; return; }
+
+  let html = '<table class="data-table"><thead><tr>'
+    + '<th>板块名称</th><th>类型</th><th style="text-align:right">涨跌幅</th>'
+    + '<th style="text-align:right">成交额</th><th>涨/跌</th><th>领涨股</th>'
+    + '</tr></thead><tbody>';
+
+  boards.forEach(b => {
+    const pct = b.change_pct || 0;
+    const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+    const pctCls = pct >= 0 ? 'up' : 'down';
+    const typeLabel = b.type === 'industry' ? '行业' : '概念';
+    const turnoverStr = b.turnover != null ? formatTurnover(b.turnover) : '-';
+    const upDown = (b.up_count != null ? b.up_count : '-') + '/' + (b.down_count != null ? b.down_count : '-');
+    const leadStock = b.lead_stock_name || '-';
+    const leadLink = b.lead_stock_symbol
+      ? '<span class="code-link" onclick="event.stopPropagation();openStockFromSector(\'' + escapeHtml(b.lead_stock_symbol) + '\')">' + escapeHtml(leadStock) + '</span>'
+      : escapeHtml(leadStock);
+
+    html += '<tr style="cursor:pointer;" onclick="loadSectorBoardDetail(\'' + escapeHtml(b.type) + '\',\'' + escapeHtml(b.name) + '\')">'
+      + '<td><span class="name-strong">' + escapeHtml(b.name) + '</span></td>'
+      + '<td>' + typeLabel + '</td>'
+      + '<td class="num ' + pctCls + '">' + pctStr + '</td>'
+      + '<td class="num">' + turnoverStr + '</td>'
+      + '<td>' + upDown + '</td>'
+      + '<td>' + leadLink + '</td>'
+      + '</tr>';
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function hideSectorDetail() {
+  const area = document.getElementById('sectorDetailArea');
+  if (area) area.style.display = 'none';
+  const heatmap = document.getElementById('sectorHeatmapCard');
+  const list = document.getElementById('sectorListCard');
+  if (heatmap) heatmap.style.display = '';
+  if (list) list.style.display = '';
+  _disposeSectorKlineChart();
+}
+
+function _disposeSectorKlineChart() {
+  if (_sectorKlineChart) { try { _sectorKlineChart.remove(); } catch(e){} _sectorKlineChart = null; }
+  if (_sectorKlineResizeObserver) { _sectorKlineResizeObserver.disconnect(); _sectorKlineResizeObserver = null; }
+}
+
+async function loadSectorBoardDetail(type, name) {
+  const area = document.getElementById('sectorDetailArea');
+  const title = document.getElementById('sectorDetailTitle');
+  const heatmap = document.getElementById('sectorHeatmapCard');
+  const list = document.getElementById('sectorListCard');
+  if (!area) return;
+
+  _sectorCurrentBoardName = name;
+  _sectorCurrentBoardType = type;
+
+  area.style.display = '';
+  if (heatmap) heatmap.style.display = 'none';
+  if (list) list.style.display = 'none';
+  if (title) title.textContent = '「' + name + '」(' + (type === 'industry' ? '行业' : '概念') + ')';
+
+  await Promise.all([
+    loadSectorBoardStocks(type, name),
+    loadSectorKline(type, name, 'daily'),
+  ]);
+}
+
+async function loadSectorBoardStocks(type, name) {
+  const body = document.getElementById('sectorStocksBody');
+  const title = document.getElementById('sectorStocksTitle');
+  if (!body) return;
+  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
+
+  try {
+    const resp = await fetch('/api/sector/board/' + encodeURIComponent(type) + '/' + encodeURIComponent(name));
+    const json = await resp.json();
+    if (!json.success) { body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '查询失败') + '</div>'; return; }
+    if (!json.data?.length) { body.innerHTML = '<div class="empty-state">暂无成分股数据</div>'; return; }
+    if (title) title.textContent = '成分股（共 ' + (json.total || json.data.length) + ' 只）';
+
+    let html = '<table class="data-table"><thead><tr>'
+      + '<th>代码</th><th>名称</th><th style="text-align:right">最新价</th>'
+      + '<th style="text-align:right">涨跌幅</th><th style="text-align:right">成交量(手)</th>'
+      + '<th style="text-align:right">成交额</th>'
+      + '</tr></thead><tbody>';
+    json.data.forEach(s => {
+      const pct = s.change_pct || 0;
+      const pctStr = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%';
+      const pctCls = pct >= 0 ? 'up' : 'down';
+      html += '<tr style="cursor:pointer;" onclick="openStockFromSector(\'' + escapeHtml(s.symbol) + '\')">'
+        + '<td><span class="code-link">' + escapeHtml(s.symbol) + '</span></td>'
+        + '<td><span class="name-strong">' + escapeHtml(s.name) + '</span></td>'
+        + '<td class="num">' + (s.price != null ? s.price.toFixed(2) : '-') + '</td>'
+        + '<td class="num ' + pctCls + '">' + pctStr + '</td>'
+        + '<td class="num">' + (s.volume != null ? Number(s.volume).toLocaleString() : '-') + '</td>'
+        + '<td class="num">' + (s.turnover != null ? formatTurnover(s.turnover) : '-') + '</td>'
+        + '</tr>';
+    });
+    html += '</tbody></table>';
+    body.innerHTML = html;
+  } catch (e) {
+    body.innerHTML = '<div class="empty-state">请求失败，请稍后重试</div>';
+  }
+}
+
+async function loadSectorKline(type, name, period) {
+  const container = document.getElementById('sectorKlineChart');
+  if (!container) return;
+  _disposeSectorKlineChart();
+
+  try {
+    const resp = await fetch('/api/sector/board_kline/' + encodeURIComponent(type) + '/' + encodeURIComponent(name) + '?period=' + period);
+    const json = await resp.json();
+    if (!json.success || !json.data?.length) { container.innerHTML = '<div class="empty-state" style="padding:40px;">暂无K线数据</div>'; return; }
+
+    container.innerHTML = '';
+    _sectorKlineChart = LightweightCharts.createChart(container, {
+      width: container.clientWidth, height: 360,
+      layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
+      grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+      crosshair: { mode: 0 },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { borderVisible: false },
+    });
+
+    var candleSeries = _sectorKlineChart.addCandlestickSeries({
+      upColor: '#ef4444', downColor: '#22c55e',
+      borderUpColor: '#ef4444', borderDownColor: '#22c55e',
+      wickUpColor: '#ef4444', wickDownColor: '#22c55e',
+    });
+    candleSeries.setData(json.data.map(function(k) {
+      return { time: k.date, open: k.open, high: k.high, low: k.low, close: k.close };
+    }));
+
+    var volSeries = _sectorKlineChart.addHistogramSeries({
+      priceFormat: { type: 'volume' }, priceScaleId: 'vol',
+    });
+    _sectorKlineChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+    volSeries.setData(json.data.map(function(k) {
+      return {
+        time: k.date, value: k.volume || 0,
+        color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'
+      };
+    }));
+
+    _sectorKlineChart.timeScale().fitContent();
+    _sectorKlineChart.timeScale().applyOptions({ rightOffset: 5, minBarSpacing: 2 });
+
+    _sectorKlineResizeObserver = new ResizeObserver(function() {
+      if (_sectorKlineChart) _sectorKlineChart.applyOptions({ width: container.clientWidth });
+    });
+    _sectorKlineResizeObserver.observe(container);
+  } catch (e) {
+    container.innerHTML = '<div class="empty-state" style="padding:40px;">K线加载失败</div>';
+  }
+}
+
+function switchSectorKlinePeriod(period, el) {
+  document.querySelectorAll('#sectorKlinePeriodBtns button').forEach(function(b) { b.classList.remove('active'); });
+  if (el) el.classList.add('active');
+  loadSectorKline(_sectorCurrentBoardType, _sectorCurrentBoardName, period);
+}
+
+function openStockFromSector(symbol) {
+  var stockNav = document.querySelector('[data-view="stock"]');
+  if (stockNav) switchView('stock', stockNav);
+  var input = document.getElementById('stockSearchInput');
+  if (input) {
+    input.value = symbol;
+    searchStock();
+  }
+}
+
 </script>
 </body>
 </html>
