@@ -1125,6 +1125,10 @@ textarea.form-input {
         <svg viewBox="0 0 20 20" fill="none"><path d="M3 17V7l4-4 3 5 4-5 3 7v7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <span>股票查询</span>
       </button>
+      <button class="nav-item" data-view="sector" onclick="switchView('sector', this)">
+        <svg viewBox="0 0 20 20" fill="none"><rect x="2" y="2" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="11" y="2" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="2" y="11" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/><rect x="11" y="11" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.7"/></svg>
+        <span>板块</span>
+      </button>
       <button class="nav-item" data-view="fund" onclick="switchView('fund', this)">
         <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M7 7h6M7 10h6M7 13h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         <span>基金</span>
@@ -1841,6 +1845,75 @@ textarea.form-input {
         </div>
       </div>
 
+      <!-- ==================== VIEW: SECTOR ==================== -->
+      <div id="view-sector" class="view">
+
+        <!-- Tab 切换 -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-body" style="padding:8px 12px;">
+            <div style="display:flex;gap:4px;">
+              <button class="btn btn-ghost btn-sm active" id="sectorTabIndustry" onclick="switchSectorTab('industry', this)">行业板块</button>
+              <button class="btn btn-ghost btn-sm" id="sectorTabConcept" onclick="switchSectorTab('concept', this)">概念板块</button>
+              <button class="btn btn-ghost btn-sm" id="sectorTabAll" onclick="switchSectorTab('all', this)">全部</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 热力方块图 -->
+        <div class="card" id="sectorHeatmapCard">
+          <div class="card-header">
+            <div class="card-title">涨跌热力图</div>
+            <button class="btn btn-ghost btn-sm" onclick="loadSectorBoards()">刷新</button>
+          </div>
+          <div class="card-body" id="sectorHeatmapBody">
+            <div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>
+          </div>
+        </div>
+
+        <!-- 板块列表表格 -->
+        <div class="card" style="margin-top:16px;" id="sectorListCard">
+          <div class="card-header">
+            <div class="card-title">板块列表</div>
+          </div>
+          <div class="card-body" style="overflow-x:auto;padding:0;">
+            <div id="sectorListBody" style="max-height:600px;overflow-y:auto;"></div>
+          </div>
+        </div>
+
+        <!-- 板块详情面板 -->
+        <div id="sectorDetailArea" style="display:none;">
+          <div style="margin-bottom:16px;">
+            <button class="btn btn-ghost" onclick="hideSectorDetail()" style="font-size:13px;">← 返回板块列表</button>
+            <span id="sectorDetailTitle" style="font-weight:600;font-size:16px;margin-left:8px;"></span>
+          </div>
+
+          <!-- 板块 K 线图 -->
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header">
+              <div class="card-title">板块 K 线</div>
+              <div style="display:flex;gap:4px;" id="sectorKlinePeriodBtns">
+                <button class="btn btn-ghost btn-sm active" onclick="switchSectorKlinePeriod('daily',this)">日K</button>
+                <button class="btn btn-ghost btn-sm" onclick="switchSectorKlinePeriod('weekly',this)">周K</button>
+                <button class="btn btn-ghost btn-sm" onclick="switchSectorKlinePeriod('monthly',this)">月K</button>
+              </div>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div id="sectorKlineChart" style="height:360px;"></div>
+            </div>
+          </div>
+
+          <!-- 成分股列表 -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title" id="sectorStocksTitle">成分股</div>
+            </div>
+            <div class="card-body" style="overflow-x:auto;padding:0;">
+              <div id="sectorStocksBody" style="max-height:500px;overflow-y:auto;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ==================== VIEW: CRYPTO ==================== -->
       <div id="view-crypto" class="view">
 
@@ -2226,6 +2299,7 @@ const topbarMeta = {
   futures:   { title: '期货', sub: '主力合约行情 · K线 · 持仓龙虎榜' },
   watchlist: { title: '自选股', sub: '添加/删除 · 实时行情 · 30s自动刷新' },
   sim: { title: '模拟交易', sub: '虚拟盘 · 开仓/平仓 · 盈亏统计' },
+  sector: { title: '板块', sub: '行业板块 · 概念板块 · 涨跌幅热力图 · 成分股 · K线' },
 };
 
 let _fundLoaded = false;
@@ -2255,6 +2329,7 @@ function switchView(view, el) {
   if (view === 'futures') { loadFuturesBoards(); }
   if (view === 'watchlist') { loadWatchlist(); }
   if (view === 'sim') { loadSim(); }
+  if (view === 'sector') { loadSectorBoards(); }
 }
 
 /* ============================================================
