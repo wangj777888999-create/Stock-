@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import threading
 import time
 from typing import Any, Callable
 
@@ -124,10 +125,12 @@ def _clean(v):
 
 # ─── TTL 缓存 ───
 
-TTL_REALTIME = 30
-TTL_REALTIME_REFRESH = 5
-TTL_DAILY = 300
-TTL_COMPANY = 86400
+TTL_REALTIME = 30          # 实时行情（30s）
+TTL_REALTIME_REFRESH = 5   # 强制刷新（5s）
+TTL_DAILY = 300            # 日内聚合行情（5min，盘中仍在变化）
+TTL_KLINE = 3600           # K 线历史（1h，日内不变）
+TTL_BOARDS = 1800          # 板块列表/成分股（30min）
+TTL_COMPANY = 86400        # 公司基本面（24h）
 
 
 # ─── 持久化缓存（SQLite）───
@@ -186,13 +189,46 @@ def _deserialize(raw: str):
     return data
 
 
+# L1 进程内缓存：key → (value, expires_at: float)
+_mem: dict[str, tuple[Any, float]] = {}
+_mem_lock = threading.Lock()
+
+
 class _CacheCompat:
-    """向后兼容旧 TTLCache API，委托给 cache_get/cache_set。"""
+    """两层缓存：L1 进程内 dict（<0.1ms）→ L2 SQLite（5~20ms）→ 未命中。"""
 
     def get(self, key: str):
-        return cache_get(key)
+        now = time.time()
+        # L1 命中
+        with _mem_lock:
+            entry = _mem.get(key)
+            if entry is not None:
+                val, exp = entry
+                if now < exp:
+                    return val
+                del _mem[key]
+        # L2：直接查 SQLite，同时获取 expires_at 用于回填 L1
+        db = get_db()
+        row = db.execute(
+            "SELECT value, expires_at FROM cache WHERE key = ?", (key,)
+        ).fetchone()
+        if not row:
+            return None
+        raw, expires_at = row
+        if now >= expires_at:
+            db.execute("DELETE FROM cache WHERE key = ?", (key,))
+            db.commit()
+            return None
+        val = _deserialize(raw)
+        # 回填 L1，使用 SQLite 中真实的 expires_at
+        with _mem_lock:
+            _mem[key] = (val, expires_at)
+        return val
 
     def set(self, key: str, value: Any, ttl: int = TTL_DAILY) -> None:
+        exp = time.time() + ttl
+        with _mem_lock:
+            _mem[key] = (value, exp)
         cache_set(key, value, ttl)
 
 
