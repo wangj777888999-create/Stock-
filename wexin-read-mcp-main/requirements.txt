@@ -12,6 +12,9 @@ httpx>=0.25.0
 markdown>=3.5.0
 apscheduler>=3.10.0
 
+# A-share stock data (board/sector, K-line, financials)
+akshare>=1.14.0
+
 # Global stock data (Korea/Japan)
 yfinance>=0.2.31
 
