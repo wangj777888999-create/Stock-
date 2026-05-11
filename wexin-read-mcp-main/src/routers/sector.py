@@ -29,7 +29,7 @@ async def get_board_kline(
     board_type: str,
     board_name: str,
     period: str = Query(default="daily", regex="^(daily|weekly|monthly)$"),
-    count: int = Query(default=120, ge=1, le=1000),
+    count: int = Query(default=500, ge=0, le=2000),
 ):
     """板块 K 线（仅东方财富，无兜底）"""
     svc = get_sector_service()
