@@ -5591,6 +5591,143 @@ function openStockFromSector(symbol) {
   }
 }
 
+/* ============================================================
+   NORTHBOUND — 北向资金 / 龙虎榜
+   ============================================================ */
+
+// V2 namespace
+window.StockPulse = window.StockPulse || {};
+window.StockPulse.api = window.StockPulse.api || {};
+window.StockPulse.pages = window.StockPulse.pages || {};
+
+// API wrappers
+window.StockPulse.api.getNorthFlow = async function() {
+  return fetch('/api/market/north-flow').then(function(r) { return r.json(); });
+};
+window.StockPulse.api.getNorthHistory = async function() {
+  return fetch('/api/market/north-history').then(function(r) { return r.json(); });
+};
+window.StockPulse.api.getDragonTiger = async function(date) {
+  return fetch('/api/market/dragon-tiger' + (date ? '?date=' + date : '')).then(function(r) { return r.json(); });
+};
+
+let _northboundChart = null;
+
+function switchNorthboundTab(tab, btn) {
+  document.querySelectorAll('#view-northbound .btn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  document.getElementById('northbound-flow-panel').style.display = tab === 'flow' ? '' : 'none';
+  document.getElementById('northbound-history-panel').style.display = tab === 'history' ? '' : 'none';
+  document.getElementById('northbound-dragon-panel').style.display = tab === 'dragon' ? '' : 'none';
+  if (tab === 'history') loadNorthHistory();
+  if (tab === 'dragon') loadDragonTiger();
+}
+
+async function loadNorthboundPage() {
+  const summaryEl = document.getElementById('northbound-summary');
+  const chartEl = document.getElementById('northbound-flow-chart');
+  summaryEl.innerHTML = '<span class="spinner dark"></span> 加载中...';
+  chartEl.innerHTML = '';
+  try {
+    const json = await window.StockPulse.api.getNorthFlow();
+    if (!json.success || !json.data || !json.data.length) {
+      summaryEl.textContent = '今日暂无北向资金数据';
+      return;
+    }
+    const latest = json.data[json.data.length - 1];
+    const totalFlow = latest['北向资金'] || 0;
+    const isPositive = totalFlow >= 0;
+    summaryEl.innerHTML = '<span style="color:' + (isPositive ? '#ef4444' : '#22c55e') + '">' + (isPositive ? '+' : '') + (totalFlow / 100000000).toFixed(2) + ' 亿</span> <span style="font-size:14px;color:var(--ink-3);">今日累计净流入</span>';
+
+    if (_northboundChart) { _northboundChart.remove(); _northboundChart = null; }
+    _northboundChart = LightweightCharts.createChart(chartEl, {
+      width: chartEl.clientWidth, height: 280,
+      layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
+      grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+      crosshair: { mode: 0 },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { borderVisible: false },
+    });
+    const series = _northboundChart.addLineSeries({ color: '#3b82f6', lineWidth: 2 });
+    const chartData = json.data
+      .filter(function(d) { return d['时间'] && d['北向资金'] != null; })
+      .map(function(d) { return { time: d['日期'] + ' ' + d['时间'], value: d['北向资金'] / 100000000 }; });
+    if (chartData.length) series.setData(chartData);
+    _northboundChart.timeScale().fitContent();
+  } catch (e) {
+    summaryEl.textContent = '加载失败: ' + e.message;
+  }
+}
+
+async function loadNorthHistory() {
+  const chartEl = document.getElementById('northbound-history-chart');
+  chartEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
+  try {
+    const json = await window.StockPulse.api.getNorthHistory();
+    if (!json.success || !json.data || !json.data.length) {
+      chartEl.innerHTML = '<div class="empty-state">暂无历史数据</div>';
+      return;
+    }
+    chartEl.innerHTML = '';
+    if (_northboundChart) { _northboundChart.remove(); _northboundChart = null; }
+    _northboundChart = LightweightCharts.createChart(chartEl, {
+      width: chartEl.clientWidth, height: 340,
+      layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
+      grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+      crosshair: { mode: 0 },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { borderVisible: false },
+    });
+    const series = _northboundChart.addHistogramSeries({
+      priceFormat: { type: 'volume' },
+      color: 'rgba(59,130,246,0.5)',
+    });
+    const chartData = json.data
+      .filter(function(d) { return d['日期'] && d['当日成交净买额'] != null; })
+      .map(function(d) {
+        return {
+          time: d['日期'],
+          value: d['当日成交净买额'] / 100000000,
+          color: d['当日成交净买额'] >= 0 ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)',
+        };
+      });
+    if (chartData.length) series.setData(chartData);
+    _northboundChart.timeScale().fitContent();
+  } catch (e) {
+    chartEl.innerHTML = '<div class="empty-state">加载失败</div>';
+  }
+}
+
+async function loadDragonTiger() {
+  const el = document.getElementById('northbound-dragon-table');
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
+  try {
+    const json = await window.StockPulse.api.getDragonTiger();
+    if (!json.success || !json.data || !json.data.length) {
+      el.innerHTML = '<div class="empty-state">今日暂无龙虎榜数据</div>';
+      return;
+    }
+    const cols = Object.keys(json.data[0]);
+    let h = '<table class="data-table"><thead><tr>';
+    cols.forEach(function(c) { h += '<th>' + escapeHtml(c) + '</th>'; });
+    h += '</tr></thead><tbody>';
+    json.data.forEach(function(row) {
+      h += '<tr>';
+      cols.forEach(function(c) { h += '<td class="num">' + escapeHtml(row[c] != null ? String(row[c]) : '-') + '</td>'; });
+      h += '</tr>';
+    });
+    h += '</tbody></table>';
+    el.innerHTML = h;
+  } catch (e) {
+    el.innerHTML = '<div class="empty-state">加载失败</div>';
+  }
+}
+
+window.StockPulse.pages.northbound = {
+  load: loadNorthboundPage,
+  switchTab: switchNorthboundTab,
+};
+
 </script>
 </body>
 </html>
