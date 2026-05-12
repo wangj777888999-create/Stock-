@@ -3415,6 +3415,8 @@ function _renderQuoteInline(d) {
 
 /* --- K线图 --- */
 function _disposeKlineSubCharts() {
+  if (_klineMacdObserver) { _klineMacdObserver.disconnect(); _klineMacdObserver = null; }
+  if (_klineRsiObserver) { _klineRsiObserver.disconnect(); _klineRsiObserver = null; }
   if (_klineMacdChart) { try { _klineMacdChart.remove(); } catch(e){} _klineMacdChart = null; }
   if (_klineRsiChart) { try { _klineRsiChart.remove(); } catch(e){} _klineRsiChart = null; }
   const macdEl = document.getElementById('klineMacdChart');
