@@ -258,7 +258,7 @@ async def delete_note(note_id: int):
 async def get_patterns(
     symbol: str,
     period: str = "day",
-    lookback: int = Query(default=120, ge=20, le=500),
+    lookback: int = Query(default=500, ge=20, le=1000),
 ):
     from stock_service import StockService
     from services.indicators import calc_macd, detect_candle_patterns, detect_macd_signals

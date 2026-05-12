@@ -2127,9 +2127,36 @@ textarea.form-input {
 
             <!-- 形态信号面板 -->
             <div id="taPanel-patterns">
+              <!-- 过滤器 chips -->
+              <div style="background:var(--surface-2,#f8fafc);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;margin-bottom:8px;">
+                <div style="font-size:11px;color:var(--ink-3);margin-bottom:5px;">显示形态（点击切换）</div>
+                <div id="taPatternFilters" style="display:flex;flex-wrap:wrap;gap:4px;">
+                  <span style="font-size:11px;color:var(--ink-3);">加载中…</span>
+                </div>
+              </div>
+              <!-- 添加自定义标注 -->
+              <button class="btn btn-sm" style="width:100%;font-size:12px;margin-bottom:6px;" onclick="taToggleCustomForm()">＋ 添加自定义标注</button>
+              <div id="taCustomPatternForm" style="display:none;background:var(--surface-2,#f8fafc);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px;margin-bottom:8px;">
+                <div style="display:flex;flex-direction:column;gap:6px;">
+                  <div style="display:flex;gap:6px;align-items:center;">
+                    <input id="taCustomDate" type="date" class="search-input" style="flex:1;font-size:12px;padding:4px 8px;">
+                    <input id="taCustomColor" type="color" value="#f59e0b" style="width:32px;height:28px;border:none;cursor:pointer;border-radius:4px;padding:0;">
+                  </div>
+                  <input id="taCustomText" type="text" class="search-input" placeholder="标注文字，如：买点、压力位" style="font-size:12px;padding:4px 8px;">
+                  <select id="taCustomPosition" class="search-input" style="font-size:12px;padding:4px 8px;">
+                    <option value="belowBar">K线下方（箭头向上）</option>
+                    <option value="aboveBar">K线上方（箭头向下）</option>
+                  </select>
+                  <div style="display:flex;gap:6px;">
+                    <button class="btn btn-sm btn-primary" style="flex:1;font-size:12px;" onclick="taSaveCustomPattern()">保存标注</button>
+                    <button class="btn btn-sm btn-ghost" style="font-size:12px;" onclick="taToggleCustomForm()">取消</button>
+                  </div>
+                </div>
+              </div>
+              <!-- 形态列表 -->
               <div class="card">
                 <div class="card-body" id="taPatternsBody"
-                     style="padding:12px;max-height:560px;overflow-y:auto;">
+                     style="padding:12px;max-height:460px;overflow-y:auto;">
                   <div class="empty-state" style="padding:20px 0;">选择股票后加载</div>
                 </div>
               </div>
@@ -3360,7 +3387,10 @@ let _taDrawing = null;    // 正在绘制的临时对象 {type, data, color}
 let _taDrawings = [];     // 已保存的画线列表
 let _taSelected = null;   // 当前选中的画线 id
 let _taKlineData = [];    // K 线数据（坐标映射用）
-let _taPatterns = [];     // 形态信号列表
+let _taPatterns = [];          // 当前展示的形态信号（过滤后）
+let _taAllAutoPatterns = [];   // API 返回的全部自动识别形态（未过滤）
+let _taCustomPatterns = [];    // 用户手动添加的自定义标注
+let _taPatternFilters = new Set(['doji','harami','hammer','shooting_star','bullish_engulf','bearish_engulf','macd_golden','macd_death','macd_bullish_div','macd_bearish_div','custom']);
 let _taNotes = [];        // 笔记列表
 let _taNoteEditId = null; // 编辑中的笔记 id（null=新建）
 let _taMouseDown = false; // canvas 鼠标按下状态
@@ -5550,18 +5580,16 @@ async function taRenderChart() {
   if (showIndicators && json.indicators?.macd) {
     macdWrap.style.display = '';
     taRenderMacdChart(json.data, json.indicators.macd);
-    // 时间轴同步
-    const mainTs = _taChart.timeScale();
-    mainTs.subscribeVisibleLogicalRangeChange(r => {
-      if (_taMacdChart && r) _taMacdChart.timeScale().setVisibleLogicalRange(r);
+    // 时间轴同步：用时间范围而非 logical range，避免子图数据点数量不同导致错位
+    _taChart.timeScale().subscribeVisibleTimeRangeChange(r => {
+      if (_taMacdChart && r) _taMacdChart.timeScale().setVisibleRange(r);
     });
   } else { macdWrap.style.display = 'none'; }
   if (showIndicators && json.indicators?.rsi?.values) {
     rsiWrap.style.display = '';
     taRenderRsiChart(json.data, json.indicators.rsi.values);
-    const mainTs = _taChart.timeScale();
-    mainTs.subscribeVisibleLogicalRangeChange(r => {
-      if (_taRsiChart && r) _taRsiChart.timeScale().setVisibleLogicalRange(r);
+    _taChart.timeScale().subscribeVisibleTimeRangeChange(r => {
+      if (_taRsiChart && r) _taRsiChart.timeScale().setVisibleRange(r);
     });
   } else { rsiWrap.style.display = 'none'; }
 
@@ -5860,11 +5888,25 @@ function taSetDrawMode(mode, btn) {
 async function taLoadDrawings() {
   if (!_taSymbol) return;
   _taDrawings = [];
+  _taCustomPatterns = [];
   try {
     const json = await (await fetch(
       `/api/analysis/drawings?symbol=${encodeURIComponent(_taSymbol)}&market=a&period=${_taPeriod}`
     )).json();
-    if (json.success) { _taDrawings = json.data || []; taRedrawCanvas(); }
+    if (json.success) {
+      const all = json.data || [];
+      _taDrawings = all.filter(d => d.type !== 'custom_pattern');
+      _taCustomPatterns = all.filter(d => d.type === 'custom_pattern').map(d => ({
+        id: d.id,
+        time: d.data.time || '',
+        text: d.data.text || d.label || '自定义',
+        color: d.color || '#f59e0b',
+        position: d.data.position || 'belowBar',
+        shape: 'circle',
+        pattern_type: 'custom',
+      }));
+      taRedrawCanvas();
+    }
   } catch(e) {}
 }
 
@@ -5900,6 +5942,20 @@ async function taClearAllDrawings() {
 }
 
 // ── 形态识别 ──────────────────────────────────────────────────
+const TA_PATTERN_DEFS = [
+  { key:'doji',           name:'十字星',    color:'#f59e0b' },
+  { key:'harami',         name:'孕线',      color:'#8b5cf6' },
+  { key:'hammer',         name:'锤头线',    color:'#22c55e' },
+  { key:'shooting_star',  name:'射击之星',  color:'#ef4444' },
+  { key:'bullish_engulf', name:'多头吞噬',  color:'#22c55e' },
+  { key:'bearish_engulf', name:'空头吞噬',  color:'#ef4444' },
+  { key:'macd_golden',    name:'MACD金叉',  color:'#22c55e' },
+  { key:'macd_death',     name:'MACD死叉',  color:'#ef4444' },
+  { key:'macd_bullish_div', name:'MACD底背离', color:'#06b6d4' },
+  { key:'macd_bearish_div', name:'MACD顶背离', color:'#f43f5e' },
+  { key:'custom',         name:'自定义标注', color:'#f59e0b' },
+];
+
 async function taLoadPatterns() {
   if (!_taSymbol || !['day','week','month'].includes(_taPeriod)) {
     document.getElementById('taPatternsBody').innerHTML = '<div class="empty-state" style="padding:16px;">仅日/周/月K支持形态识别</div>';
@@ -5908,40 +5964,119 @@ async function taLoadPatterns() {
   const body = document.getElementById('taPatternsBody');
   body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--ink-3);">识别中...</div>';
   try {
-    const json = await (await fetch(`/api/analysis/patterns/${encodeURIComponent(_taSymbol)}?period=${_taPeriod}&lookback=120`)).json();
+    const json = await (await fetch(`/api/analysis/patterns/${encodeURIComponent(_taSymbol)}?period=${_taPeriod}&lookback=500`)).json();
     if (!json.success) { body.innerHTML = '<div class="empty-state" style="padding:16px;">形态识别失败</div>'; return; }
-    _taPatterns = [...(json.candle_patterns || []), ...(json.macd_signals || [])];
-    // 在主图打 marker
-    if (_taSeries && _taSeries.setMarkers) {
-      const markers = _taPatterns.map(p => ({
-        time: p.time, position: p.position || 'belowBar',
-        color: p.color || '#f59e0b', shape: p.shape || 'circle', text: p.text || '',
-      })).sort((a,b) => a.time < b.time ? -1 : 1);
-      _taSeries.setMarkers(markers);
-    }
-    taRenderPatternsList(json.candle_patterns || [], json.macd_signals || []);
+    _taAllAutoPatterns = [...(json.candle_patterns || []), ...(json.macd_signals || [])];
+    taRenderPatternFilters();
+    taApplyPatternFilters();
   } catch(e) { body.innerHTML = '<div class="empty-state" style="padding:16px;">加载失败</div>'; }
 }
 
-function taRenderPatternsList(candles, macds) {
+function taRenderPatternFilters() {
+  const el = document.getElementById('taPatternFilters');
+  if (!el) return;
+  el.innerHTML = TA_PATTERN_DEFS.map(def => {
+    const on = _taPatternFilters.has(def.key);
+    return `<button onclick="taTogglePatternType('${def.key}')"
+      style="font-size:11px;padding:2px 8px;border-radius:12px;border:1px solid ${def.color};
+             background:${on ? def.color : 'transparent'};color:${on ? '#fff' : def.color};
+             cursor:pointer;transition:all .15s;">
+        ${def.name}
+      </button>`;
+  }).join('');
+}
+
+function taTogglePatternType(key) {
+  if (_taPatternFilters.has(key)) _taPatternFilters.delete(key);
+  else _taPatternFilters.add(key);
+  taRenderPatternFilters();
+  taApplyPatternFilters();
+}
+
+function taApplyPatternFilters() {
+  const filtered = [
+    ..._taAllAutoPatterns.filter(p => _taPatternFilters.has(p.pattern_type)),
+    ...(_taPatternFilters.has('custom') ? _taCustomPatterns : []),
+  ];
+  _taPatterns = filtered;
+  if (_taSeries && _taSeries.setMarkers) {
+    const markers = filtered.map(p => ({
+      time: p.time, position: p.position || 'belowBar',
+      color: p.color || '#f59e0b', shape: p.shape || 'circle', text: p.text || '',
+    })).sort((a,b) => a.time < b.time ? -1 : 1);
+    _taSeries.setMarkers(markers);
+  }
+  taRenderPatternsList(filtered);
+}
+
+function taRenderPatternsList(patterns) {
   const body = document.getElementById('taPatternsBody');
-  const nameMap = {
-    doji:'十字星', harami:'孕线', hammer:'锤头线', shooting_star:'射击之星',
-    bullish_engulf:'多头吞噬', bearish_engulf:'空头吞噬',
-    macd_golden:'MACD金叉', macd_death:'MACD死叉',
-    macd_bullish_div:'MACD底背离', macd_bearish_div:'MACD顶背离',
-  };
-  const all = [...candles, ...macds].sort((a,b) => b.time > a.time ? 1 : -1);
-  if (!all.length) { body.innerHTML = '<div class="empty-state" style="padding:16px;">近120日无明显信号</div>'; return; }
-  body.innerHTML = all.map(p =>
-    `<div class="ta-pattern-item" onclick="taJumpToTime('${escapeHtml(p.time)}')">
-       <span class="ta-pattern-dot" style="background:${escapeHtml(p.color||'#f59e0b')};margin-top:5px;"></span>
-       <div>
+  const nameMap = Object.fromEntries(TA_PATTERN_DEFS.map(d => [d.key, d.name]));
+  const all = [...patterns].sort((a,b) => b.time > a.time ? 1 : -1);
+  if (!all.length) { body.innerHTML = '<div class="empty-state" style="padding:16px;">无匹配信号（可调整过滤器）</div>'; return; }
+  body.innerHTML = all.map(p => {
+    const isCustom = p.pattern_type === 'custom';
+    return `<div class="ta-pattern-item" onclick="taJumpToTime('${escapeHtml(p.time)}')">
+       <span class="ta-pattern-dot" style="background:${escapeHtml(p.color||'#f59e0b')};margin-top:5px;flex-shrink:0;"></span>
+       <div style="flex:1;min-width:0;">
          <div style="font-size:13px;font-weight:500;color:var(--ink);">${escapeHtml(nameMap[p.pattern_type]||p.text||p.pattern_type)}</div>
-         <div style="font-size:11px;color:var(--ink-3);">${escapeHtml(p.time)}</div>
+         <div style="font-size:11px;color:var(--ink-3);">${escapeHtml(p.time)}${isCustom && p.text ? ' · ' + escapeHtml(p.text) : ''}</div>
        </div>
-     </div>`
-  ).join('');
+       ${isCustom ? `<button onclick="event.stopPropagation();taDeleteCustomPattern(${p.id})"
+         style="font-size:11px;color:var(--ink-3);background:none;border:none;cursor:pointer;padding:2px 4px;flex-shrink:0;">✕</button>` : ''}
+     </div>`;
+  }).join('');
+}
+
+// ── 自定义标注 CRUD ────────────────────────────────────────────
+function taToggleCustomForm() {
+  const f = document.getElementById('taCustomPatternForm');
+  if (!f) return;
+  const show = f.style.display === 'none';
+  f.style.display = show ? '' : 'none';
+  if (show && _taKlineData.length) {
+    // 默认填最后一根 K 线日期
+    const lastDate = _taKlineData[_taKlineData.length - 1]?.date || '';
+    const el = document.getElementById('taCustomDate');
+    if (el && !el.value) el.value = lastDate;
+  }
+}
+
+async function taSaveCustomPattern() {
+  if (!_taSymbol) return;
+  const date  = document.getElementById('taCustomDate')?.value;
+  const text  = (document.getElementById('taCustomText')?.value || '').trim();
+  const color = document.getElementById('taCustomColor')?.value || '#f59e0b';
+  const pos   = document.getElementById('taCustomPosition')?.value || 'belowBar';
+  if (!date) { alert('请选择日期'); return; }
+  if (!text) { alert('请输入标注文字'); return; }
+  try {
+    const resp = await fetch('/api/analysis/drawings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        symbol: _taSymbol, market: 'a', period: _taPeriod,
+        type: 'custom_pattern',
+        data: { time: date, text, position: pos },
+        color, label: text,
+      }),
+    });
+    const json = await resp.json();
+    if (json.success) {
+      _taCustomPatterns.push({ id: json.id, time: date, text, color, position: pos, shape: 'circle', pattern_type: 'custom' });
+      taToggleCustomForm();
+      document.getElementById('taCustomText').value = '';
+      taApplyPatternFilters();
+    }
+  } catch(e) { alert('保存失败'); }
+}
+
+async function taDeleteCustomPattern(id) {
+  try {
+    await fetch(`/api/analysis/drawings/${id}`, { method: 'DELETE' });
+    _taCustomPatterns = _taCustomPatterns.filter(p => p.id !== id);
+    taApplyPatternFilters();
+  } catch(e) {}
 }
 
 function taJumpToTime(timeStr) {
