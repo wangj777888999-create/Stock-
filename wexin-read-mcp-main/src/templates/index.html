@@ -2306,6 +2306,7 @@ let _fundLoaded = false;
 
 function switchView(view, el) {
   // 离开旧视图前清理副作用
+  if (_klineResizeObserver) { _klineResizeObserver.disconnect(); _klineResizeObserver = null; }
   if (_klineMacdObserver) { _klineMacdObserver.disconnect(); _klineMacdObserver = null; }
   if (_klineRsiObserver) { _klineRsiObserver.disconnect(); _klineRsiObserver = null; }
   if (_fundResizeObserver) { _fundResizeObserver.disconnect(); _fundResizeObserver = null; }
