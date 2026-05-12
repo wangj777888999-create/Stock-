@@ -4248,6 +4248,7 @@ async function fundSearch() {
 let _fundChart = null, _fundKlineSeries = null, _fundVolSeries = null, _fundKlineRaw = null;
 
 async function selectFund(code, name) {
+  if (_fundResizeObserver) { _fundResizeObserver.disconnect(); _fundResizeObserver = null; }
   const listArea = document.getElementById('fundBoardCard');
   const resultCard = document.getElementById('fundResultCard');
   const detailArea = document.getElementById('fundDetailArea');
@@ -4308,7 +4309,8 @@ async function selectFund(code, name) {
       _fundChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
       _fundVolSeries.setData(kline.map(k => ({ time: k.date, value: k.volume, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
       _fundChart.timeScale().fitContent();
-      new ResizeObserver(() => { if (_fundChart) _fundChart.applyOptions({ width: chartEl.clientWidth }); }).observe(chartEl);
+      _fundResizeObserver = new ResizeObserver(() => { if (_fundChart) _fundChart.applyOptions({ width: chartEl.clientWidth }); });
+      _fundResizeObserver.observe(chartEl);
     } else {
       chartEl.innerHTML = '<div class="empty-state" style="padding:40px;">暂无K线数据</div>';
     }
@@ -4336,6 +4338,7 @@ async function selectFund(code, name) {
 }
 
 function switchFundKlinePeriod(period, btn) {
+  if (_fundResizeObserver) { _fundResizeObserver.disconnect(); _fundResizeObserver = null; }
   document.querySelectorAll('#fundKlinePeriodBtns .btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   if (!_fundKlineRaw || !_fundKlineRaw.length) return;
@@ -4362,7 +4365,8 @@ function switchFundKlinePeriod(period, btn) {
   _fundChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
   _fundVolSeries.setData(data.map(k => ({ time: k.time, value: k.volume || 0, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
   _fundChart.timeScale().fitContent();
-  new ResizeObserver(() => { if (_fundChart) _fundChart.applyOptions({ width: chartEl.clientWidth }); }).observe(chartEl);
+  _fundResizeObserver = new ResizeObserver(() => { if (_fundChart) _fundChart.applyOptions({ width: chartEl.clientWidth }); });
+  _fundResizeObserver.observe(chartEl);
 }
 
 function hideFundDetail() {
