@@ -2161,7 +2161,7 @@ textarea.form-input {
                   <button class="btn btn-sm" style="font-size:11px;padding:2px 8px;" onclick="taToggleRuleForm()">＋ 添加规则</button>
                 </div>
                 <div id="taRulesList" style="display:flex;flex-direction:column;gap:4px;"></div>
-                <div id="taRuleForm" style="display:none;margin-top:8px;display:none;flex-direction:column;gap:6px;">
+                <div id="taRuleForm" data-open="0" style="display:none;flex-direction:column;gap:6px;margin-top:8px;">
                   <input id="taRuleName" type="text" class="search-input" placeholder="规则名称，如：3连阳" style="font-size:12px;padding:4px 8px;">
                   <select id="taRuleType" class="search-input" style="font-size:12px;padding:4px 8px;" onchange="taRuleTypeChange()">
                     <option value="consecutive_bull">连阳（收盘>开盘 连续N根）</option>
@@ -6205,8 +6205,9 @@ function taRenderRulesList() {
 function taToggleRuleForm() {
   const f = document.getElementById('taRuleForm');
   if (!f) return;
-  const show = f.style.display === 'none' || f.style.display === '';
-  f.style.display = show ? 'flex' : 'none';
+  const opening = f.dataset.open !== '1';
+  f.dataset.open = opening ? '1' : '0';
+  f.style.display = opening ? 'flex' : 'none';
 }
 
 function taRuleTypeChange() {
@@ -6232,6 +6233,7 @@ async function taSaveCustomRule() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, rule_type, params, color, position }),
     });
+    if (!resp.ok) { alert('保存失败（' + resp.status + '），请重启服务后重试'); return; }
     const json = await resp.json();
     if (json.success) {
       _taCustomRules.push({ id: json.id, name, rule_type, params, color, position, enabled: 1 });
@@ -6240,8 +6242,10 @@ async function taSaveCustomRule() {
       taEvalCustomRules();
       taRenderRulesList();
       taApplyPatternFilters();
+    } else {
+      alert('保存失败：' + (json.detail || JSON.stringify(json)));
     }
-  } catch(e) { alert('保存失败'); }
+  } catch(e) { alert('保存失败：' + e.message); }
 }
 
 async function taToggleRuleEnabled(id, enabled) {
