@@ -290,3 +290,88 @@ async def get_patterns(
         "candle_patterns": candle_signals,
         "macd_signals": macd_signals,
     }
+
+
+# ── 自定义形态规则 ─────────────────────────────────────────────────────────────
+
+class RuleIn(BaseModel):
+    name: str
+    rule_type: str
+    params: dict = {}
+    color: str = "#22c55e"
+    position: str = "belowBar"
+    enabled: int = 1
+
+
+class RuleUpdate(BaseModel):
+    name: Optional[str] = None
+    rule_type: Optional[str] = None
+    params: Optional[dict] = None
+    color: Optional[str] = None
+    position: Optional[str] = None
+    enabled: Optional[int] = None
+
+
+@router.get("/api/analysis/rules")
+async def get_rules():
+    db = get_db()
+    rows = db.execute(
+        "SELECT id, name, rule_type, params, color, position, enabled, created_at "
+        "FROM custom_pattern_rules ORDER BY id"
+    ).fetchall()
+    return {
+        "success": True,
+        "data": [
+            {
+                "id": r[0], "name": r[1], "rule_type": r[2],
+                "params": json.loads(r[3]), "color": r[4],
+                "position": r[5], "enabled": r[6], "created_at": r[7],
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.post("/api/analysis/rules")
+async def create_rule(req: RuleIn):
+    db = get_db()
+    db.execute(
+        "INSERT INTO custom_pattern_rules (name, rule_type, params, color, position, enabled) "
+        "VALUES (?,?,?,?,?,?)",
+        (req.name, req.rule_type, json.dumps(req.params), req.color, req.position, req.enabled),
+    )
+    db.commit()
+    row_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+    return {"success": True, "id": row_id}
+
+
+@router.put("/api/analysis/rules/{rule_id}")
+async def update_rule(rule_id: int, req: RuleUpdate):
+    db = get_db()
+    sets, params = [], []
+    if req.name is not None:
+        sets.append("name=?"); params.append(req.name)
+    if req.rule_type is not None:
+        sets.append("rule_type=?"); params.append(req.rule_type)
+    if req.params is not None:
+        sets.append("params=?"); params.append(json.dumps(req.params))
+    if req.color is not None:
+        sets.append("color=?"); params.append(req.color)
+    if req.position is not None:
+        sets.append("position=?"); params.append(req.position)
+    if req.enabled is not None:
+        sets.append("enabled=?"); params.append(req.enabled)
+    if not sets:
+        return {"success": True}
+    params.append(rule_id)
+    db.execute(f"UPDATE custom_pattern_rules SET {', '.join(sets)} WHERE id=?", params)
+    db.commit()
+    return {"success": True}
+
+
+@router.delete("/api/analysis/rules/{rule_id}")
+async def delete_rule(rule_id: int):
+    db = get_db()
+    db.execute("DELETE FROM custom_pattern_rules WHERE id=?", (rule_id,))
+    db.commit()
+    return {"success": True}

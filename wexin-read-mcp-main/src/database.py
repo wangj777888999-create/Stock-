@@ -210,6 +210,17 @@ def init_db(db_path: str | None = None) -> None:
             );
 
             CREATE INDEX IF NOT EXISTS idx_notes_symbol ON stock_notes(symbol, market);
+
+            CREATE TABLE IF NOT EXISTS custom_pattern_rules (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT    NOT NULL,
+                rule_type   TEXT    NOT NULL,
+                params      TEXT    NOT NULL DEFAULT '{}',
+                color       TEXT    DEFAULT '#22c55e',
+                position    TEXT    DEFAULT 'belowBar',
+                enabled     INTEGER DEFAULT 1,
+                created_at  TEXT    DEFAULT (datetime('now'))
+            );
         """)
 
         # 清理过期缓存

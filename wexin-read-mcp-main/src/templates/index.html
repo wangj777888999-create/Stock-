@@ -2154,10 +2154,42 @@ textarea.form-input {
                   </div>
                 </div>
               </div>
+              <!-- 自定义规则 -->
+              <div style="background:var(--surface-2,#f8fafc);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px;margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                  <span style="font-size:11px;color:var(--ink-3);">自定义规则</span>
+                  <button class="btn btn-sm" style="font-size:11px;padding:2px 8px;" onclick="taToggleRuleForm()">＋ 添加规则</button>
+                </div>
+                <div id="taRulesList" style="display:flex;flex-direction:column;gap:4px;"></div>
+                <div id="taRuleForm" style="display:none;margin-top:8px;display:none;flex-direction:column;gap:6px;">
+                  <input id="taRuleName" type="text" class="search-input" placeholder="规则名称，如：3连阳" style="font-size:12px;padding:4px 8px;">
+                  <select id="taRuleType" class="search-input" style="font-size:12px;padding:4px 8px;" onchange="taRuleTypeChange()">
+                    <option value="consecutive_bull">连阳（收盘>开盘 连续N根）</option>
+                    <option value="consecutive_bear">连阴（收盘&lt;开盘 连续N根）</option>
+                    <option value="gain_pct">N日涨幅 ≥ X%</option>
+                    <option value="loss_pct">N日跌幅 ≥ X%</option>
+                  </select>
+                  <div style="display:flex;gap:6px;">
+                    <input id="taRuleN" type="number" class="search-input" placeholder="天数 N" min="2" max="30" value="3" style="flex:1;font-size:12px;padding:4px 8px;">
+                    <input id="taRulePct" type="number" class="search-input" placeholder="幅度 %" min="0" step="0.5" value="5" style="flex:1;font-size:12px;padding:4px 8px;display:none;">
+                  </div>
+                  <div style="display:flex;gap:6px;align-items:center;">
+                    <select id="taRulePosition" class="search-input" style="flex:1;font-size:12px;padding:4px 8px;">
+                      <option value="belowBar">K线下方</option>
+                      <option value="aboveBar">K线上方</option>
+                    </select>
+                    <input id="taRuleColor" type="color" value="#22c55e" style="width:32px;height:28px;border:none;cursor:pointer;border-radius:4px;padding:0;">
+                  </div>
+                  <div style="display:flex;gap:6px;">
+                    <button class="btn btn-sm btn-primary" style="flex:1;font-size:12px;" onclick="taSaveCustomRule()">保存规则</button>
+                    <button class="btn btn-sm btn-ghost" style="font-size:12px;" onclick="taToggleRuleForm()">取消</button>
+                  </div>
+                </div>
+              </div>
               <!-- 形态列表 -->
               <div class="card">
                 <div class="card-body" id="taPatternsBody"
-                     style="padding:12px;max-height:460px;overflow-y:auto;">
+                     style="padding:12px;max-height:400px;overflow-y:auto;">
                   <div class="empty-state" style="padding:20px 0;">选择股票后加载</div>
                 </div>
               </div>
@@ -3391,7 +3423,9 @@ let _taKlineData = [];    // K 线数据（坐标映射用）
 let _taPatterns = [];          // 当前展示的形态信号（过滤后）
 let _taAllAutoPatterns = [];   // API 返回的全部自动识别形态（未过滤）
 let _taCustomPatterns = [];    // 用户手动添加的自定义标注
-let _taPatternFilters = new Set(['doji','harami','hammer','shooting_star','bullish_engulf','bearish_engulf','macd_golden','macd_death','macd_bullish_div','macd_bearish_div','custom']);
+let _taCustomRules = [];       // 自定义规则列表（从 DB 加载）
+let _taCustomRulePatterns = []; // 规则计算出的匹配结果
+let _taPatternFilters = new Set(['doji','harami','hammer','shooting_star','bullish_engulf','bearish_engulf','macd_golden','macd_death','macd_bullish_div','macd_bearish_div','custom','custom_rule']);
 let _taNotes = [];        // 笔记列表
 let _taNoteEditId = null; // 编辑中的笔记 id（null=新建）
 let _taMouseDown = false; // canvas 鼠标按下状态
@@ -5955,6 +5989,7 @@ const TA_PATTERN_DEFS = [
   { key:'macd_bullish_div', name:'MACD底背离', color:'#06b6d4' },
   { key:'macd_bearish_div', name:'MACD顶背离', color:'#f43f5e' },
   { key:'custom',         name:'自定义标注', color:'#f59e0b' },
+  { key:'custom_rule',    name:'规则匹配',   color:'#6366f1' },
 ];
 
 async function taLoadPatterns() {
@@ -5968,6 +6003,7 @@ async function taLoadPatterns() {
     const json = await (await fetch(`/api/analysis/patterns/${encodeURIComponent(_taSymbol)}?period=${_taPeriod}&lookback=500`)).json();
     if (!json.success) { body.innerHTML = '<div class="empty-state" style="padding:16px;">形态识别失败</div>'; return; }
     _taAllAutoPatterns = [...(json.candle_patterns || []), ...(json.macd_signals || [])];
+    await taLoadCustomRules();   // 加载规则 → 评估 → 合并进过滤器
     taRenderPatternFilters();
     taApplyPatternFilters();
   } catch(e) { body.innerHTML = '<div class="empty-state" style="padding:16px;">加载失败</div>'; }
@@ -5998,6 +6034,7 @@ function taApplyPatternFilters() {
   const filtered = [
     ..._taAllAutoPatterns.filter(p => _taPatternFilters.has(p.pattern_type)),
     ...(_taPatternFilters.has('custom') ? _taCustomPatterns : []),
+    ...(_taPatternFilters.has('custom_rule') ? _taCustomRulePatterns : []),
   ];
   _taPatterns = filtered;
   if (_taSeries && _taSeries.setMarkers) {
@@ -6076,6 +6113,158 @@ async function taDeleteCustomPattern(id) {
   try {
     await fetch(`/api/analysis/drawings/${id}`, { method: 'DELETE' });
     _taCustomPatterns = _taCustomPatterns.filter(p => p.id !== id);
+    taApplyPatternFilters();
+  } catch(e) {}
+}
+
+// ── 自定义规则 ─────────────────────────────────────────────────
+async function taLoadCustomRules() {
+  try {
+    const json = await (await fetch('/api/analysis/rules')).json();
+    _taCustomRules = json.data || [];
+    taEvalCustomRules();
+    taRenderRulesList();
+  } catch(e) {}
+}
+
+function taEvalCustomRules() {
+  _taCustomRulePatterns = [];
+  if (!_taKlineData.length) return;
+  for (const rule of _taCustomRules) {
+    if (!rule.enabled) continue;
+    _taCustomRulePatterns.push(...taEvalOneRule(rule));
+  }
+}
+
+function taEvalOneRule(rule) {
+  const data = _taKlineData;
+  const n = rule.params.n || 3;
+  const pct = rule.params.pct || 0;
+  const base = { position: rule.position || 'belowBar', color: rule.color || '#6366f1', text: rule.name, pattern_type: 'custom_rule' };
+  const results = [];
+  switch (rule.rule_type) {
+    case 'consecutive_bull':
+      for (let i = n - 1; i < data.length; i++) {
+        if (Array.from({length: n}, (_, j) => data[i - j]).every(k => parseFloat(k.close) > parseFloat(k.open)))
+          results.push({ ...base, time: data[i].date, shape: 'arrowUp' });
+      }
+      break;
+    case 'consecutive_bear':
+      for (let i = n - 1; i < data.length; i++) {
+        if (Array.from({length: n}, (_, j) => data[i - j]).every(k => parseFloat(k.close) < parseFloat(k.open)))
+          results.push({ ...base, time: data[i].date, shape: 'arrowDown' });
+      }
+      break;
+    case 'gain_pct':
+      for (let i = n; i < data.length; i++) {
+        const ref = parseFloat(data[i - n].close);
+        if (ref > 0 && (parseFloat(data[i].close) - ref) / ref * 100 >= pct)
+          results.push({ ...base, time: data[i].date, shape: 'arrowUp' });
+      }
+      break;
+    case 'loss_pct':
+      for (let i = n; i < data.length; i++) {
+        const ref = parseFloat(data[i - n].close);
+        if (ref > 0 && (ref - parseFloat(data[i].close)) / ref * 100 >= pct)
+          results.push({ ...base, time: data[i].date, shape: 'arrowDown' });
+      }
+      break;
+  }
+  return results;
+}
+
+const RULE_TYPE_NAMES = {
+  consecutive_bull: '连阳', consecutive_bear: '连阴',
+  gain_pct: '涨幅', loss_pct: '跌幅',
+};
+
+function taRenderRulesList() {
+  const el = document.getElementById('taRulesList');
+  if (!el) return;
+  if (!_taCustomRules.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--ink-3);text-align:center;padding:4px 0;">暂无规则</div>';
+    return;
+  }
+  el.innerHTML = _taCustomRules.map(r => {
+    const typeName = RULE_TYPE_NAMES[r.rule_type] || r.rule_type;
+    const paramStr = r.params.pct != null ? `${r.params.n}日/${r.params.pct}%` : `${r.params.n}根`;
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:var(--surface);border:1px solid var(--border);border-radius:6px;">
+      <span style="width:8px;height:8px;border-radius:50%;background:${r.color};flex-shrink:0;"></span>
+      <span style="flex:1;font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</span>
+      <span style="font-size:10px;color:var(--ink-3);flex-shrink:0;">${typeName}·${paramStr}</span>
+      <button onclick="taToggleRuleEnabled(${r.id},${r.enabled ? 0 : 1})"
+        style="font-size:10px;padding:1px 5px;border-radius:4px;border:1px solid var(--border);background:${r.enabled ? '#22c55e' : 'transparent'};color:${r.enabled ? '#fff' : 'var(--ink-3)'};cursor:pointer;flex-shrink:0;">
+        ${r.enabled ? '开' : '关'}
+      </button>
+      <button onclick="taDeleteCustomRule(${r.id})"
+        style="font-size:11px;color:var(--ink-3);background:none;border:none;cursor:pointer;flex-shrink:0;">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function taToggleRuleForm() {
+  const f = document.getElementById('taRuleForm');
+  if (!f) return;
+  const show = f.style.display === 'none' || f.style.display === '';
+  f.style.display = show ? 'flex' : 'none';
+}
+
+function taRuleTypeChange() {
+  const t = document.getElementById('taRuleType')?.value;
+  const pctEl = document.getElementById('taRulePct');
+  if (pctEl) pctEl.style.display = (t === 'gain_pct' || t === 'loss_pct') ? '' : 'none';
+}
+
+async function taSaveCustomRule() {
+  const name = (document.getElementById('taRuleName')?.value || '').trim();
+  const rule_type = document.getElementById('taRuleType')?.value;
+  const n = parseInt(document.getElementById('taRuleN')?.value) || 3;
+  const pctEl = document.getElementById('taRulePct');
+  const color = document.getElementById('taRuleColor')?.value || '#22c55e';
+  const position = document.getElementById('taRulePosition')?.value || 'belowBar';
+  if (!name) { alert('请输入规则名称'); return; }
+  const params = { n };
+  if (rule_type === 'gain_pct' || rule_type === 'loss_pct')
+    params.pct = parseFloat(pctEl?.value) || 5;
+  try {
+    const resp = await fetch('/api/analysis/rules', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, rule_type, params, color, position }),
+    });
+    const json = await resp.json();
+    if (json.success) {
+      _taCustomRules.push({ id: json.id, name, rule_type, params, color, position, enabled: 1 });
+      taToggleRuleForm();
+      document.getElementById('taRuleName').value = '';
+      taEvalCustomRules();
+      taRenderRulesList();
+      taApplyPatternFilters();
+    }
+  } catch(e) { alert('保存失败'); }
+}
+
+async function taToggleRuleEnabled(id, enabled) {
+  try {
+    await fetch(`/api/analysis/rules/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
+    const r = _taCustomRules.find(r => r.id === id);
+    if (r) r.enabled = enabled;
+    taEvalCustomRules();
+    taRenderRulesList();
+    taApplyPatternFilters();
+  } catch(e) {}
+}
+
+async function taDeleteCustomRule(id) {
+  try {
+    await fetch(`/api/analysis/rules/${id}`, { method: 'DELETE' });
+    _taCustomRules = _taCustomRules.filter(r => r.id !== id);
+    taEvalCustomRules();
+    taRenderRulesList();
     taApplyPatternFilters();
   } catch(e) {}
 }
