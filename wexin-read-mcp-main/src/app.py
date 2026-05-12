@@ -90,6 +90,8 @@ app.include_router(stats_router)
 app.include_router(articles_router)
 from routers.sector import router as sector_router
 app.include_router(sector_router)
+from routers.analysis import router as analysis_router
+app.include_router(analysis_router)
 
 
 @app.get("/", response_class=HTMLResponse)
