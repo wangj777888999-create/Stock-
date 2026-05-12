@@ -2305,6 +2305,16 @@ const topbarMeta = {
 let _fundLoaded = false;
 
 function switchView(view, el) {
+  // 离开旧视图前清理副作用
+  if (_klineMacdObserver) { _klineMacdObserver.disconnect(); _klineMacdObserver = null; }
+  if (_klineRsiObserver) { _klineRsiObserver.disconnect(); _klineRsiObserver = null; }
+  if (_fundResizeObserver) { _fundResizeObserver.disconnect(); _fundResizeObserver = null; }
+  if (_futuresResizeObserver) { _futuresResizeObserver.disconnect(); _futuresResizeObserver = null; }
+  // 离开自选股视图时清理定时器
+  if (_watchlistInterval && view !== 'watchlist') {
+    clearInterval(_watchlistInterval);
+    _watchlistInterval = null;
+  }
   // 博主管理 & 文章收集 需要登录
   if ((view === 'task' || view === 'bloggers') && !_mpLoggedIn) {
     if (el) el.classList.remove('active');
