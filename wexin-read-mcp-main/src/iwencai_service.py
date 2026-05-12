@@ -14,6 +14,9 @@ from http_client import patch_requests as _patch_requests
 
 logger = logging.getLogger("iwencai-service")
 
+_WENCAI_TIMEOUT = 15.0   # 问财单次查询超时
+_AKSHARE_TIMEOUT = 20.0  # AKShare 接口超时
+
 
 def _clean(v):
     """将 NaN/NaT 转为 None。"""
@@ -35,10 +38,11 @@ class IWencaiService:
             return cached
 
         try:
-            df = await asyncio.to_thread(
-                pywencai.get, query=query, loop=loop, perpage=perpage
+            df = await asyncio.wait_for(
+                asyncio.to_thread(pywencai.get, query=query, loop=loop, perpage=perpage),
+                timeout=_WENCAI_TIMEOUT,
             )
-            if df is None or df.empty:
+            if df is None or (hasattr(df, "empty") and df.empty):
                 return {"success": True, "data": [], "total": 0}
 
             records = []
@@ -51,6 +55,9 @@ class IWencaiService:
             resp = {"success": True, "data": records, "total": len(records)}
             cache.set(cache_key, resp, TTL_REALTIME)
             return resp
+        except asyncio.TimeoutError:
+            logger.warning(f"问财查询超时: {query}")
+            return {"success": False, "error": "问财查询超时，请稍后重试"}
         except Exception as e:
             logger.error(f"问财查询失败: {e}")
             return {"success": False, "error": f"查询失败: {str(e)}"}
@@ -63,8 +70,9 @@ class IWencaiService:
             return cached
 
         try:
-            df = await asyncio.to_thread(
-                _patch_requests, ak.stock_board_industry_name_ths
+            df = await asyncio.wait_for(
+                asyncio.to_thread(_patch_requests, ak.stock_board_industry_name_ths),
+                timeout=_AKSHARE_TIMEOUT,
             )
             if df is None or df.empty:
                 return {"success": True, "data": []}
@@ -73,6 +81,9 @@ class IWencaiService:
             resp = {"success": True, "data": records}
             cache.set(cache_key, resp, TTL_COMPANY)
             return resp
+        except asyncio.TimeoutError:
+            logger.warning("行业列表获取超时")
+            return {"success": False, "error": "行业列表请求超时，请稍后重试"}
         except Exception as e:
             logger.error(f"行业列表获取失败: {e}")
             return {"success": False, "error": str(e)}
@@ -85,12 +96,11 @@ class IWencaiService:
             return cached
 
         try:
-            df = await asyncio.to_thread(
-                pywencai.get,
-                query=sector_name,
-                perpage=perpage,
+            df = await asyncio.wait_for(
+                asyncio.to_thread(pywencai.get, query=sector_name, perpage=perpage),
+                timeout=_WENCAI_TIMEOUT,
             )
-            if df is None or df.empty:
+            if df is None or (hasattr(df, "empty") and df.empty):
                 return {"success": True, "data": [], "total": 0}
 
             records = []
@@ -103,6 +113,9 @@ class IWencaiService:
             resp = {"success": True, "data": records, "total": len(records)}
             cache.set(cache_key, resp, TTL_REALTIME)
             return resp
+        except asyncio.TimeoutError:
+            logger.warning(f"概念成分股查询超时: {sector_name}")
+            return {"success": False, "error": "概念查询超时，请稍后重试"}
         except Exception as e:
             logger.error(f"概念成分股获取失败: {e}")
             return {"success": False, "error": str(e)}
@@ -115,9 +128,9 @@ class IWencaiService:
             return cached
 
         try:
-            result = await asyncio.to_thread(
-                pywencai.get,
-                query=f"{symbol} 机构调研",
+            result = await asyncio.wait_for(
+                asyncio.to_thread(pywencai.get, query=f"{symbol} 机构调研"),
+                timeout=_WENCAI_TIMEOUT,
             )
             # 个股查询返回 dict，从"近半年机构调研明细"提取
             if isinstance(result, dict):
@@ -136,6 +149,9 @@ class IWencaiService:
                 cache.set(cache_key, resp, TTL_DAILY)
                 return resp
             return {"success": True, "data": []}
+        except asyncio.TimeoutError:
+            logger.warning(f"机构调研查询超时: {symbol}")
+            return {"success": False, "error": "机构调研查询超时，请稍后重试"}
         except Exception as e:
             logger.error(f"机构调研查询失败: {e}")
             return {"success": False, "error": str(e)}
@@ -149,18 +165,20 @@ class IWencaiService:
 
         try:
             full_query = f"近一月有机构调研，{query}" if query else "近一月机构调研家数大于5家，按调研日期降序"
-            df = await asyncio.to_thread(
-                pywencai.get,
-                query=full_query,
-                perpage=100,
+            df = await asyncio.wait_for(
+                asyncio.to_thread(pywencai.get, query=full_query, perpage=100),
+                timeout=_WENCAI_TIMEOUT,
             )
-            if df is None or df.empty:
+            if df is None or (hasattr(df, "empty") and df.empty):
                 return {"success": True, "data": [], "total": 0}
 
             records = self._dedup_visits(df)
             resp = {"success": True, "data": records, "total": len(records)}
             cache.set(cache_key, resp, TTL_REALTIME)
             return resp
+        except asyncio.TimeoutError:
+            logger.warning(f"机构调研扫描超时: {query}")
+            return {"success": False, "error": "机构调研扫描超时，请稍后重试"}
         except Exception as e:
             logger.error(f"机构调研扫描失败: {e}")
             return {"success": False, "error": str(e)}
@@ -170,7 +188,6 @@ class IWencaiService:
         """按股票代码去重，每只股票保留第一条（最新调研）"""
         seen = set()
         records = []
-        visit_cols = [c for c in df.columns if '调研' in c and '次数' not in c]
         meta_cols = ['market_code', 'code', '明细数据']
         keep_cols = [c for c in df.columns if c not in meta_cols]
 
@@ -181,10 +198,7 @@ class IWencaiService:
             if code in seen:
                 continue
             seen.add(code)
-            r = {}
-            for col in keep_cols:
-                r[col] = _clean(row[col])
-            records.append(r)
+            records.append({col: _clean(row[col]) for col in keep_cols})
 
         return records
 

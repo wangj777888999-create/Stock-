@@ -231,6 +231,16 @@ class _CacheCompat:
             _mem[key] = (value, exp)
         cache_set(key, value, ttl)
 
+    def clear(self) -> None:
+        with _mem_lock:
+            _mem.clear()
+        db = get_db()
+        db.execute("DELETE FROM cache")
+        db.commit()
+
+    # 兼容旧 benchmark 脚本的 cache._store.clear() 调用
+    _store = _mem
+
 
 cache = _CacheCompat()
 

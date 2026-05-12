@@ -103,6 +103,7 @@ async def _startup():
     """启动时预加载数据。"""
     init_db()
     asyncio.create_task(StockService.preload_stock_list())
+    asyncio.create_task(StockService._refresh_stock_list_bg())
 
     async def _preload_fund():
         try:

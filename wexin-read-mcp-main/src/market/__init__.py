@@ -19,11 +19,7 @@ def list_providers() -> list[dict]:
     return [{"name": p.name, "label": p.label} for p in _providers.values()]
 
 
-# Register fund, crypto, and futures providers
+# Register fund provider
 from .fund import FundProvider
-from .crypto import CryptoProvider
-from .futures import FuturesProvider
 
 register(FundProvider())
-register(CryptoProvider())
-register(FuturesProvider())

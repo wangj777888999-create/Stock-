@@ -1133,21 +1133,6 @@ textarea.form-input {
         <svg viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M7 7h6M7 10h6M7 13h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
         <span>基金</span>
       </button>
-      <button class="nav-item" data-view="crypto" onclick="switchView('crypto', this)">
-        <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.6"/><path d="M10 6v8M8 8h4c1.1 0 2 .9 2 2s-.9 2-2 2H8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span>币圈</span>
-      </button>
-      <button class="nav-item" data-view="futures" onclick="switchView('futures', this)">
-        <svg viewBox="0 0 20 20" fill="none"><path d="M3 17V7l4-4 4 4 6-4v14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 11l4-4 4 4 6-4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" opacity=".5"/></svg>
-        <span>期货</span>
-      </button>
-      <button class="nav-item" data-view="northbound" onclick="switchView('northbound', this)">
-        <svg viewBox="0 0 20 20" fill="none">
-          <path d="M4 16l4-6 3 3 5-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M14 6h2v2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>北向/龙虎</span>
-      </button>
       <button class="nav-item" data-view="watchlist" onclick="switchView('watchlist', this)">
         <svg viewBox="0 0 20 20" fill="none"><polygon points="10,3 13,9 19,10 14,15 15,21 10,18 5,21 6,15 1,10 7,9" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
         <span>自选股</span>
@@ -1921,124 +1906,6 @@ textarea.form-input {
         </div>
       </div>
 
-      <!-- ==================== VIEW: CRYPTO ==================== -->
-      <div id="view-crypto" class="view">
-
-        <!-- 币种搜索 -->
-        <div class="card" style="margin-bottom:16px;">
-          <div class="card-body" style="padding:12px;">
-            <div style="display:flex;gap:8px;">
-              <input id="cryptoSearchInput" class="input" placeholder="搜索币种（名称或代码，如 BTC）" style="flex:1;"
-                     onkeydown="if(event.key==='Enter')cryptoSearch()">
-              <button class="btn btn-primary" onclick="cryptoSearch()">搜索</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 币种行情列表 -->
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">主流币种行情</div>
-            <button class="btn btn-ghost btn-sm" onclick="loadCryptoSpot()">刷新</button>
-          </div>
-          <div class="card-body" style="overflow-x:auto;padding:0;">
-            <div id="cryptoSpotBody" style="max-height:600px;overflow-y:auto;">
-              <div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ==================== VIEW: FUTURES ==================== -->
-      <div id="view-futures" class="view">
-
-        <!-- 搜索 -->
-        <div class="card" style="margin-bottom:16px;">
-          <div class="card-body" style="padding:12px;">
-            <div style="display:flex;gap:8px;">
-              <input id="futuresSearchInput" class="input" placeholder="搜索期货品种（如 螺纹、黄金）" style="flex:1;"
-                     onkeydown="if(event.key==='Enter')futuresSearch()">
-              <button class="btn btn-primary" onclick="futuresSearch()">搜索</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 板块分类 -->
-        <div class="card" id="futuresBoardCard">
-          <div class="card-header">
-            <div class="card-title">期货板块分类</div>
-            <button class="btn btn-ghost btn-sm" onclick="loadFuturesBoards()">刷新</button>
-          </div>
-          <div class="card-body" id="futuresBoardBody">
-            <div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>
-          </div>
-        </div>
-
-        <!-- 板块合约列表 -->
-        <div class="card" id="futuresResultCard" style="display:none;margin-top:16px;">
-          <div class="card-header">
-            <div class="card-title" id="futuresResultTitle">合约列表</div>
-          </div>
-          <div class="card-body" style="overflow-x:auto;padding:0;">
-            <div id="futuresResultBody" style="max-height:500px;overflow-y:auto;"></div>
-          </div>
-        </div>
-
-        <!-- 合约详情面板 -->
-        <div id="futuresDetailArea" style="display:none;">
-          <div style="margin-bottom:16px;">
-            <button class="btn btn-ghost" onclick="hideFuturesDetail()" style="font-size:13px;">← 返回合约列表</button>
-            <span id="futuresDetailTitle" style="font-weight:600;font-size:16px;margin-left:8px;"></span>
-          </div>
-
-          <!-- K 线图 -->
-          <div class="card" style="margin-bottom:16px;">
-            <div class="card-header">
-              <div class="card-title">K 线走势</div>
-              <div style="display:flex;gap:4px;" id="futuresKlinePeriodBtns">
-                <button class="btn btn-ghost btn-sm active" onclick="switchFuturesKlinePeriod('day',this)">日K</button>
-                <button class="btn btn-ghost btn-sm" onclick="switchFuturesKlinePeriod('week',this)">周K</button>
-                <button class="btn btn-ghost btn-sm" onclick="switchFuturesKlinePeriod('month',this)">月K</button>
-              </div>
-            </div>
-            <div style="display:flex;gap:6px;padding:6px 12px 0;" id="futuresMaToggles"></div>
-            <div class="card-body" style="padding:0;">
-              <div id="futuresKlineChart" style="height:360px;"></div>
-            </div>
-          </div>
-
-          <!-- 持仓龙虎榜 -->
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">持仓龙虎榜</div>
-              <span id="futuresRankDate" style="color:var(--ink-3);font-size:12px;"></span>
-            </div>
-            <div class="card-body" style="overflow-x:auto;padding:0;">
-              <div id="futuresRankBody" style="max-height:400px;overflow-y:auto;"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ==================== VIEW: NORTHBOUND ==================== -->
-      <div id="view-northbound" class="view">
-        <div class="tab-bar" style="display:flex;gap:8px;margin-bottom:20px;">
-          <button class="btn active" onclick="switchNorthboundTab('flow', this)">实时净流入</button>
-          <button class="btn" onclick="switchNorthboundTab('history', this)">历史趋势</button>
-          <button class="btn" onclick="switchNorthboundTab('dragon', this)">龙虎榜</button>
-        </div>
-        <div id="northbound-flow-panel">
-          <div id="northbound-summary" style="font-size:28px;font-weight:700;margin-bottom:16px;"></div>
-          <div id="northbound-flow-chart" style="height:300px;"></div>
-        </div>
-        <div id="northbound-history-panel" style="display:none">
-          <div id="northbound-history-chart" style="height:360px;"></div>
-        </div>
-        <div id="northbound-dragon-panel" style="display:none">
-          <div id="northbound-dragon-table"></div>
-        </div>
-      </div>
-
       <!-- ==================== VIEW: WATCHLIST ==================== -->
       <div id="view-watchlist" class="view">
         <div class="card">
@@ -2321,9 +2188,6 @@ const topbarMeta = {
   config:   { title: '配置设置', sub: '邮箱 SMTP · 公众号授权 · AI API' },
   stock:    { title: '股票查询', sub: '搜索 A 股/美股/港股 · 实时行情' },
   fund:     { title: '基金', sub: 'ETF 板块分类 · 基金搜索 · 实时行情' },
-  crypto:   { title: '币圈', sub: '主流币种行情 · 币种搜索' },
-  futures:   { title: '期货', sub: '主力合约行情 · K线 · 持仓龙虎榜' },
-  northbound: { title: '北向/龙虎', sub: '北向资金实时净流入 · 历史趋势 · 龙虎榜' },
   watchlist: { title: '自选股', sub: '添加/删除 · 实时行情 · 30s自动刷新' },
   sim: { title: '模拟交易', sub: '虚拟盘 · 开仓/平仓 · 盈亏统计' },
   sector: { title: '板块', sub: '行业板块 · 概念板块 · 涨跌幅热力图 · 成分股 · K线' },
@@ -2337,7 +2201,6 @@ function switchView(view, el) {
   if (_klineMacdObserver) { _klineMacdObserver.disconnect(); _klineMacdObserver = null; }
   if (_klineRsiObserver) { _klineRsiObserver.disconnect(); _klineRsiObserver = null; }
   if (_fundResizeObserver) { _fundResizeObserver.disconnect(); _fundResizeObserver = null; }
-  if (_futuresResizeObserver) { _futuresResizeObserver.disconnect(); _futuresResizeObserver = null; }
   // 离开自选股视图时清理定时器
   if (_watchlistInterval && view !== 'watchlist') {
     clearInterval(_watchlistInterval);
@@ -2363,9 +2226,6 @@ function switchView(view, el) {
   if (view === 'bloggers') { loadBloggers(); }
   if (view === 'articles') { loadArticles(); }
   if (view === 'fund' && !_fundLoaded) { loadFundBoards(); _fundLoaded = true; }
-  if (view === 'crypto') { loadCryptoSpot(); }
-  if (view === 'futures') { loadFuturesBoards(); }
-  if (view === 'northbound') { loadNorthboundPage(); }
   if (view === 'watchlist') { loadWatchlist(); }
   if (view === 'sim') { loadSim(); }
   if (view === 'sector') { loadSectorBoards(); }
@@ -3315,7 +3175,6 @@ let _klineResizeObserver = null;
 let _klineMacdObserver = null;
 let _klineRsiObserver = null;
 let _fundResizeObserver = null;
-let _futuresResizeObserver = null;
 
 /* --- 搜索 --- */
 async function searchStock() {
@@ -4072,7 +3931,6 @@ const MARKET_CONFIG = [
   { name: 'us_stock', label: '美股' },
   { name: 'hk_stock', label: '港股' },
   { name: 'global_index', label: '全球指数' },
-  { name: 'crypto', label: '币圈' },
 ];
 
 function initMarketSwitcher() {
@@ -4417,264 +4275,6 @@ function hideFundDetail() {
   if (resultCard) resultCard.style.display = '';
   // 清理图表
   if (_fundChart) { _fundChart.remove(); _fundChart = null; }
-}
-
-// --- Crypto View ---
-
-async function loadCryptoSpot() {
-  const body = document.getElementById('cryptoSpotBody');
-  if (!body) return;
-  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
-  try {
-    const resp = await fetch('/api/market/crypto/spot');
-    const json = await resp.json();
-    if (!json.success || !json.data?.length) { body.innerHTML = '<div class="empty-state">加载失败</div>'; return; }
-    _renderCryptoTable(body, json.data);
-  } catch (e) {
-    body.innerHTML = '<div class="empty-state">加载失败，请稍后重试</div>';
-  }
-}
-
-async function cryptoSearch() {
-  const input = document.getElementById('cryptoSearchInput');
-  const keyword = input ? input.value.trim() : '';
-  if (!keyword) { loadCryptoSpot(); return; }
-  const body = document.getElementById('cryptoSpotBody');
-  if (!body) return;
-  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 搜索中...</div>';
-  try {
-    const resp = await fetch('/api/market/crypto/search?q=' + encodeURIComponent(keyword));
-    const json = await resp.json();
-    if (!json.success || !json.data?.length) { body.innerHTML = '<div class="empty-state">未找到结果</div>'; return; }
-    _renderCryptoTable(body, json.data);
-  } catch (e) {
-    body.innerHTML = '<div class="empty-state">搜索失败，请稍后重试</div>';
-  }
-}
-
-function _renderCryptoTable(container, data) {
-  let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
-  html += '<thead><tr style="border-bottom:2px solid var(--border);text-align:left;">';
-  html += '<th style="padding:8px;">#</th><th style="padding:8px;">名称</th><th style="padding:8px;">代码</th>';
-  html += '<th style="padding:8px;text-align:right;">价格(USD)</th><th style="padding:8px;text-align:right;">24h涨跌</th>';
-  html += '<th style="padding:8px;text-align:right;">市值</th><th style="padding:8px;text-align:right;">24h成交量</th>';
-  html += '</tr></thead><tbody>';
-  data.forEach(c => {
-    const change = c.change_24h || 0;
-    const color = change >= 0 ? 'var(--green)' : 'var(--red)';
-    const sign = change >= 0 ? '+' : '';
-    const mcap = c.market_cap ? (c.market_cap >= 1e12 ? (c.market_cap/1e12).toFixed(2)+'T' : c.market_cap >= 1e9 ? (c.market_cap/1e9).toFixed(2)+'B' : (c.market_cap/1e6).toFixed(2)+'M') : '-';
-    const vol = c.volume_24h ? (c.volume_24h >= 1e9 ? (c.volume_24h/1e9).toFixed(2)+'B' : (c.volume_24h/1e6).toFixed(2)+'M') : '-';
-    html += '<tr style="border-bottom:1px solid var(--border);">';
-    html += '<td style="padding:8px;color:var(--ink-3);">' + escapeHtml(c.rank || '-') + '</td>';
-    html += '<td style="padding:8px;font-weight:500;">' + escapeHtml(c.name) + '</td>';
-    html += '<td style="padding:8px;color:var(--ink-3);">' + escapeHtml(c.code) + '</td>';
-    html += '<td style="padding:8px;text-align:right;font-weight:500;">' + escapeHtml(c.price ? c.price.toLocaleString() : '-') + '</td>';
-    html += '<td style="padding:8px;text-align:right;color:' + color + ';">' + escapeHtml(sign + change.toFixed(2) + '%') + '</td>';
-    html += '<td style="padding:8px;text-align:right;color:var(--ink-3);">$' + escapeHtml(mcap) + '</td>';
-    html += '<td style="padding:8px;text-align:right;color:var(--ink-3);">$' + escapeHtml(vol) + '</td>';
-    html += '</tr>';
-  });
-  html += '</tbody></table>';
-  container.innerHTML = html;
-}
-
-// --- Futures View ---
-
-async function loadFuturesBoards() {
-  const body = document.getElementById('futuresBoardBody');
-  if (!body) return;
-  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
-  try {
-    const resp = await fetch('/api/market/futures/boards');
-    const json = await resp.json();
-    if (!json.success || !json.data?.length) {
-      body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '加载失败') + '</div>';
-      return;
-    }
-    let html = '<div class="board-grid">';
-    json.data.forEach(item => {
-      const label = item.name + ' (' + item.count + ')';
-      html += '<div class="board-chip" data-name="' + escapeHtml(item.name) + '">'
-        + escapeHtml(label) + '</div>';
-    });
-    html += '</div>';
-    body.innerHTML = html;
-    body.querySelectorAll('.board-chip').forEach(chip => {
-      chip.addEventListener('click', () => loadFuturesBoardStocks(chip.dataset.name));
-    });
-  } catch (e) {
-    body.innerHTML = '<div class="empty-state">加载失败，请稍后重试</div>';
-  }
-}
-
-async function loadFuturesBoardStocks(name) {
-  const card = document.getElementById('futuresResultCard');
-  const body = document.getElementById('futuresResultBody');
-  const title = document.getElementById('futuresResultTitle');
-  if (!card || !body || !title) return;
-  card.style.display = '';
-  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
-  title.textContent = '「' + name + '」';
-  try {
-    const resp = await fetch('/api/market/futures/board/' + encodeURIComponent(name));
-    const json = await resp.json();
-    if (!json.success) { body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '查询失败') + '</div>'; return; }
-    if (!json.data?.length) { body.innerHTML = '<div class="empty-state">未找到数据</div>'; return; }
-    title.textContent = '「' + name + '」（共 ' + (json.total || json.data.length) + ' 条）';
-    _renderWencaiTable(body, json.data, row => selectFutures(row['代码'], row['名称']));
-  } catch (e) {
-    body.innerHTML = '<div class="empty-state">请求失败，请稍后重试</div>';
-  }
-}
-
-async function futuresSearch() {
-  const input = document.getElementById('futuresSearchInput');
-  const keyword = input ? input.value.trim() : '';
-  if (!keyword) { showToast('请输入搜索关键词', 'warning'); return; }
-  const card = document.getElementById('futuresResultCard');
-  const body = document.getElementById('futuresResultBody');
-  const title = document.getElementById('futuresResultTitle');
-  if (!card || !body || !title) return;
-  card.style.display = '';
-  body.innerHTML = '<div style="text-align:center;padding:30px;color:var(--ink-3);"><span class="spinner dark"></span> 搜索中...</div>';
-  title.textContent = '搜索: ' + keyword;
-  try {
-    const resp = await fetch('/api/market/futures/search?q=' + encodeURIComponent(keyword));
-    const json = await resp.json();
-    if (!json.success || !json.data?.length) { body.innerHTML = '<div class="empty-state">未找到结果</div>'; return; }
-    title.textContent = '搜索: ' + keyword + '（' + json.total + ' 条）';
-    _renderWencaiTable(body, json.data, row => selectFutures(row['代码'], row['名称']));
-  } catch (e) {
-    body.innerHTML = '<div class="empty-state">搜索失败，请稍后重试</div>';
-  }
-}
-
-let _futuresChart = null, _futuresKlineSeries = null, _futuresVolSeries = null, _futuresKlineRaw = null;
-
-async function selectFutures(code, name) {
-  if (_futuresResizeObserver) { _futuresResizeObserver.disconnect(); _futuresResizeObserver = null; }
-  const listArea = document.getElementById('futuresBoardCard');
-  const resultCard = document.getElementById('futuresResultCard');
-  const detailArea = document.getElementById('futuresDetailArea');
-  const title = document.getElementById('futuresDetailTitle');
-  if (!detailArea) return;
-
-  if (listArea) listArea.style.display = 'none';
-  if (resultCard) resultCard.style.display = 'none';
-  detailArea.style.display = '';
-  title.textContent = name + ' (' + code + ')';
-
-  document.getElementById('futuresKlineChart').innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
-  document.getElementById('futuresRankBody').innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
-  document.getElementById('futuresRankDate').textContent = '';
-
-  // 并行加载 K 线和龙虎榜
-  const [klineResult, rankResult] = await Promise.allSettled([
-    fetch('/api/futures/kline/' + code + '?all_history=true').then(r => r.json()),
-    fetch('/api/futures/rank/' + code).then(r => r.json()),
-  ]);
-
-  // 渲染 K 线
-  const chartEl = document.getElementById('futuresKlineChart');
-  if (klineResult.status === 'fulfilled' && klineResult.value.success && klineResult.value.data?.length) {
-    const kline = klineResult.value.data;
-    chartEl.innerHTML = '';
-    _futuresChart = LightweightCharts.createChart(chartEl, {
-      width: chartEl.clientWidth, height: 360,
-      layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
-      grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
-      crosshair: { mode: 0 },
-      rightPriceScale: { borderVisible: false },
-      timeScale: { borderVisible: false, timeVisible: false },
-    });
-    _futuresKlineSeries = _futuresChart.addCandlestickSeries({
-      upColor: '#ef4444', downColor: '#22c55e',
-      borderUpColor: '#ef4444', borderDownColor: '#22c55e',
-      wickUpColor: '#ef4444', wickDownColor: '#22c55e',
-    });
-    _futuresKlineSeries.setData(kline.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
-    // MA 均线
-    _futuresKlineRaw = kline.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close, volume: k.volume }));
-    addMALines(_futuresChart, _futuresKlineRaw, 'futuresMaToggles');
-    if (kline[0].volume != null) {
-      _futuresVolSeries = _futuresChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
-      _futuresChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
-      _futuresVolSeries.setData(kline.map(k => ({ time: k.date, value: k.volume, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
-    }
-    _futuresChart.timeScale().fitContent();
-    _futuresResizeObserver = new ResizeObserver(() => { if (_futuresChart) _futuresChart.applyOptions({ width: chartEl.clientWidth }); });
-    _futuresResizeObserver.observe(chartEl);
-  } else {
-    chartEl.innerHTML = '<div class="empty-state" style="padding:40px;">暂无K线数据</div>';
-  }
-
-  // 渲染龙虎榜
-  const rankEl = document.getElementById('futuresRankBody');
-  const rankDateEl = document.getElementById('futuresRankDate');
-  if (rankResult.status === 'fulfilled' && rankResult.value.success && rankResult.value.data?.length) {
-    const rank = rankResult.value.data;
-    if (rankResult.value.date) rankDateEl.textContent = '数据日期: ' + rankResult.value.date;
-    let h = '<table class="data-table"><thead><tr><th>合约</th><th>成交量前5</th><th>增减</th><th>持买前5</th><th>增减</th><th>持卖前5</th><th>增减</th></tr></thead><tbody>';
-    rank.forEach(r => {
-      h += `<tr>
-        <td style="font-weight:500;">${escapeHtml(r['合约'] || '-')}</td>
-        <td class="num">${escapeHtml(r['成交量前5'] ?? '-')}</td>
-        <td class="num ${r['成交量增减'] > 0 ? 'up' : r['成交量增减'] < 0 ? 'down' : ''}">${escapeHtml(r['成交量增减'] != null ? (r['成交量增减'] >= 0 ? '+' : '') + r['成交量增减'] : '-')}</td>
-        <td class="num">${escapeHtml(r['持买量前5'] ?? '-')}</td>
-        <td class="num ${r['持买增减'] > 0 ? 'up' : r['持买增减'] < 0 ? 'down' : ''}">${escapeHtml(r['持买增减'] != null ? (r['持买增减'] >= 0 ? '+' : '') + r['持买增减'] : '-')}</td>
-        <td class="num">${escapeHtml(r['持卖量前5'] ?? '-')}</td>
-        <td class="num ${r['持卖增减'] > 0 ? 'up' : r['持卖增减'] < 0 ? 'down' : ''}">${escapeHtml(r['持卖增减'] != null ? (r['持卖增减'] >= 0 ? '+' : '') + r['持卖增减'] : '-')}</td>
-      </tr>`;
-    });
-    h += '</tbody></table>';
-    rankEl.innerHTML = h;
-  } else {
-    const err = rankResult.status === 'fulfilled' ? (rankResult.value.error || '暂无数据') : '加载失败';
-    rankEl.innerHTML = '<div class="empty-state">' + escapeHtml(err) + '</div>';
-  }
-}
-
-function switchFuturesKlinePeriod(period, btn) {
-  if (_futuresResizeObserver) { _futuresResizeObserver.disconnect(); _futuresResizeObserver = null; }
-  document.querySelectorAll('#futuresKlinePeriodBtns .btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  if (!_futuresKlineRaw || !_futuresKlineRaw.length) return;
-  const data = aggregateKline(_futuresKlineRaw, period);
-  if (_futuresChart) { _futuresChart.remove(); _futuresChart = null; }
-  const chartEl = document.getElementById('futuresKlineChart');
-  chartEl.innerHTML = '';
-  _futuresChart = LightweightCharts.createChart(chartEl, {
-    width: chartEl.clientWidth, height: 360,
-    layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
-    grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
-    crosshair: { mode: 0 },
-    rightPriceScale: { borderVisible: false },
-    timeScale: { borderVisible: false, timeVisible: false },
-  });
-  _futuresKlineSeries = _futuresChart.addCandlestickSeries({
-    upColor: '#ef4444', downColor: '#22c55e',
-    borderUpColor: '#ef4444', borderDownColor: '#22c55e',
-    wickUpColor: '#ef4444', wickDownColor: '#22c55e',
-  });
-  _futuresKlineSeries.setData(data);
-  addMALines(_futuresChart, data, 'futuresMaToggles');
-  _futuresVolSeries = _futuresChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
-  _futuresChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
-  _futuresVolSeries.setData(data.map(k => ({ time: k.time, value: k.volume || 0, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
-  _futuresChart.timeScale().fitContent();
-  _futuresResizeObserver = new ResizeObserver(() => { if (_futuresChart) _futuresChart.applyOptions({ width: chartEl.clientWidth }); });
-  _futuresResizeObserver.observe(chartEl);
-}
-
-function hideFuturesDetail() {
-  const listArea = document.getElementById('futuresBoardCard');
-  const resultCard = document.getElementById('futuresResultCard');
-  const detailArea = document.getElementById('futuresDetailArea');
-  if (detailArea) detailArea.style.display = 'none';
-  if (listArea) listArea.style.display = '';
-  if (resultCard) resultCard.style.display = '';
-  if (_futuresChart) { _futuresChart.remove(); _futuresChart = null; }
 }
 
 /* --- 持仓股详情弹窗 --- */
@@ -5590,143 +5190,6 @@ function openStockFromSector(symbol) {
     searchStock();
   }
 }
-
-/* ============================================================
-   NORTHBOUND — 北向资金 / 龙虎榜
-   ============================================================ */
-
-// V2 namespace
-window.StockPulse = window.StockPulse || {};
-window.StockPulse.api = window.StockPulse.api || {};
-window.StockPulse.pages = window.StockPulse.pages || {};
-
-// API wrappers
-window.StockPulse.api.getNorthFlow = async function() {
-  return fetch('/api/market/north-flow').then(function(r) { return r.json(); });
-};
-window.StockPulse.api.getNorthHistory = async function() {
-  return fetch('/api/market/north-history').then(function(r) { return r.json(); });
-};
-window.StockPulse.api.getDragonTiger = async function(date) {
-  return fetch('/api/market/dragon-tiger' + (date ? '?date=' + date : '')).then(function(r) { return r.json(); });
-};
-
-let _northboundChart = null;
-
-function switchNorthboundTab(tab, btn) {
-  document.querySelectorAll('#view-northbound .btn').forEach(function(b) { b.classList.remove('active'); });
-  btn.classList.add('active');
-  document.getElementById('northbound-flow-panel').style.display = tab === 'flow' ? '' : 'none';
-  document.getElementById('northbound-history-panel').style.display = tab === 'history' ? '' : 'none';
-  document.getElementById('northbound-dragon-panel').style.display = tab === 'dragon' ? '' : 'none';
-  if (tab === 'history') loadNorthHistory();
-  if (tab === 'dragon') loadDragonTiger();
-}
-
-async function loadNorthboundPage() {
-  const summaryEl = document.getElementById('northbound-summary');
-  const chartEl = document.getElementById('northbound-flow-chart');
-  summaryEl.innerHTML = '<span class="spinner dark"></span> 加载中...';
-  chartEl.innerHTML = '';
-  try {
-    const json = await window.StockPulse.api.getNorthFlow();
-    if (!json.success || !json.data || !json.data.length) {
-      summaryEl.textContent = '今日暂无北向资金数据';
-      return;
-    }
-    const latest = json.data[json.data.length - 1];
-    const totalFlow = latest['北向资金'] || 0;
-    const isPositive = totalFlow >= 0;
-    summaryEl.innerHTML = '<span style="color:' + (isPositive ? '#ef4444' : '#22c55e') + '">' + (isPositive ? '+' : '') + (totalFlow / 100000000).toFixed(2) + ' 亿</span> <span style="font-size:14px;color:var(--ink-3);">今日累计净流入</span>';
-
-    if (_northboundChart) { _northboundChart.remove(); _northboundChart = null; }
-    _northboundChart = LightweightCharts.createChart(chartEl, {
-      width: chartEl.clientWidth, height: 280,
-      layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
-      grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
-      crosshair: { mode: 0 },
-      rightPriceScale: { borderVisible: false },
-      timeScale: { borderVisible: false },
-    });
-    const series = _northboundChart.addLineSeries({ color: '#3b82f6', lineWidth: 2 });
-    const chartData = json.data
-      .filter(function(d) { return d['时间'] && d['北向资金'] != null; })
-      .map(function(d) { return { time: d['日期'] + ' ' + d['时间'], value: d['北向资金'] / 100000000 }; });
-    if (chartData.length) series.setData(chartData);
-    _northboundChart.timeScale().fitContent();
-  } catch (e) {
-    summaryEl.textContent = '加载失败: ' + e.message;
-  }
-}
-
-async function loadNorthHistory() {
-  const chartEl = document.getElementById('northbound-history-chart');
-  chartEl.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
-  try {
-    const json = await window.StockPulse.api.getNorthHistory();
-    if (!json.success || !json.data || !json.data.length) {
-      chartEl.innerHTML = '<div class="empty-state">暂无历史数据</div>';
-      return;
-    }
-    chartEl.innerHTML = '';
-    if (_northboundChart) { _northboundChart.remove(); _northboundChart = null; }
-    _northboundChart = LightweightCharts.createChart(chartEl, {
-      width: chartEl.clientWidth, height: 340,
-      layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
-      grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
-      crosshair: { mode: 0 },
-      rightPriceScale: { borderVisible: false },
-      timeScale: { borderVisible: false },
-    });
-    const series = _northboundChart.addHistogramSeries({
-      priceFormat: { type: 'volume' },
-      color: 'rgba(59,130,246,0.5)',
-    });
-    const chartData = json.data
-      .filter(function(d) { return d['日期'] && d['当日成交净买额'] != null; })
-      .map(function(d) {
-        return {
-          time: d['日期'],
-          value: d['当日成交净买额'] / 100000000,
-          color: d['当日成交净买额'] >= 0 ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)',
-        };
-      });
-    if (chartData.length) series.setData(chartData);
-    _northboundChart.timeScale().fitContent();
-  } catch (e) {
-    chartEl.innerHTML = '<div class="empty-state">加载失败</div>';
-  }
-}
-
-async function loadDragonTiger() {
-  const el = document.getElementById('northbound-dragon-table');
-  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
-  try {
-    const json = await window.StockPulse.api.getDragonTiger();
-    if (!json.success || !json.data || !json.data.length) {
-      el.innerHTML = '<div class="empty-state">今日暂无龙虎榜数据</div>';
-      return;
-    }
-    const cols = Object.keys(json.data[0]);
-    let h = '<table class="data-table"><thead><tr>';
-    cols.forEach(function(c) { h += '<th>' + escapeHtml(c) + '</th>'; });
-    h += '</tr></thead><tbody>';
-    json.data.forEach(function(row) {
-      h += '<tr>';
-      cols.forEach(function(c) { h += '<td class="num">' + escapeHtml(row[c] != null ? String(row[c]) : '-') + '</td>'; });
-      h += '</tr>';
-    });
-    h += '</tbody></table>';
-    el.innerHTML = h;
-  } catch (e) {
-    el.innerHTML = '<div class="empty-state">加载失败</div>';
-  }
-}
-
-window.StockPulse.pages.northbound = {
-  load: loadNorthboundPage,
-  switchTab: switchNorthboundTab,
-};
 
 </script>
 </body>

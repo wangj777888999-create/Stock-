@@ -97,6 +97,8 @@ async def test_concurrent_improvement():
 
 
 async def main():
+    from database import init_db
+    init_db()
     print("股票服务性能测试 - 优化后验证\n")
 
     await test_with_preload()

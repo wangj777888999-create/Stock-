@@ -124,6 +124,8 @@ async def test_concurrent_scraper(n_concurrent: int = 3):
 
 
 async def main():
+    from database import init_db
+    init_db()
     print("="*60)
     print("股票信息平台 - 综合性能测试")
     print("="*60)

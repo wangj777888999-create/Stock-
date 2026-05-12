@@ -102,6 +102,8 @@ async def test_concurrent_stock(n_concurrent: int = 10):
 
 
 async def main():
+    from database import init_db
+    init_db()
     print("开始股票服务性能测试...\n")
 
     # 1. 单次基线测试

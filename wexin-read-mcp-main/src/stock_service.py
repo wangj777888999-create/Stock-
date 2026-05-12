@@ -37,7 +37,7 @@ from stock_utils import (
 )
 
 from services.indicators import calc_rsi, calc_macd, calc_kdj, calc_boll
-from http_client import session, patch_requests
+from http_client import session, patch_requests, get_async_client
 
 logger = logging.getLogger("stock-service")
 
@@ -362,15 +362,54 @@ class StockService:
         if cls._stock_list_loaded and cls._stock_list_cache is not None:
             return True
 
+        import json as _json
+        import pandas as pd
+        from pathlib import Path
+
+        # 优先加载本地离线列表（由问财生成，无需网络）
+        local_path = Path(__file__).parent / "stock_list.json"
+        if local_path.exists():
+            try:
+                data = _json.loads(local_path.read_text(encoding="utf-8"))
+                df = pd.DataFrame(data)  # columns: code, name
+                cls._stock_list_cache = df
+                cls._stock_list_loaded = True
+                logger.info(f"从本地文件加载股票列表，共 {len(df)} 只")
+                return True
+            except Exception as e:
+                logger.warning(f"本地股票列表读取失败: {e}，尝试网络获取")
+
+        # 本地不存在时走网络
+        return await cls._refresh_stock_list_bg()
+
+    @classmethod
+    async def _refresh_stock_list_bg(cls) -> bool:
+        """后台从 AKShare 刷新股票列表并写入本地文件。"""
+        import json as _json
+        import pandas as pd
+        from pathlib import Path
+
         try:
-            logger.info("正在预加载股票列表...")
-            df = await asyncio.to_thread(_patch_requests, ak.stock_info_a_code_name)
+            logger.info("后台刷新股票列表...")
+            df = await asyncio.wait_for(
+                asyncio.to_thread(_patch_requests, ak.stock_info_a_code_name),
+                timeout=15,
+            )
             cls._stock_list_cache = df
             cls._stock_list_loaded = True
-            logger.info(f"股票列表加载完成，共 {len(df)} 只股票")
+            logger.info(f"股票列表刷新完成，共 {len(df)} 只")
+            # 写回本地文件（供下次离线使用）
+            local_path = Path(__file__).parent / "stock_list.json"
+            records = df[["code", "name"]].to_dict(orient="records")
+            local_path.write_text(_json.dumps(records, ensure_ascii=False), encoding="utf-8")
             return True
+        except asyncio.TimeoutError:
+            logger.warning("网络刷新股票列表超时")
+            cls._stock_list_loaded = True
+            return False
         except Exception as e:
-            logger.error(f"预加载股票列表失败: {e}")
+            logger.error(f"网络刷新股票列表失败: {e}")
+            cls._stock_list_loaded = True
             return False
 
     # ─── 1. 搜索 ───
@@ -385,19 +424,19 @@ class StockService:
         results = []
 
         try:
-            # 1. 搜索 A 股
-            if StockService._stock_list_cache is not None:
-                df = StockService._stock_list_cache
-            else:
-                df = await asyncio.to_thread(_patch_requests, ak.stock_info_a_code_name)
+            # 1. 搜索 A 股（优先用内存缓存，未加载时触发预加载）
+            if StockService._stock_list_cache is None:
+                await StockService.preload_stock_list()
+            df = StockService._stock_list_cache
 
-            mask = (
-                df["code"].str.contains(keyword, case=False, na=False)
-                | df["name"].str.contains(keyword, case=False, na=False)
-            )
-            matched = df[mask].head(15)
-            for _, row in matched.iterrows():
-                results.append({"code": row["code"], "name": row["name"], "market": "a"})
+            if df is not None:
+                mask = (
+                    df["code"].str.contains(keyword, case=False, na=False)
+                    | df["name"].str.contains(keyword, case=False, na=False)
+                )
+                matched = df[mask].head(15)
+                for _, row in matched.iterrows():
+                    results.append({"code": row["code"], "name": row["name"], "market": "a"})
 
             # 2. 搜索美股
             kw_upper = keyword.upper()
@@ -447,9 +486,9 @@ class StockService:
                 url_code = symbol
 
             url = _QT_URL.format(exchange=exchange, code=url_code)
-            r = await asyncio.to_thread(_get, url, timeout=10)
-            r.encoding = "gbk"
-            record = _parse_tencent_quote(r.text, symbol)
+            r = await get_async_client().get(url, timeout=10)
+            text = r.content.decode("gbk", errors="replace")
+            record = _parse_tencent_quote(text, symbol)
             if record is None:
                 return {"success": False, "error": f"未找到股票 {symbol}"}
 
@@ -488,7 +527,7 @@ class StockService:
                         f"/CN_MarketDataService.getKLineData"
                         f"?symbol={exchange_prefix}{norm}&scale={scale}&ma=no&datalen={count}"
                     )
-                    r = await asyncio.to_thread(_get, sina_url, timeout=10)
+                    r = await get_async_client().get(sina_url, timeout=10)
                     text = r.text
                     # 解析 JSONP：var _1m_data=(JSON);
                     m = re.search(r'=\((\[.*?\])\);', text, re.DOTALL)
@@ -520,7 +559,7 @@ class StockService:
                                 symbol=norm, period=ak_period,
                                 start_date="20050101", end_date="20300101", adjust="qfq",
                             ),
-                            timeout=15.0,
+                            timeout=5.0,
                         )
                         if df is not None and not df.empty:
                             col_map = {f: _resolve_col(df.columns, a) for f, a in KLINE_COL_ALIASES.items()}
@@ -547,7 +586,7 @@ class StockService:
                             f"?param={exchange_prefix}{norm},{tencent_period},,,{min(count, 640)},qfq"
                         )
                         try:
-                            r = await asyncio.to_thread(_get, tencent_url, timeout=10)
+                            r = await get_async_client().get(tencent_url, timeout=10)
                             data = r.json()
                             kdata_node = data.get("data", {}).get(f"{exchange_prefix}{norm}", {})
                             kdata = kdata_node.get(tencent_period, []) or \
@@ -685,31 +724,43 @@ class StockService:
 
         try:
             if market == "a":
-                df = await asyncio.to_thread(_patch_requests, ak.stock_profile_cninfo, symbol=norm)
-                if df is None or df.empty:
+                from services.source_racer import race_sources
+                from services.eastmoney import get_company_profile as em_profile
+
+                async def _akshare_profile():
+                    df = await asyncio.wait_for(
+                        asyncio.to_thread(_patch_requests, ak.stock_profile_cninfo, symbol=norm),
+                        timeout=12,
+                    )
+                    if df is None or df.empty:
+                        return None
+                    row = df.iloc[0]
+                    return {k: _clean(row.get(k)) for k in [
+                        "公司名称", "A股简称", "所属行业", "上市日期",
+                        "注册资金", "法人代表", "官方网站", "主营业务",
+                        "经营范围", "注册地址",
+                    ]}
+
+                async def _emweb_profile():
+                    return await em_profile(norm, market)
+
+                sid, record = await race_sources(
+                    [("akshare_cninfo", _akshare_profile), ("emweb_profile", _emweb_profile)],
+                    timeout=30,
+                    validate=lambda r: bool(r),
+                )
+                if not record:
                     return {"success": False, "error": "未找到公司信息"}
-                row = df.iloc[0]
-                record = {
-                    "公司名称": row.get("公司名称"),
-                    "A股简称": row.get("A股简称"),
-                    "所属行业": row.get("所属行业"),
-                    "上市日期": row.get("上市日期"),
-                    "注册资金": row.get("注册资金"),
-                    "法人代表": row.get("法人代表"),
-                    "官方网站": row.get("官方网站"),
-                    "主营业务": row.get("主营业务"),
-                    "经营范围": row.get("经营范围"),
-                    "注册地址": row.get("注册地址"),
-                }
 
             elif market == "hk":
-                df = await asyncio.to_thread(
-                    _patch_requests, ak.stock_hk_company_profile_em,
-                    symbol=original,
+                df = await asyncio.wait_for(
+                    asyncio.to_thread(_patch_requests, ak.stock_hk_company_profile_em, symbol=original),
+                    timeout=20,
                 )
                 if df is None or df.empty:
                     return {"success": False, "error": "未找到公司信息"}
                 row = df.iloc[0]
+                sid = "akshare_hk"
                 record = {
                     "公司名称": row.get("公司名称"),
                     "英文名称": row.get("英文名称"),
@@ -726,13 +777,14 @@ class StockService:
 
             else:
                 # 美股：雪球基本信息
-                df = await asyncio.to_thread(
-                    _patch_requests, ak.stock_individual_basic_info_us_xq,
-                    symbol=norm,
+                df = await asyncio.wait_for(
+                    asyncio.to_thread(_patch_requests, ak.stock_individual_basic_info_us_xq, symbol=norm),
+                    timeout=20,
                 )
                 if df is None or df.empty:
                     return {"success": False, "error": "未找到公司信息"}
                 info = dict(zip(df["item"], df["value"]))
+                sid = "akshare_us"
                 record = {
                     "公司名称": info.get("org_name_en", ""),
                     "英文名称": info.get("org_short_name_en", ""),
@@ -746,9 +798,12 @@ class StockService:
                 }
 
             record = {k: _clean(v) for k, v in record.items()}
-            resp = {"success": True, "data": record}
+            resp = {"success": True, "data": record, "source": sid}
             cache.set(cache_key, resp, TTL_COMPANY)
             return resp
+        except asyncio.TimeoutError:
+            logger.error(f"获取公司信息超时 {symbol}")
+            return {"success": False, "error": "公司信息请求超时，请稍后重试"}
         except Exception as e:
             logger.error(f"获取公司信息失败 {symbol}: {e}")
             return {"success": False, "error": f"获取公司信息失败: {e}"}
@@ -767,36 +822,54 @@ class StockService:
 
         try:
             if market == "a":
-                df = await asyncio.to_thread(
-                    _patch_requests, ak.stock_financial_abstract_ths,
-                    symbol=norm, indicator="按报告期",
+                from services.source_racer import race_sources
+                from services.eastmoney import get_financial as em_financial
+
+                async def _akshare_financial():
+                    df = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            _patch_requests, ak.stock_financial_abstract_ths,
+                            symbol=norm, indicator="按报告期",
+                        ),
+                        timeout=12,
+                    )
+                    if df is None or df.empty:
+                        return None
+                    df = df.sort_values("报告期", ascending=False).head(16)
+                    pick_cols = [
+                        "报告期", "净利润", "净利润同比增长率", "营业总收入", "营业总收入同比增长率",
+                        "基本每股收益", "每股净资产", "每股经营现金流",
+                        "销售净利率", "销售毛利率", "净资产收益率", "资产负债率", "流动比率",
+                    ]
+                    existing = [c for c in pick_cols if c in df.columns]
+                    rows = df[existing].to_dict(orient="records")
+                    for r in rows:
+                        for k, v in r.items():
+                            r[k] = None if v in (False, "False", "false") else _clean(v)
+                    return rows
+
+                async def _emweb_financial():
+                    return await em_financial(norm, market)
+
+                sid, records = await race_sources(
+                    [("akshare_ths", _akshare_financial), ("emweb_financial", _emweb_financial)],
+                    timeout=30,
+                    validate=lambda r: bool(r),
                 )
-                if df is None or df.empty:
+                if not records:
                     return {"success": False, "error": "未找到财务数据"}
-                df = df.sort_values("报告期", ascending=False).head(16)
-                pick_cols = [
-                    "报告期", "净利润", "净利润同比增长率", "营业总收入", "营业总收入同比增长率",
-                    "基本每股收益", "每股净资产", "每股经营现金流",
-                    "销售净利率", "销售毛利率",
-                    "净资产收益率", "资产负债率", "流动比率",
-                ]
-                existing = [c for c in pick_cols if c in df.columns]
-                records = df[existing].to_dict(orient="records")
-                for r in records:
-                    for k, v in r.items():
-                        if v is False or v == "False" or v == "false":
-                            r[k] = None
-                        else:
-                            r[k] = _clean(v)
 
             elif market == "hk":
-                # 港股财务指标
-                df = await asyncio.to_thread(
-                    _patch_requests, ak.stock_financial_hk_analysis_indicator_em,
-                    symbol=original, indicator="按年度",
+                df = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        _patch_requests, ak.stock_financial_hk_analysis_indicator_em,
+                        symbol=original, indicator="按年度",
+                    ),
+                    timeout=20,
                 )
                 if df is None or df.empty:
                     return {"success": False, "error": "未找到财务数据"}
+                sid = "akshare_hk"
                 df = df.sort_values("REPORT_DATE", ascending=False).head(8)
                 records = []
                 for _, row in df.iterrows():
@@ -816,13 +889,16 @@ class StockService:
                     })
 
             else:
-                # 美股财务指标
-                df = await asyncio.to_thread(
-                    _patch_requests, ak.stock_financial_us_analysis_indicator_em,
-                    symbol=norm,
+                df = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        _patch_requests, ak.stock_financial_us_analysis_indicator_em,
+                        symbol=norm,
+                    ),
+                    timeout=20,
                 )
                 if df is None or df.empty:
                     return {"success": False, "error": "未找到财务数据"}
+                sid = "akshare_us"
                 df = df.sort_values("REPORT_DATE", ascending=False).head(8)
                 records = []
                 for _, row in df.iterrows():
@@ -841,9 +917,12 @@ class StockService:
                         "流动比率": f"{flow_ratio:.2f}" if flow_ratio is not None else None,
                     })
 
-            resp = {"success": True, "data": records}
+            resp = {"success": True, "data": records, "source": sid}
             cache.set(cache_key, resp, TTL_DAILY)
             return resp
+        except asyncio.TimeoutError:
+            logger.error(f"获取财务数据超时 {symbol}")
+            return {"success": False, "error": "财务数据请求超时，请稍后重试"}
         except Exception as e:
             logger.error(f"获取财务数据失败 {symbol}: {e}")
             return {"success": False, "error": f"获取财务数据失败: {e}"}
@@ -863,9 +942,12 @@ class StockService:
 
         try:
             exchange = get_exchange(symbol)
-            df = await asyncio.to_thread(
-                _patch_requests, ak.stock_individual_fund_flow,
-                stock=symbol, market=exchange,
+            df = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _patch_requests, ak.stock_individual_fund_flow,
+                    stock=symbol, market=exchange,
+                ),
+                timeout=20,
             )
             if df is None or df.empty:
                 return {"success": False, "error": "未找到资金流向数据"}
@@ -893,6 +975,9 @@ class StockService:
             resp = {"success": True, "data": records}
             cache.set(cache_key, resp, TTL_REALTIME)
             return resp
+        except asyncio.TimeoutError:
+            logger.error(f"获取资金流向超时 {symbol}")
+            return {"success": False, "error": "资金流向请求超时，请稍后重试"}
         except Exception as e:
             logger.error(f"获取资金流向失败 {symbol}: {e}")
             return {"success": False, "error": f"获取资金流向失败: {e}"}
@@ -947,9 +1032,12 @@ class StockService:
             from datetime import datetime, timedelta
             end_date = datetime.now().strftime("%Y%m%d")
             start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
-            df = await asyncio.to_thread(
-                _patch_requests, ak.stock_zh_a_disclosure_report_cninfo,
-                symbol=symbol, start_date=start_date, end_date=end_date,
+            df = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _patch_requests, ak.stock_zh_a_disclosure_report_cninfo,
+                    symbol=symbol, start_date=start_date, end_date=end_date,
+                ),
+                timeout=30,
             )
             if df is None or df.empty:
                 return {"success": True, "data": []}
@@ -964,6 +1052,9 @@ class StockService:
             resp = {"success": True, "data": records}
             cache.set(cache_key, resp, TTL_COMPANY)
             return resp
+        except asyncio.TimeoutError:
+            logger.error(f"获取公告超时 {symbol}")
+            return {"success": False, "error": "公告请求超时，请稍后重试"}
         except Exception as e:
             logger.error(f"获取公告失败 {symbol}: {e}")
             return {"success": False, "error": f"获取公告失败: {e}"}
@@ -982,8 +1073,9 @@ class StockService:
             return cached
 
         try:
-            df = await asyncio.to_thread(
-                _patch_requests, ak.stock_circulate_stock_holder, symbol=symbol,
+            df = await asyncio.wait_for(
+                asyncio.to_thread(_patch_requests, ak.stock_circulate_stock_holder, symbol=symbol),
+                timeout=30,
             )
             if df is None or df.empty:
                 return {"success": False, "error": "未找到股东数据"}
@@ -1006,6 +1098,9 @@ class StockService:
             }
             cache.set(cache_key, resp, TTL_DAILY)
             return resp
+        except asyncio.TimeoutError:
+            logger.error(f"获取股东数据超时 {symbol}")
+            return {"success": False, "error": "股东数据请求超时，请稍后重试"}
         except Exception as e:
             logger.error(f"获取股东数据失败 {symbol}: {e}")
             return {"success": False, "error": f"获取股东数据失败: {e}"}
