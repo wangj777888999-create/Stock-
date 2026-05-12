@@ -3529,7 +3529,8 @@ async function loadKline(period) {
         histSeries.setData(macdData.macd.map((v, i) => ({ time: timeFormat(dates[i]), value: v, color: v != null && v >= 0 ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)' })).filter(k => k.value != null));
         _klineMacdChart.timeScale().fitContent();
         _klineMacdChart.timeScale().applyOptions({ rightOffset: 5, minBarSpacing: 2, fixRightEdge: true });
-        new ResizeObserver(() => { if (_klineMacdChart) _klineMacdChart.applyOptions({ width: macdEl.clientWidth }); }).observe(macdEl);
+        _klineMacdObserver = new ResizeObserver(() => { if (_klineMacdChart) _klineMacdChart.applyOptions({ width: macdEl.clientWidth }); });
+        _klineMacdObserver.observe(macdEl);
         // Sync crosshair move
         if (mainTs) {
           mainTs.subscribeVisibleTimeRangeChange(() => {
@@ -3564,7 +3565,8 @@ async function loadKline(period) {
         } catch(e){}
         _klineRsiChart.timeScale().fitContent();
         _klineRsiChart.timeScale().applyOptions({ rightOffset: 5, minBarSpacing: 2, fixRightEdge: true });
-        new ResizeObserver(() => { if (_klineRsiChart) _klineRsiChart.applyOptions({ width: rsiEl.clientWidth }); }).observe(rsiEl);
+        _klineRsiObserver = new ResizeObserver(() => { if (_klineRsiChart) _klineRsiChart.applyOptions({ width: rsiEl.clientWidth }); });
+        _klineRsiObserver.observe(rsiEl);
         if (mainTs) {
           mainTs.subscribeVisibleTimeRangeChange(() => {
             if (!_klineRsiChart) return;
