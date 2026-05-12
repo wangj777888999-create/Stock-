@@ -180,6 +180,36 @@ def init_db(db_path: str | None = None) -> None:
                 processed       INTEGER DEFAULT 0,
                 created_at      TEXT DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS chart_drawings (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol      TEXT NOT NULL,
+                market      TEXT NOT NULL DEFAULT 'a',
+                period      TEXT NOT NULL DEFAULT 'day',
+                type        TEXT NOT NULL,
+                data        TEXT NOT NULL,
+                color       TEXT DEFAULT '#2563EB',
+                label       TEXT DEFAULT '',
+                visible     INTEGER DEFAULT 1,
+                created_at  TEXT DEFAULT (datetime('now')),
+                updated_at  TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_drawings_symbol ON chart_drawings(symbol, market, period);
+
+            CREATE TABLE IF NOT EXISTS stock_notes (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol      TEXT NOT NULL,
+                market      TEXT NOT NULL DEFAULT 'a',
+                title       TEXT DEFAULT '',
+                content     TEXT NOT NULL DEFAULT '',
+                tags        TEXT DEFAULT '',
+                note_date   TEXT DEFAULT (date('now')),
+                created_at  TEXT DEFAULT (datetime('now')),
+                updated_at  TEXT DEFAULT (datetime('now'))
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_notes_symbol ON stock_notes(symbol, market);
         """)
 
         # 清理过期缓存

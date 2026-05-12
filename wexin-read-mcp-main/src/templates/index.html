@@ -1049,6 +1049,30 @@ textarea.form-input {
   white-space: nowrap;
 }
 .tag-chip.alt { background: #F0FDF4; color: #15803D; }
+/* ── 技术分析视图 ── */
+#taChartWrap { cursor: default; }
+#taChartWrap.drawing { cursor: crosshair; }
+.ta-pattern-item {
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background var(--t) var(--ease);
+  display: flex; align-items: flex-start; gap: 8px;
+}
+.ta-pattern-item:hover { background: var(--bg); }
+.ta-pattern-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+.ta-note-item {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background var(--t) var(--ease);
+}
+.ta-note-item:hover { background: var(--bg); }
+.ta-note-title { font-size: 13px; font-weight: 500; color: var(--ink); }
+.ta-note-meta  { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+.ta-note-preview { font-size: 12px; color: var(--ink-2); margin-top: 3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
+.ta-tag-chip {
+  font-size: 10px; padding: 1px 7px; border-radius: 10px;
+  background: var(--blue-s); color: var(--blue); border: 1px solid rgba(37,99,235,0.15);
+  display: inline-block; margin: 2px 3px 0 0;
+}
 </style>
 </head>
 <body>
@@ -1140,6 +1164,10 @@ textarea.form-input {
       <button class="nav-item" data-view="sim" onclick="switchView('sim', this)">
         <svg viewBox="0 0 20 20" fill="none"><path d="M5 13l4-4 3 5 4-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17" cy="4" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M3 17h14M3 13v4M17 13v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         <span>模拟交易</span>
+      </button>
+      <button class="nav-item" data-view="analysis" onclick="switchView('analysis', this)">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M3 17V8l4-4 3 5 4-6 3 5v9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 14h16" stroke="currentColor" stroke-width="1.1" stroke-dasharray="2 2.5" stroke-linecap="round"/></svg>
+        <span>技术分析</span>
       </button>
       <div class="nav-section-label" style="margin-top:8px;">系统</div>
       <button class="nav-item" data-view="config" onclick="switchView('config', this)">
@@ -1637,7 +1665,11 @@ textarea.form-input {
                 <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 10V14M10 7V14M13 9V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
                 <span>K线走势</span>
               </div>
-              <div style="display:flex;gap:4px;" id="klinePeriodBtns">
+              <div style="display:flex;gap:4px;align-items:center;" id="klinePeriodBtns">
+                <button class="btn btn-ghost btn-sm" onclick="taOpenFromStock()" title="在技术分析视图中打开" style="margin-right:4px;color:var(--blue);">
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="none" style="vertical-align:-1px;"><path d="M3 17V8l4-4 3 5 4-6 3 5v9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  技术分析
+                </button>
                 <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('1min',this)">分时</button>
                 <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('5min',this)">5分</button>
                 <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('15min',this)">15分</button>
@@ -1993,6 +2025,152 @@ textarea.form-input {
         </div>
       </div>
 
+      <!-- ==================== VIEW: ANALYSIS ==================== -->
+      <div id="view-analysis" class="view">
+
+        <!-- 搜索栏 -->
+        <div class="card" style="margin-bottom:12px;">
+          <div class="card-body" style="padding:12px 16px;">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <div style="position:relative;">
+                <input id="taSearchInput" class="input" placeholder="搜索股票（代码或名称）"
+                       style="width:220px;"
+                       oninput="taOnSearchInput()"
+                       onkeydown="if(event.key==='Enter')taSearchStock()">
+                <div id="taSearchDropdown" style="display:none;position:absolute;top:100%;left:0;
+                     background:var(--surface);border:1px solid var(--border);
+                     border-radius:var(--r-sm);box-shadow:var(--shadow-md);
+                     z-index:200;min-width:280px;max-height:280px;overflow-y:auto;margin-top:2px;"></div>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="taSearchStock()">搜索</button>
+              <div id="taPeriodBtns" style="display:none;margin-left:4px;gap:4px;">
+                <button class="btn btn-ghost btn-sm active" onclick="taSwitchPeriod('day',this)">日K</button>
+                <button class="btn btn-ghost btn-sm" onclick="taSwitchPeriod('week',this)">周K</button>
+                <button class="btn btn-ghost btn-sm" onclick="taSwitchPeriod('month',this)">月K</button>
+              </div>
+              <span id="taCurrentStock" style="display:none;font-weight:600;font-size:14px;color:var(--ink);margin-left:4px;"></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 主体：图表区 + 右侧面板 -->
+        <div id="taMainArea" style="display:none;gap:12px;align-items:flex-start;">
+
+          <!-- 左侧：工具栏 + 图表 -->
+          <div style="flex:1;min-width:0;">
+
+            <!-- 画图工具栏 -->
+            <div class="card" style="margin-bottom:8px;">
+              <div class="card-body" style="padding:8px 16px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <span style="font-size:12px;color:var(--ink-3);flex-shrink:0;">画图</span>
+                <button id="taTool-none" class="btn btn-ghost btn-sm active" onclick="taSetDrawMode(null,this)" title="选择模式">
+                  <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M5 3l12 7-7 2-2 7z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+                  选择
+                </button>
+                <button id="taTool-hline" class="btn btn-ghost btn-sm" onclick="taSetDrawMode('hline',this)" title="水平线">
+                  <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M2 10h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                  水平线
+                </button>
+                <button id="taTool-trendline" class="btn btn-ghost btn-sm" onclick="taSetDrawMode('trendline',this)" title="趋势线">
+                  <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M3 17L17 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                  趋势线
+                </button>
+                <button id="taTool-text" class="btn btn-ghost btn-sm" onclick="taSetDrawMode('text',this)" title="文字标注">
+                  <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M4 5h12M10 5v12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  文字
+                </button>
+                <button id="taTool-rect" class="btn btn-ghost btn-sm" onclick="taSetDrawMode('rect',this)" title="矩形框">
+                  <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><rect x="3" y="5" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.7"/></svg>
+                  矩形
+                </button>
+                <input type="color" id="taDrawColor" value="#2563EB"
+                       style="width:26px;height:26px;border:none;border-radius:5px;cursor:pointer;padding:2px;background:transparent;"
+                       title="线条颜色">
+                <div style="flex:1;"></div>
+                <button class="btn btn-ghost btn-sm" onclick="taClearAllDrawings()" style="color:var(--red,#ef4444);">清除画线</button>
+              </div>
+            </div>
+
+            <!-- 图表容器 -->
+            <div class="card">
+              <div class="card-body" style="padding:0;position:relative;">
+                <div id="taChartWrap" style="position:relative;width:100%;user-select:none;">
+                  <div id="taChart" style="width:100%;height:420px;"></div>
+                  <canvas id="taCanvas" style="position:absolute;top:0;left:0;pointer-events:none;z-index:10;"></canvas>
+                </div>
+                <div style="position:relative;display:none;" id="taMacdChartWrap">
+                  <span style="position:absolute;top:4px;left:8px;z-index:5;font-size:11px;font-weight:600;
+                               color:#f5d547;background:rgba(255,255,255,0.9);padding:1px 6px;border-radius:3px;
+                               pointer-events:none;">MACD</span>
+                  <div id="taMacdChart" style="width:100%;height:100px;"></div>
+                </div>
+                <div style="position:relative;display:none;" id="taRsiChartWrap">
+                  <span style="position:absolute;top:4px;left:8px;z-index:5;font-size:11px;font-weight:600;
+                               color:#06b6d4;background:rgba(255,255,255,0.9);padding:1px 6px;border-radius:3px;
+                               pointer-events:none;">RSI 14</span>
+                  <div id="taRsiChart" style="width:100%;height:100px;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右侧面板 -->
+          <div style="width:272px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;">
+            <!-- Tab -->
+            <div style="display:flex;gap:4px;background:var(--surface-2,#f8fafc);
+                        border-radius:var(--r-sm);border:1px solid var(--border);padding:4px;">
+              <button id="taRightTab-patterns" class="btn btn-sm active"
+                      style="flex:1;font-size:12px;" onclick="taSwitchRightTab('patterns',this)">形态信号</button>
+              <button id="taRightTab-notes" class="btn btn-sm"
+                      style="flex:1;font-size:12px;" onclick="taSwitchRightTab('notes',this)">分析笔记</button>
+            </div>
+
+            <!-- 形态信号面板 -->
+            <div id="taPanel-patterns">
+              <div class="card">
+                <div class="card-body" id="taPatternsBody"
+                     style="padding:12px;max-height:560px;overflow-y:auto;">
+                  <div class="empty-state" style="padding:20px 0;">选择股票后加载</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 笔记面板 -->
+            <div id="taPanel-notes" style="display:none;">
+              <div class="card">
+                <div class="card-header" style="padding:10px 14px;">
+                  <div class="card-title" style="font-size:13px;">分析笔记</div>
+                  <button class="btn btn-primary btn-sm" style="font-size:12px;" onclick="taOpenNoteEditor(null)">+ 新建</button>
+                </div>
+                <div class="card-body" id="taNotesList"
+                     style="padding:0;max-height:480px;overflow-y:auto;">
+                  <div class="empty-state" style="padding:20px;">暂无笔记</div>
+                </div>
+              </div>
+              <!-- 内嵌编辑器 -->
+              <div class="card" id="taNoteEditor" style="display:none;margin-top:8px;">
+                <div class="card-header" style="padding:10px 14px;">
+                  <div id="taNoteEditorTitle" class="card-title" style="font-size:13px;">新建笔记</div>
+                </div>
+                <div class="card-body" style="padding:12px;display:flex;flex-direction:column;gap:8px;">
+                  <input id="taNoteTitle" class="input" placeholder="标题（选填）" style="font-size:13px;">
+                  <input id="taNoteDate" class="input" type="date" style="font-size:13px;">
+                  <textarea id="taNoteContent" class="input" rows="5"
+                            placeholder="分析思路、买卖理由、复盘心得..."
+                            style="font-size:13px;resize:vertical;min-height:80px;"></textarea>
+                  <input id="taNoteTags" class="input" placeholder="标签（逗号分隔）" style="font-size:13px;">
+                  <div style="display:flex;gap:8px;justify-content:flex-end;">
+                    <button class="btn btn-ghost btn-sm" onclick="taCloseNoteEditor()">取消</button>
+                    <button class="btn btn-primary btn-sm" onclick="taSaveNote()">保存</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div><!-- /右侧面板 -->
+
+        </div><!-- /taMainArea -->
+      </div><!-- /view-analysis -->
+
       <!-- ==================== VIEW: CONFIG ==================== -->
       <div id="view-config" class="view">
 
@@ -2190,7 +2368,8 @@ const topbarMeta = {
   fund:     { title: '基金', sub: 'ETF 板块分类 · 基金搜索 · 实时行情' },
   watchlist: { title: '自选股', sub: '添加/删除 · 实时行情 · 30s自动刷新' },
   sim: { title: '模拟交易', sub: '虚拟盘 · 开仓/平仓 · 盈亏统计' },
-  sector: { title: '板块', sub: '行业板块 · 概念板块 · 涨跌幅热力图 · 成分股 · K线' },
+  sector:   { title: '板块', sub: '行业板块 · 概念板块 · 涨跌幅热力图 · 成分股 · K线' },
+  analysis: { title: '技术分析', sub: '画图工具 · 形态识别 · 分析笔记' },
 };
 
 let _fundLoaded = false;
@@ -2201,6 +2380,13 @@ function switchView(view, el) {
   if (_klineMacdObserver) { _klineMacdObserver.disconnect(); _klineMacdObserver = null; }
   if (_klineRsiObserver) { _klineRsiObserver.disconnect(); _klineRsiObserver = null; }
   if (_fundResizeObserver) { _fundResizeObserver.disconnect(); _fundResizeObserver = null; }
+  // 技术分析视图清理
+  if (_taResizeObserver) { _taResizeObserver.disconnect(); _taResizeObserver = null; }
+  if (_taMacdObserver)   { _taMacdObserver.disconnect();   _taMacdObserver = null; }
+  if (_taChart)     { try { _taChart.remove();     } catch(e){} _taChart = null; _taSeries = null; _taVolSeries = null; }
+  if (_taMacdChart) { try { _taMacdChart.remove(); } catch(e){} _taMacdChart = null; }
+  if (_taRsiChart)  { try { _taRsiChart.remove();  } catch(e){} _taRsiChart = null; }
+  _taCanvas = null; _taCtx = null; _taDrawing = null;
   // 离开自选股视图时清理定时器
   if (_watchlistInterval && view !== 'watchlist') {
     clearInterval(_watchlistInterval);
@@ -2229,6 +2415,7 @@ function switchView(view, el) {
   if (view === 'watchlist') { loadWatchlist(); }
   if (view === 'sim') { loadSim(); }
   if (view === 'sector') { loadSectorBoards(); }
+  if (view === 'analysis') { taInitView(); }
 }
 
 /* ============================================================
@@ -3159,6 +3346,24 @@ function aggregateKline(dailyData, period) {
   });
   return Object.values(groups).sort((a, b) => a.time < b.time ? -1 : 1);
 }
+
+/* ============================================================
+   TECHNICAL ANALYSIS — 技术分析视图全局状态
+   ============================================================ */
+let _taSymbol = '', _taName = '', _taPeriod = 'day';
+let _taChart = null, _taSeries = null, _taVolSeries = null;
+let _taMacdChart = null, _taRsiChart = null;
+let _taResizeObserver = null, _taMacdObserver = null;
+let _taCanvas = null, _taCtx = null;
+let _taDrawMode = null;   // null | 'hline' | 'trendline' | 'text' | 'rect'
+let _taDrawing = null;    // 正在绘制的临时对象 {type, data, color}
+let _taDrawings = [];     // 已保存的画线列表
+let _taSelected = null;   // 当前选中的画线 id
+let _taKlineData = [];    // K 线数据（坐标映射用）
+let _taPatterns = [];     // 形态信号列表
+let _taNotes = [];        // 笔记列表
+let _taNoteEditId = null; // 编辑中的笔记 id（null=新建）
+let _taMouseDown = false; // canvas 鼠标按下状态
 
 /* ============================================================
    STOCK — 搜索、行情、K线、公司简介、财务、资金流向、新闻
@@ -5189,6 +5394,656 @@ function openStockFromSector(symbol) {
     input.value = symbol;
     searchStock();
   }
+}
+
+/* ============================================================
+   TECHNICAL ANALYSIS — 技术分析视图
+   ============================================================ */
+
+// ── 入口 ──────────────────────────────────────────────────────
+function taInitView() {
+  if (_taSymbol) {
+    taRenderChart();
+  }
+}
+
+function taOpenFromStock() {
+  if (!_stockCode) return;
+  const nav = document.querySelector('[data-view="analysis"]');
+  switchView('analysis', nav);
+  taLoadStock(_stockCode, _stockName || _stockCode, _stockMarket || 'a');
+}
+
+// ── 搜索 ──────────────────────────────────────────────────────
+let _taSearchTimer = null;
+function taOnSearchInput() {
+  clearTimeout(_taSearchTimer);
+  _taSearchTimer = setTimeout(taSearchStock, 300);
+}
+
+async function taSearchStock() {
+  const kw = document.getElementById('taSearchInput').value.trim();
+  if (!kw) { document.getElementById('taSearchDropdown').style.display = 'none'; return; }
+  try {
+    const json = await (await fetch('/api/stock/search?keyword=' + encodeURIComponent(kw))).json();
+    const dd = document.getElementById('taSearchDropdown');
+    if (!json.success || !json.data?.length) { dd.style.display = 'none'; return; }
+    dd.innerHTML = json.data.slice(0, 10).map(s =>
+      `<div style="padding:9px 14px;cursor:pointer;border-bottom:1px solid var(--border);
+                   display:flex;gap:10px;align-items:center;"
+            onmousedown="taLoadStock('${escapeHtml(s.code)}','${escapeHtml(s.name)}','${escapeHtml(s.market||'a')}')">
+        <span style="font-family:var(--mono,monospace);font-size:12px;color:var(--ink-3);">${escapeHtml(s.code)}</span>
+        <span style="font-size:13px;font-weight:500;">${escapeHtml(s.name)}</span>
+        <span style="font-size:11px;color:var(--ink-3);margin-left:auto;">${escapeHtml(s.market||'')}</span>
+      </div>`
+    ).join('');
+    dd.style.display = '';
+  } catch(e) {}
+}
+
+async function taLoadStock(code, name, market) {
+  document.getElementById('taSearchDropdown').style.display = 'none';
+  document.getElementById('taSearchInput').value = name + '（' + code + '）';
+  _taSymbol = code; _taName = name;
+  document.getElementById('taCurrentStock').textContent = name + '（' + code + '）';
+  document.getElementById('taCurrentStock').style.display = '';
+  document.getElementById('taPeriodBtns').style.display = 'flex';
+  const ma = document.getElementById('taMainArea');
+  ma.style.display = 'flex';
+  await taRenderChart();
+}
+
+async function taSwitchPeriod(period, btn) {
+  document.querySelectorAll('#taPeriodBtns .btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _taPeriod = period;
+  await taRenderChart();
+}
+
+// ── 图表初始化 ─────────────────────────────────────────────────
+async function taRenderChart() {
+  if (!_taSymbol) return;
+
+  // 销毁旧实例
+  if (_taResizeObserver) { _taResizeObserver.disconnect(); _taResizeObserver = null; }
+  if (_taMacdObserver)   { _taMacdObserver.disconnect();   _taMacdObserver = null; }
+  if (_taChart)     { try { _taChart.remove();     } catch(e){} _taChart = null; }
+  if (_taMacdChart) { try { _taMacdChart.remove(); } catch(e){} _taMacdChart = null; }
+  if (_taRsiChart)  { try { _taRsiChart.remove();  } catch(e){} _taRsiChart = null; }
+  _taSeries = null; _taVolSeries = null; _taDrawing = null;
+
+  const container = document.getElementById('taChart');
+  container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:420px;color:var(--ink-3);"><span>加载中...</span></div>';
+
+  const showIndicators = ['day','week','month'].includes(_taPeriod);
+  const url = `/api/stock/kline/${_taSymbol}?period=${_taPeriod}&all_history=true` +
+              (showIndicators ? '&indicators=rsi,macd' : '');
+  let json;
+  try {
+    json = await (await fetch(url)).json();
+  } catch(e) {
+    container.innerHTML = '<div class="empty-state" style="padding:40px;">K线加载失败</div>';
+    return;
+  }
+  if (!json.success || !json.data?.length) {
+    container.innerHTML = '<div class="empty-state" style="padding:40px;">暂无K线数据</div>';
+    return;
+  }
+  container.innerHTML = '';
+  _taKlineData = json.data;
+
+  // 主图
+  _taChart = LightweightCharts.createChart(container, {
+    width: container.clientWidth, height: 420,
+    layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
+    grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: { borderVisible: false },
+    timeScale: { borderVisible: false },
+  });
+
+  const isIntraday = ['1min','5min','15min','30min','60min'].includes(_taPeriod);
+  if (isIntraday) {
+    _taSeries = _taChart.addAreaSeries({ lineColor: '#2563EB', topColor: 'rgba(37,99,235,0.2)', bottomColor: 'rgba(37,99,235,0)', lineWidth: 1.5 });
+    _taSeries.setData(json.data.map(k => ({ time: k.date, value: k.close })));
+  } else {
+    _taSeries = _taChart.addCandlestickSeries({
+      upColor: '#ef4444', downColor: '#22c55e',
+      borderUpColor: '#ef4444', borderDownColor: '#22c55e',
+      wickUpColor: '#ef4444', wickDownColor: '#22c55e',
+    });
+    _taSeries.setData(json.data.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
+    // 均线
+    const candleData = json.data.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close }));
+    [[5,'#f59e0b'],[10,'#3b82f6'],[20,'#8b5cf6'],[60,'#6b7280']].forEach(([p, c]) => {
+      const s = _taChart.addLineSeries({ color: c, lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
+      s.setData(computeMA(candleData, p));
+    });
+  }
+
+  // 成交量
+  _taVolSeries = _taChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+  _taChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+  _taVolSeries.setData(json.data.map(k => ({
+    time: k.date, value: k.volume,
+    color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)'
+  })));
+
+  _taChart.timeScale().fitContent();
+  _taChart.timeScale().applyOptions({ rightOffset: 5, fixRightEdge: true });
+
+  // ResizeObserver
+  _taResizeObserver = new ResizeObserver(() => {
+    if (_taChart) { _taChart.applyOptions({ width: container.clientWidth }); taResizeCanvas(); taRedrawCanvas(); }
+  });
+  _taResizeObserver.observe(container);
+
+  // Canvas 叠加层
+  taInitCanvas();
+
+  // 图表缩放/滚动时重绘 canvas
+  _taChart.timeScale().subscribeVisibleLogicalRangeChange(() => taRedrawCanvas());
+
+  // MACD 子图
+  const macdWrap = document.getElementById('taMacdChartWrap');
+  const rsiWrap  = document.getElementById('taRsiChartWrap');
+  if (showIndicators && json.indicators?.macd) {
+    macdWrap.style.display = '';
+    taRenderMacdChart(json.data, json.indicators.macd);
+    // 时间轴同步
+    const mainTs = _taChart.timeScale();
+    mainTs.subscribeVisibleLogicalRangeChange(r => {
+      if (_taMacdChart && r) _taMacdChart.timeScale().setVisibleLogicalRange(r);
+    });
+  } else { macdWrap.style.display = 'none'; }
+  if (showIndicators && json.indicators?.rsi?.values) {
+    rsiWrap.style.display = '';
+    taRenderRsiChart(json.data, json.indicators.rsi.values);
+    const mainTs = _taChart.timeScale();
+    mainTs.subscribeVisibleLogicalRangeChange(r => {
+      if (_taRsiChart && r) _taRsiChart.timeScale().setVisibleLogicalRange(r);
+    });
+  } else { rsiWrap.style.display = 'none'; }
+
+  // 加载已保存画线 + 形态识别
+  await taLoadDrawings();
+  await taLoadPatterns();
+}
+
+function taRenderMacdChart(data, macd) {
+  const el = document.getElementById('taMacdChart');
+  el.innerHTML = '';
+  if (_taMacdObserver) { _taMacdObserver.disconnect(); _taMacdObserver = null; }
+  if (_taMacdChart) { try { _taMacdChart.remove(); } catch(e){} _taMacdChart = null; }
+  _taMacdChart = LightweightCharts.createChart(el, {
+    width: el.clientWidth, height: 100,
+    layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 10 },
+    grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+    crosshair: { mode: 0 },
+    rightPriceScale: { borderVisible: false },
+    timeScale: { borderVisible: false, visible: false },
+  });
+  const dates = data.map(k => k.date);
+  const fmt = t => t;
+  const dif = _taMacdChart.addLineSeries({ color: '#f5d547', lineWidth: 1, lastValueVisible: false });
+  dif.setData(macd.dif.map((v,i) => ({ time: fmt(dates[i]), value: v })).filter(k => k.value != null));
+  const dea = _taMacdChart.addLineSeries({ color: '#ef4444', lineWidth: 1, lastValueVisible: false });
+  dea.setData(macd.dea.map((v,i) => ({ time: fmt(dates[i]), value: v })).filter(k => k.value != null));
+  const hist = _taMacdChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
+  hist.setData(macd.macd.map((v,i) => ({ time: fmt(dates[i]), value: v, color: v != null && v >= 0 ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)' })).filter(k => k.value != null));
+  _taMacdObserver = new ResizeObserver(() => { if (_taMacdChart) _taMacdChart.applyOptions({ width: el.clientWidth }); });
+  _taMacdObserver.observe(el);
+}
+
+function taRenderRsiChart(data, values) {
+  const el = document.getElementById('taRsiChart');
+  el.innerHTML = '';
+  if (_taRsiChart) { try { _taRsiChart.remove(); } catch(e){} _taRsiChart = null; }
+  _taRsiChart = LightweightCharts.createChart(el, {
+    width: el.clientWidth, height: 100,
+    layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 10 },
+    grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+    crosshair: { mode: 0 },
+    rightPriceScale: { borderVisible: false },
+    timeScale: { borderVisible: false, visible: false },
+  });
+  const s = _taRsiChart.addLineSeries({ color: '#06b6d4', lineWidth: 1, lastValueVisible: false });
+  s.setData(values.map((v,i) => ({ time: data[i].date, value: v })).filter(k => k.value != null));
+  const roRsz = new ResizeObserver(() => { if (_taRsiChart) _taRsiChart.applyOptions({ width: el.clientWidth }); });
+  roRsz.observe(el);
+}
+
+// ── Canvas 叠加层 ──────────────────────────────────────────────
+function taInitCanvas() {
+  const wrap = document.getElementById('taChartWrap');
+  _taCanvas = document.getElementById('taCanvas');
+  _taCtx = _taCanvas.getContext('2d');
+  taResizeCanvas();
+
+  wrap.onmousedown = taOnMouseDown;
+  wrap.onmousemove = taOnMouseMove;
+  wrap.onmouseup   = taOnMouseUp;
+  wrap.ondblclick  = taOnDblClick;
+  wrap.oncontextmenu = taOnContextMenu;
+  wrap.onmouseleave  = () => { if (_taDrawing) { _taDrawing = null; taRedrawCanvas(); } };
+}
+
+function taResizeCanvas() {
+  const main = document.getElementById('taChart');
+  if (!_taCanvas || !main) return;
+  _taCanvas.width  = main.clientWidth;
+  _taCanvas.height = main.clientHeight;
+  _taCanvas.style.width  = main.clientWidth  + 'px';
+  _taCanvas.style.height = main.clientHeight + 'px';
+}
+
+// ── 坐标映射 ───────────────────────────────────────────────────
+function taTimeToX(timeStr) {
+  if (!_taChart) return null;
+  return _taChart.timeScale().timeToCoordinate(timeStr);
+}
+function taPriceToY(price) {
+  if (!_taSeries) return null;
+  return _taSeries.priceToCoordinate(price);
+}
+function taXToTime(x) {
+  if (!_taChart || !_taKlineData.length) return null;
+  const logical = _taChart.timeScale().coordinateToLogical(x);
+  if (logical === null) return null;
+  const idx = Math.max(0, Math.min(Math.round(logical), _taKlineData.length - 1));
+  return _taKlineData[idx]?.date || null;
+}
+function taYToPrice(y) {
+  if (!_taSeries) return null;
+  return _taSeries.coordinateToPrice(y);
+}
+
+// ── 重绘 ───────────────────────────────────────────────────────
+function taRedrawCanvas() {
+  if (!_taCtx || !_taCanvas) return;
+  _taCtx.clearRect(0, 0, _taCanvas.width, _taCanvas.height);
+  _taDrawings.forEach(d => taDrawOne(d, false));
+  if (_taDrawing) taDrawOne(_taDrawing, true);
+}
+
+function taDrawOne(d, isTemp) {
+  const ctx = _taCtx;
+  const color = d.color || '#2563EB';
+  const selected = d.id === _taSelected;
+  ctx.save();
+  ctx.strokeStyle = isTemp ? color + 'aa' : color;
+  ctx.fillStyle   = color;
+  ctx.lineWidth   = selected ? 2.5 : 1.5;
+  ctx.setLineDash(selected ? [5, 3] : []);
+
+  switch (d.type) {
+    case 'hline': {
+      const y = taPriceToY(d.data.price);
+      if (y === null) break;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(_taCanvas.width, y); ctx.stroke();
+      ctx.font = '11px system-ui,sans-serif';
+      ctx.fillStyle = '#fff';
+      const lbl = (d.data.price || 0).toFixed(2);
+      const tw = ctx.measureText(lbl).width;
+      ctx.fillRect(_taCanvas.width - tw - 12, y - 9, tw + 10, 16);
+      ctx.fillStyle = color;
+      ctx.fillText(lbl, _taCanvas.width - tw - 7, y + 3);
+      break;
+    }
+    case 'trendline': {
+      const x1 = taTimeToX(d.data.t1), y1 = taPriceToY(d.data.p1);
+      const x2 = taTimeToX(d.data.t2), y2 = taPriceToY(d.data.p2);
+      if (x1 === null || x2 === null || y1 === null || y2 === null) break;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      if (selected) {
+        [[x1,y1],[x2,y2]].forEach(([hx,hy]) => {
+          ctx.beginPath(); ctx.arc(hx, hy, 5, 0, Math.PI*2);
+          ctx.fillStyle = color; ctx.fill();
+        });
+      }
+      break;
+    }
+    case 'text': {
+      const x = taTimeToX(d.data.time), y = taPriceToY(d.data.price);
+      if (x === null || y === null) break;
+      ctx.font = 'bold 12px system-ui,sans-serif';
+      const tw = ctx.measureText(d.data.text).width;
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillRect(x - 2, y - 14, tw + 8, 18);
+      if (selected) { ctx.strokeStyle = color; ctx.setLineDash([]); ctx.strokeRect(x - 2, y - 14, tw + 8, 18); }
+      ctx.fillStyle = color;
+      ctx.fillText(d.data.text, x + 2, y);
+      break;
+    }
+    case 'rect': {
+      const x1 = taTimeToX(d.data.t1), y1 = taPriceToY(d.data.p1);
+      const x2 = taTimeToX(d.data.t2), y2 = taPriceToY(d.data.p2);
+      if (x1 === null || x2 === null || y1 === null || y2 === null) break;
+      const rx = Math.min(x1,x2), ry = Math.min(y1,y2);
+      const rw = Math.abs(x2-x1), rh = Math.abs(y2-y1);
+      ctx.fillStyle = color + '22';
+      ctx.fillRect(rx, ry, rw, rh);
+      ctx.setLineDash([]);
+      ctx.strokeRect(rx, ry, rw, rh);
+      break;
+    }
+  }
+  ctx.restore();
+}
+
+// ── 鼠标事件 ──────────────────────────────────────────────────
+function taOnMouseDown(e) {
+  if (e.button !== 0) return;
+  _taMouseDown = true;
+  if (!_taDrawMode) {
+    _taSelected = taHitTest(e.offsetX, e.offsetY);
+    taRedrawCanvas();
+    return;
+  }
+  const time  = taXToTime(e.offsetX);
+  const price = taYToPrice(e.offsetY);
+  if (!time || price === null) return;
+
+  if (_taDrawMode === 'hline') {
+    const d = { id: 'tmp_' + Date.now(), type: 'hline', data: { price }, color: taGetColor() };
+    _taDrawings.push(d);
+    taSaveDrawingToServer(d);
+    taRedrawCanvas();
+    return;
+  }
+  if (_taDrawMode === 'text') {
+    const text = window.prompt('输入标注文字：');
+    if (!text) return;
+    const d = { id: 'tmp_' + Date.now(), type: 'text', data: { time, price, text }, color: taGetColor() };
+    _taDrawings.push(d);
+    taSaveDrawingToServer(d);
+    taRedrawCanvas();
+    return;
+  }
+  // trendline / rect：记录第一点
+  _taDrawing = { id: 'tmp_draw', type: _taDrawMode, data: { t1: time, p1: price, t2: time, p2: price }, color: taGetColor() };
+}
+
+function taOnMouseMove(e) {
+  if (!_taDrawing || !_taMouseDown) return;
+  const time  = taXToTime(e.offsetX);
+  const price = taYToPrice(e.offsetY);
+  if (!time || price === null) return;
+  _taDrawing.data.t2 = time;
+  _taDrawing.data.p2 = price;
+  taRedrawCanvas();
+}
+
+function taOnMouseUp(e) {
+  _taMouseDown = false;
+  if (!_taDrawing) return;
+  const time  = taXToTime(e.offsetX);
+  const price = taYToPrice(e.offsetY);
+  _taDrawing.data.t2 = time || _taDrawing.data.t2;
+  _taDrawing.data.p2 = price !== null ? price : _taDrawing.data.p2;
+  // 防止误点（几乎没有移动）
+  if (_taDrawing.data.t1 === _taDrawing.data.t2 && _taDrawing.type !== 'hline') {
+    _taDrawing = null; taRedrawCanvas(); return;
+  }
+  const d = { ..._taDrawing, id: 'tmp_' + Date.now() };
+  _taDrawings.push(d);
+  taSaveDrawingToServer(d);
+  _taDrawing = null;
+  taRedrawCanvas();
+}
+
+function taOnDblClick(e) {
+  if (_taSelected) {
+    taDeleteDrawing(_taSelected);
+    _taSelected = null;
+    taRedrawCanvas();
+  }
+}
+
+function taOnContextMenu(e) {
+  e.preventDefault();
+  const hit = taHitTest(e.offsetX, e.offsetY);
+  if (hit && confirm('删除此画线？')) {
+    taDeleteDrawing(hit);
+    if (_taSelected === hit) _taSelected = null;
+  }
+}
+
+// ── 命中检测 ──────────────────────────────────────────────────
+function taHitTest(mx, my) {
+  const T = 8;
+  for (let i = _taDrawings.length - 1; i >= 0; i--) {
+    const d = _taDrawings[i];
+    if (d.type === 'hline') {
+      const y = taPriceToY(d.data.price);
+      if (y !== null && Math.abs(my - y) < T) return d.id;
+    } else if (d.type === 'trendline') {
+      const x1 = taTimeToX(d.data.t1), y1 = taPriceToY(d.data.p1);
+      const x2 = taTimeToX(d.data.t2), y2 = taPriceToY(d.data.p2);
+      if (x1 !== null && x2 !== null && y1 !== null && y2 !== null) {
+        if (_taSegDist(mx, my, x1, y1, x2, y2) < T) return d.id;
+      }
+    } else if (d.type === 'text') {
+      const x = taTimeToX(d.data.time), y = taPriceToY(d.data.price);
+      if (x !== null && y !== null && Math.abs(mx - x) < 60 && Math.abs(my - y) < 20) return d.id;
+    } else if (d.type === 'rect') {
+      const x1 = taTimeToX(d.data.t1), x2 = taTimeToX(d.data.t2);
+      const y1 = taPriceToY(d.data.p1), y2 = taPriceToY(d.data.p2);
+      if (x1 !== null && x2 !== null && y1 !== null && y2 !== null) {
+        if (mx >= Math.min(x1,x2)-T && mx <= Math.max(x1,x2)+T &&
+            my >= Math.min(y1,y2)-T && my <= Math.max(y1,y2)+T) return d.id;
+      }
+    }
+  }
+  return null;
+}
+
+function _taSegDist(px, py, ax, ay, bx, by) {
+  const dx = bx-ax, dy = by-ay, l2 = dx*dx+dy*dy;
+  if (l2 === 0) return Math.hypot(px-ax, py-ay);
+  const t = Math.max(0, Math.min(1, ((px-ax)*dx+(py-ay)*dy)/l2));
+  return Math.hypot(px-(ax+t*dx), py-(ay+t*dy));
+}
+
+function taGetColor() { return document.getElementById('taDrawColor')?.value || '#2563EB'; }
+
+function taSetDrawMode(mode, btn) {
+  _taDrawMode = mode;
+  document.querySelectorAll('[id^="taTool-"]').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const wrap = document.getElementById('taChartWrap');
+  if (wrap) wrap.classList.toggle('drawing', !!mode);
+  if (_taCanvas) _taCanvas.style.pointerEvents = mode ? 'auto' : 'none';
+}
+
+// ── 画线持久化 ─────────────────────────────────────────────────
+async function taLoadDrawings() {
+  if (!_taSymbol) return;
+  _taDrawings = [];
+  try {
+    const json = await (await fetch(
+      `/api/analysis/drawings?symbol=${encodeURIComponent(_taSymbol)}&market=a&period=${_taPeriod}`
+    )).json();
+    if (json.success) { _taDrawings = json.data || []; taRedrawCanvas(); }
+  } catch(e) {}
+}
+
+async function taSaveDrawingToServer(d) {
+  if (!_taSymbol) return;
+  try {
+    const resp = await fetch('/api/analysis/drawings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol: _taSymbol, market: 'a', period: _taPeriod, type: d.type, data: d.data, color: d.color, label: d.label || '' })
+    });
+    const json = await resp.json();
+    if (json.success) {
+      const idx = _taDrawings.findIndex(x => x.id === d.id);
+      if (idx >= 0) _taDrawings[idx].id = json.id;
+    }
+  } catch(e) {}
+}
+
+async function taDeleteDrawing(id) {
+  _taDrawings = _taDrawings.filter(d => d.id !== id);
+  taRedrawCanvas();
+  if (typeof id === 'number') {
+    try { await fetch(`/api/analysis/drawings/${id}`, { method: 'DELETE' }); } catch(e) {}
+  }
+}
+
+async function taClearAllDrawings() {
+  if (!_taSymbol) return;
+  if (!confirm('清除此股票+周期的所有画线？')) return;
+  _taDrawings = []; taRedrawCanvas();
+  try { await fetch(`/api/analysis/drawings/clear?symbol=${encodeURIComponent(_taSymbol)}&period=${_taPeriod}`, { method: 'DELETE' }); } catch(e) {}
+}
+
+// ── 形态识别 ──────────────────────────────────────────────────
+async function taLoadPatterns() {
+  if (!_taSymbol || !['day','week','month'].includes(_taPeriod)) {
+    document.getElementById('taPatternsBody').innerHTML = '<div class="empty-state" style="padding:16px;">仅日/周/月K支持形态识别</div>';
+    return;
+  }
+  const body = document.getElementById('taPatternsBody');
+  body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--ink-3);">识别中...</div>';
+  try {
+    const json = await (await fetch(`/api/analysis/patterns/${encodeURIComponent(_taSymbol)}?period=${_taPeriod}&lookback=120`)).json();
+    if (!json.success) { body.innerHTML = '<div class="empty-state" style="padding:16px;">形态识别失败</div>'; return; }
+    _taPatterns = [...(json.candle_patterns || []), ...(json.macd_signals || [])];
+    // 在主图打 marker
+    if (_taSeries && _taSeries.setMarkers) {
+      const markers = _taPatterns.map(p => ({
+        time: p.time, position: p.position || 'belowBar',
+        color: p.color || '#f59e0b', shape: p.shape || 'circle', text: p.text || '',
+      })).sort((a,b) => a.time < b.time ? -1 : 1);
+      _taSeries.setMarkers(markers);
+    }
+    taRenderPatternsList(json.candle_patterns || [], json.macd_signals || []);
+  } catch(e) { body.innerHTML = '<div class="empty-state" style="padding:16px;">加载失败</div>'; }
+}
+
+function taRenderPatternsList(candles, macds) {
+  const body = document.getElementById('taPatternsBody');
+  const nameMap = {
+    doji:'十字星', harami:'孕线', hammer:'锤头线', shooting_star:'射击之星',
+    bullish_engulf:'多头吞噬', bearish_engulf:'空头吞噬',
+    macd_golden:'MACD金叉', macd_death:'MACD死叉',
+    macd_bullish_div:'MACD底背离', macd_bearish_div:'MACD顶背离',
+  };
+  const all = [...candles, ...macds].sort((a,b) => b.time > a.time ? 1 : -1);
+  if (!all.length) { body.innerHTML = '<div class="empty-state" style="padding:16px;">近120日无明显信号</div>'; return; }
+  body.innerHTML = all.map(p =>
+    `<div class="ta-pattern-item" onclick="taJumpToTime('${escapeHtml(p.time)}')">
+       <span class="ta-pattern-dot" style="background:${escapeHtml(p.color||'#f59e0b')};margin-top:5px;"></span>
+       <div>
+         <div style="font-size:13px;font-weight:500;color:var(--ink);">${escapeHtml(nameMap[p.pattern_type]||p.text||p.pattern_type)}</div>
+         <div style="font-size:11px;color:var(--ink-3);">${escapeHtml(p.time)}</div>
+       </div>
+     </div>`
+  ).join('');
+}
+
+function taJumpToTime(timeStr) {
+  if (!_taChart) return;
+  try {
+    const x = _taChart.timeScale().timeToCoordinate(timeStr);
+    if (x !== null) {
+      const half = _taChart.timeScale().width() / 2;
+      _taChart.timeScale().scrollToPosition(x - half, false);
+    }
+  } catch(e) {}
+}
+
+// ── 右侧 Tab 切换 ─────────────────────────────────────────────
+function taSwitchRightTab(tab, btn) {
+  ['patterns','notes'].forEach(t => {
+    document.getElementById('taPanel-' + t).style.display = t === tab ? 'block' : 'none';
+    const b = document.getElementById('taRightTab-' + t);
+    if (b) b.classList.toggle('active', t === tab);
+  });
+  if (tab === 'notes') taLoadNotes();
+}
+
+// ── 笔记 CRUD ──────────────────────────────────────────────────
+async function taLoadNotes() {
+  if (!_taSymbol) return;
+  const el = document.getElementById('taNotesList');
+  el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);">加载中...</div>';
+  try {
+    const json = await (await fetch(`/api/analysis/notes?symbol=${encodeURIComponent(_taSymbol)}`)).json();
+    _taNotes = json.data || [];
+    if (!_taNotes.length) { el.innerHTML = '<div class="empty-state" style="padding:20px;">暂无笔记</div>'; return; }
+    el.innerHTML = _taNotes.map(n =>
+      `<div class="ta-note-item" onclick="taOpenNoteEditor(${n.id})">
+         <div class="ta-note-title">${escapeHtml(n.title||'（无标题）')}</div>
+         <div class="ta-note-meta">${escapeHtml(n.note_date||'')}${n.tags ? ' · ' + n.tags.split(',').filter(Boolean).map(t=>`<span class="ta-tag-chip">${escapeHtml(t.trim())}</span>`).join('') : ''}</div>
+         ${n.content ? `<div class="ta-note-preview">${escapeHtml(n.content.slice(0,80))}</div>` : ''}
+       </div>`
+    ).join('');
+  } catch(e) { el.innerHTML = '<div class="empty-state" style="padding:16px;">加载失败</div>'; }
+}
+
+function taOpenNoteEditor(id) {
+  _taNoteEditId = id;
+  const editor = document.getElementById('taNoteEditor');
+  editor.style.display = '';
+  document.getElementById('taNoteEditorTitle').textContent = id ? '编辑笔记' : '新建笔记';
+  if (id) {
+    const note = _taNotes.find(n => n.id === id);
+    if (note) {
+      document.getElementById('taNoteTitle').value   = note.title || '';
+      document.getElementById('taNoteDate').value    = note.note_date || '';
+      document.getElementById('taNoteContent').value = note.content || '';
+      document.getElementById('taNoteTags').value    = note.tags || '';
+      return;
+    }
+  }
+  document.getElementById('taNoteTitle').value   = '';
+  document.getElementById('taNoteDate').value    = new Date().toISOString().slice(0,10);
+  document.getElementById('taNoteContent').value = '';
+  document.getElementById('taNoteTags').value    = '';
+}
+
+function taCloseNoteEditor() {
+  document.getElementById('taNoteEditor').style.display = 'none';
+  _taNoteEditId = null;
+}
+
+async function taSaveNote() {
+  const payload = {
+    symbol:    _taSymbol,
+    market:    'a',
+    title:     document.getElementById('taNoteTitle').value.trim(),
+    content:   document.getElementById('taNoteContent').value.trim(),
+    tags:      document.getElementById('taNoteTags').value.trim(),
+    note_date: document.getElementById('taNoteDate').value,
+  };
+  if (!payload.content && !payload.title) { showToast('请输入笔记内容', 'error'); return; }
+  try {
+    let resp;
+    if (_taNoteEditId) {
+      resp = await fetch(`/api/analysis/notes/${_taNoteEditId}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      });
+    } else {
+      resp = await fetch('/api/analysis/notes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+      });
+    }
+    const json = await resp.json();
+    if (json.success) { showToast('笔记已保存', 'success'); taCloseNoteEditor(); taLoadNotes(); }
+    else showToast('保存失败', 'error');
+  } catch(e) { showToast('保存失败', 'error'); }
+}
+
+async function taDeleteNote(id, e) {
+  e && e.stopPropagation();
+  if (!confirm('删除此笔记？')) return;
+  try {
+    await fetch(`/api/analysis/notes/${id}`, { method: 'DELETE' });
+    taLoadNotes();
+  } catch(e) {}
 }
 
 </script>
