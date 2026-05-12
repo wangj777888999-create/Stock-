@@ -82,6 +82,8 @@ async def get_north_flow():
         return {"success": True, "data": cached}
     try:
         df = ak.stock_hsgt_fund_min_em(symbol="北向资金")
+        if df is None or df.empty:
+            return {"success": True, "data": []}
         data = df.tail(50).to_dict(orient="records")
         cache_set("north-flow", data, 300)
         return {"success": True, "data": data}
@@ -96,6 +98,8 @@ async def get_north_history():
         return {"success": True, "data": cached}
     try:
         df = ak.stock_hsgt_hist_em(symbol="北向资金")
+        if df is None or df.empty:
+            return {"success": True, "data": []}
         data = df.tail(30).to_dict(orient="records")
         cache_set("north-history", data, 300)
         return {"success": True, "data": data}
