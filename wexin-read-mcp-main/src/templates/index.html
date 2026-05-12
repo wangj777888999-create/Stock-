@@ -2036,7 +2036,8 @@ textarea.form-input {
                 <input id="taSearchInput" class="input" placeholder="搜索股票（代码或名称）"
                        style="width:220px;"
                        oninput="taOnSearchInput()"
-                       onkeydown="if(event.key==='Enter')taSearchStock()">
+                       onkeydown="if(event.key==='Enter'){clearTimeout(_taSearchTimer);taSearchStock();}"
+                       onblur="setTimeout(()=>{const d=document.getElementById('taSearchDropdown');if(d)d.style.display='none';},150)">
                 <div id="taSearchDropdown" style="display:none;position:absolute;top:100%;left:0;
                      background:var(--surface);border:1px solid var(--border);
                      border-radius:var(--r-sm);box-shadow:var(--shadow-md);
