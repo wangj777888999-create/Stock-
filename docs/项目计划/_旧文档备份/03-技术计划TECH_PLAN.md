@@ -5,7 +5,7 @@
 | 项目名称 | StockPulse (wexin-read-mcp-main) |
 | 文档版本 | v2.0 |
 | 创建日期 | 2026-04-21 |
-| 修改日期 | 2026-05-12 |
+| 修改日期 | 2026-05-12（更新：市场精简 + 东方财富 + 北向资金 + 内存泄漏修复） |
 | 状态 | 持续迭代中 |
 
 ---
@@ -15,7 +15,7 @@
 ### 1.1 当前技术架构
 
 ```
-前端 SPA (templates/index.html，5541 行)
+前端 SPA (templates/index.html，~5150 行)
   ↓
 FastAPI app.py (176 行，纯路由组装)
   ↓
@@ -27,12 +27,17 @@ routers/ (12 个独立路由模块)
   ├── blogger.py          (723 行)  博主管理 + 文章采集
   ├── analyzer.py         (317 行)  多视角 AI 分析
   ├── scheduler.py        (184 行)  定时采集调度
-  └── market/             (基金/期货/加密)
+  └── market/             (基金 Provider，期货/加密已移除)
+  ↓
+服务层
+  ├── eastmoney.py        (142 行) 东方财富直连降级
+  ├── source_racer.py     (106 行) 多源竞速工具
+  └── indicators.py       技术指标计算
   ↓
 基础设施层
   ├── database.py         SQLite WAL 模式，11 张表
   ├── stock_utils.py      L1(内存) + L2(SQLite) 双层缓存
-  ├── http_client.py      全局连接池 + 代理绕过
+  ├── http_client.py      requests.Session + httpx.AsyncClient 双客户端
   └── state.py            全局单例状态
 ```
 
@@ -68,7 +73,8 @@ routers/ (12 个独立路由模块)
 ### ✅ Phase 2：性能优化（连接池 + 缓存持久化）
 
 **HTTP 连接池**（`http_client.py`）：
-- 全局 `requests.Session`，`trust_env=False` 绕过 VPN 代理
+- `requests.Session`：供 AKShare 使用，`trust_env=False` 绕过 VPN 代理
+- `httpx.AsyncClient`：供直接异步请求使用，修复 `proxies=None` 导致的 macOS 20s 延迟 bug
 - `patch_requests()` 同时 patch `requests.get/post` 和 `requests.Session` 类（覆盖 AKShare 内部新建 Session 的路径）
 
 **双层缓存**（`stock_utils.py`）：
@@ -87,7 +93,7 @@ app.py 从 750 行拆分为 12 个独立路由模块：
 | 路由模块 | 功能 |
 |------|------|
 | `routers/stock.py` | 股票查询、K 线、财务 |
-| `routers/market.py` | 基金/期货/加密货币 |
+| `routers/market.py` | 基金（期货/加密已移除） |
 | `routers/iwencai.py` | 问财选股 |
 | `routers/blogger.py` | 博主管理 API |
 | `routers/config.py` | 配置管理 API |
@@ -188,6 +194,8 @@ async def verify_api_key(key: str = Security(api_key_header)):
 | **Phase 6** | API 认证机制 | 🔲 待开始 | — |
 | **Phase 7** | 单元测试 | 🔲 待开始 | — |
 | **Phase 8** | 前端模块化 | 🔲 进行中 | — |
+| **Phase 9** | 市场模块精简 + 东方财富降级 + 多源竞速 | ✅ 已完成 | 2026-05-12 |
+| **Phase 10** | 北向资金/龙虎榜 + ResizeObserver 内存泄漏修复 | ✅ 已完成 | 2026-05-12 |
 
 ---
 
@@ -219,6 +227,21 @@ async def verify_api_key(key: str = Security(api_key_header)):
 - [x] 11 张表覆盖完整业务数据
 - [x] WAL 模式 + busy_timeout 防锁
 - [x] `_migrate()` 支持增量迁移
+
+### Phase 9 验收 ✅（市场模块精简 + 东方财富降级）
+
+- [x] crypto.py / futures.py 已删除，market/__init__.py 仅注册 FundProvider
+- [x] routers/market.py 期货端点已移除
+- [x] services/eastmoney.py 提供公司信息 + 财务数据直连降级
+- [x] services/source_racer.py 实现多源竞速（EWMA 延迟排序 + 失败惩罚）
+- [x] http_client.py 新增 httpx.AsyncClient 单例，修复 proxies=None macOS 延迟
+
+### Phase 10 验收 ✅（北向资金/龙虎榜 + 内存泄漏修复）
+
+- [x] 后端 3 条缓存路由：north-flow（实时）、north-history（历史）、lhb（龙虎榜）
+- [x] 前端北向资金实时/历史图表 + 龙虎榜表格
+- [x] 6 处 ResizeObserver 泄漏修复（MACD/RSI 子图 + 基金 + 期货）
+- [x] switchView 兜底清理所有 observer 和定时器
 
 ### Phase 4 待验收
 
