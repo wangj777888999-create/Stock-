@@ -1,5 +1,6 @@
 """定时任务调度器 — 每日自动抓取文章 + AI扫描"""
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -11,6 +12,7 @@ from apscheduler.triggers.cron import CronTrigger
 logger = logging.getLogger("scheduler")
 
 _scheduler: AsyncIOScheduler | None = None
+_scrape_lock = asyncio.Lock()
 BLOGGERS_FILE = Path(__file__).parent.parent / "bloggers.json"
 SCHEDULER_CONFIG_FILE = Path(__file__).parent.parent / "scheduler_config.json"
 
@@ -27,7 +29,22 @@ def _load_config() -> dict:
 
 
 async def auto_scrape_job(blogger_mgr, scraper, config):
-    """每日自动采集：抓取新文章 → 存库 → AI扫描"""
+    """每日自动采集：抓取新文章 → 存库 → AI扫描。
+
+    使用 asyncio.Lock 防止定时触发与手动触发并发执行。"""
+    if _scrape_lock.locked():
+        logger.warning("上一次采集尚未完成，跳过本次触发")
+        return {"success": False, "error": "上一次采集仍在运行中"}
+
+    from article_storage import save_articles, get_existing_urls, update_mentions
+    from analyzer import ArticleAnalyzer
+
+    async with _scrape_lock:
+        return await _do_scrape(blogger_mgr, scraper, config)
+
+
+async def _do_scrape(blogger_mgr, scraper, config):
+    """采集主逻辑（在锁保护下执行）。"""
     from article_storage import save_articles, get_existing_urls, update_mentions
     from analyzer import ArticleAnalyzer
 
@@ -179,6 +196,6 @@ def stop_scheduler():
     """停止调度器"""
     global _scheduler
     if _scheduler is not None:
-        _scheduler.shutdown(wait=False)
+        _scheduler.shutdown(wait=True)
         _scheduler = None
         logger.info("定时调度器已停止")

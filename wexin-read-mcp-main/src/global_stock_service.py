@@ -8,30 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 
 import yfinance as yf
 
-from stock_utils import TTL_COMPANY, TTL_DAILY, TTL_REALTIME, cache
+from stock_utils import TTL_COMPANY, TTL_DAILY, TTL_REALTIME, _clean, cache
 
 logger = logging.getLogger("stock-service")
 
-
-# ─── 工具函数 ───
-
-
-def _clean(v):
-    """将 NaN/NaT/numpy 类型转为 JSON 安全的 Python 原生类型。"""
-    if v is None:
-        return None
-    if hasattr(v, "item"):
-        try:
-            v = v.item()
-        except (ValueError, TypeError):
-            pass
-    if isinstance(v, float) and math.isnan(v):
-        return None
-    return v
 
 
 def _to_yahoo_symbol(symbol: str, market: str) -> str:
@@ -103,6 +86,9 @@ class GlobalStockService:
 
     async def search(self, keyword: str, market: str | None = None) -> dict:
         """从静态列表搜索韩/日股票。"""
+        if not keyword or not keyword.strip():
+            return {"success": True, "data": []}
+
         cache_key = f"global:search:{keyword}:{market}"
         cached = cache.get(cache_key)
         if cached is not None:

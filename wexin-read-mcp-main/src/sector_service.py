@@ -560,6 +560,9 @@ class SectorService:
             keyword: 搜索关键词
             board_type: "industry" | "concept" | "all"
         """
+        if not keyword or not keyword.strip():
+            return {"success": True, "data": []}
+
         try:
             if board_type == "all":
                 industry_task = self._get_boards_single("industry")

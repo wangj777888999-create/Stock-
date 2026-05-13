@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import math
 
 import akshare as ak
 import pywencai
 
-from stock_utils import TTL_COMPANY, TTL_DAILY, TTL_REALTIME, cache
+from stock_utils import TTL_COMPANY, TTL_DAILY, TTL_REALTIME, _clean, cache
 from http_client import patch_requests as _patch_requests
 
 logger = logging.getLogger("iwencai-service")
@@ -17,14 +16,6 @@ logger = logging.getLogger("iwencai-service")
 _WENCAI_TIMEOUT = 15.0   # 问财单次查询超时
 _AKSHARE_TIMEOUT = 20.0  # AKShare 接口超时
 
-
-def _clean(v):
-    """将 NaN/NaT 转为 None。"""
-    if v is None:
-        return None
-    if isinstance(v, float) and math.isnan(v):
-        return None
-    return v
 
 
 class IWencaiService:

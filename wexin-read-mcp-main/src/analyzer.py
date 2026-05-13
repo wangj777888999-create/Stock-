@@ -2,12 +2,12 @@
 
 import asyncio
 import json
-import httpx
 import logging
 from datetime import datetime
 
 from agents import PERSONAS, Persona
 from config import AppConfig
+from http_client import get_async_client
 
 logger = logging.getLogger(__name__)
 
@@ -170,34 +170,35 @@ class ArticleAnalyzer:
         return {"success": True, "report": report, "error": None}
 
     async def _call_ai(self, prompt: str, system: str) -> dict:
-        """调用AI API进行分析（system prompt 由调用方决定）"""
+        """调用AI API进行分析（system prompt 由调用方决定）。"""
         try:
-            async with httpx.AsyncClient(timeout=120) as client:
-                response = await client.post(
-                    f"{self.config.ai.base_url}/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self.config.ai.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": self.config.ai.model,
-                        "messages": [
-                            {"role": "system", "content": system},
-                            {"role": "user", "content": prompt},
-                        ],
-                        "temperature": 0.3,
-                        "max_tokens": 4096,
-                    },
-                )
-                response.raise_for_status()
-                data = response.json()
-                choices = data.get("choices", [])
-                if not choices:
-                    return {"success": False, "report": "", "error": "AI返回空结果（配额耗尽或内容被过滤）"}
-                report = choices[0].get("message", {}).get("content", "")
-                if not report:
-                    return {"success": False, "report": "", "error": "AI返回内容为空"}
-                return {"success": True, "report": report, "error": None}
+            client = get_async_client()
+            response = await client.post(
+                f"{self.config.ai.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.config.ai.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.config.ai.model,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0.3,
+                    "max_tokens": 4096,
+                },
+                timeout=120.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+            choices = data.get("choices", [])
+            if not choices:
+                return {"success": False, "report": "", "error": "AI返回空结果（配额耗尽或内容被过滤）"}
+            report = choices[0].get("message", {}).get("content", "")
+            if not report:
+                return {"success": False, "report": "", "error": "AI返回内容为空"}
+            return {"success": True, "report": report, "error": None}
 
         except Exception as e:
             logger.error(f"AI分析失败: {e}")
@@ -264,31 +265,32 @@ confidence 含义：
         system = "你是股票文本扫描助手，任务是从文章中提取所有被提及的股票名称。只做扫描，不做荐股判断。输出严格 JSON。"
 
         try:
-            async with httpx.AsyncClient(timeout=120) as client:
-                response = await client.post(
-                    f"{self.config.ai.base_url}/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {self.config.ai.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": self.config.ai.model,
-                        "messages": [
-                            {"role": "system", "content": system},
-                            {"role": "user", "content": prompt},
-                        ],
-                        "temperature": 0.1,
-                        "max_tokens": 2048,
-                    },
-                )
-                response.raise_for_status()
-                data = response.json()
-                choices = data.get("choices", [])
-                if not choices:
-                    return {"success": False, "mentions": [], "error": "AI返回空结果"}
-                raw = choices[0].get("message", {}).get("content", "")
-                if not raw:
-                    return {"success": False, "mentions": [], "error": "AI返回内容为空"}
+            client = get_async_client()
+            response = await client.post(
+                f"{self.config.ai.base_url}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.config.ai.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": self.config.ai.model,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0.1,
+                    "max_tokens": 2048,
+                },
+                timeout=120.0,
+            )
+            response.raise_for_status()
+            data = response.json()
+            choices = data.get("choices", [])
+            if not choices:
+                return {"success": False, "mentions": [], "error": "AI返回空结果"}
+            raw = choices[0].get("message", {}).get("content", "")
+            if not raw:
+                return {"success": False, "mentions": [], "error": "AI返回内容为空"}
 
             # 解析 JSON（兼容 markdown 代码块包裹的情况）
             text = raw.strip()

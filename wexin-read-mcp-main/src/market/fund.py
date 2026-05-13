@@ -11,7 +11,7 @@ if _src not in sys.path:
     sys.path.insert(0, _src)
 
 import pandas as pd
-from stock_utils import TTL_COMPANY, cache
+from stock_utils import TTL_COMPANY, _clean, cache
 from .base import MarketProvider
 
 logger = logging.getLogger(__name__)
@@ -19,29 +19,6 @@ logger = logging.getLogger(__name__)
 _DF_TTL = 300  # DataFrame 缓存 5 分钟
 _PROXY_KEYS = ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY")
 
-
-# ---------- 工具函数 ----------
-
-def _clean(v):
-    """Convert NaN/NaT to None, Timestamp to str, numpy types to Python native."""
-    import math
-    if v is None:
-        return None
-    if isinstance(v, pd.Timestamp):
-        return str(v)
-    try:
-        if pd.isna(v):
-            return None
-    except (TypeError, ValueError):
-        pass
-    if isinstance(v, float) and math.isnan(v):
-        return None
-    if hasattr(v, "item"):
-        try:
-            v = v.item()
-        except (ValueError, TypeError):
-            pass
-    return v
 
 
 def _df_to_dicts(df, columns=None):
@@ -267,36 +244,36 @@ class FundProvider(MarketProvider):
                     "成交额": _clean(row.get("成交额")),
                 }
 
-            # 2. K 线数据 — 新浪
-            import akshare as ak
+            # 2. K 线数据 — 腾讯前复权日线 API（py_mini_racer 在 Python 3.14 不可用）
             kline = []
             try:
-                # 从新浪代码获取完整代码
                 full_code = None
                 if not row.empty:
                     full_code = _clean(row.iloc[0] if hasattr(row, 'iloc') else row.get("代码"))
                 if not full_code:
-                    # 推测市场前缀
                     full_code = f"sz{code}" if code.startswith(("0", "3", "15")) else f"sh{code}"
 
-                saved = _no_proxy_env()
+                import requests as _req
+                s = _req.Session()
+                s.trust_env = False
                 try:
-                    kline_df = await asyncio.to_thread(
-                        ak.fund_etf_hist_sina, symbol=full_code,
-                    )
+                    url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={full_code},day,,,320,qfq"
+                    r = s.get(url, timeout=10)
+                    data = r.json()
+                    if data.get("code") == 0 and data.get("data"):
+                        stock_data = data["data"].get(full_code, {})
+                        rows = stock_data.get("qfqday") or stock_data.get("day") or []
+                        for row_data in rows:
+                            kline.append({
+                                "date": str(row_data[0])[:10],
+                                "open": row_data[1],
+                                "close": row_data[2],
+                                "high": row_data[3],
+                                "low": row_data[4],
+                                "volume": row_data[5],
+                            })
                 finally:
-                    _restore_env(saved)
-
-                if kline_df is not None and not kline_df.empty:
-                    for _, r in kline_df.iterrows():
-                        kline.append({
-                            "date": str(r.get("date", ""))[:10],
-                            "open": _clean(r.get("open")),
-                            "close": _clean(r.get("close")),
-                            "high": _clean(r.get("high")),
-                            "low": _clean(r.get("low")),
-                            "volume": _clean(r.get("volume")),
-                        })
+                    s.close()
             except Exception as e:
                 logger.warning(f"K线获取失败({code}): {e}")
 

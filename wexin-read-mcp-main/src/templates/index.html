@@ -1290,7 +1290,7 @@ textarea.form-input {
           <div class="card">
             <div class="card-header"><div class="card-title">今日热门股 Top10</div></div>
             <div class="card-body" style="padding:0">
-              <table class="hot-table"><thead><tr><th>#</th><th>名称</th><th>最新价</th><th>涨跌幅</th></tr></thead><tbody id="ck-hot-body"></tbody></table>
+              <table class="hot-table"><thead><tr><th>#</th><th>名称</th><th>最新价</th><th>涨跌幅</th><th>成交额</th><th>主力净流入</th></tr></thead><tbody id="ck-hot-body"></tbody></table>
             </div>
           </div>
           <div class="card">
@@ -2613,8 +2613,11 @@ async function fetchHotStocks() {
       const p = i.change_pct != null ? i.change_pct : 0;
       const c = p >= 0 ? 'text-red' : 'text-green';
       const s = p >= 0 ? '+' : '';
+      const mf = i.main_net_flow != null ? parseFloat(i.main_net_flow) : null;
+      const mfCls = mf != null ? (mf >= 0 ? 'text-red' : 'text-green') : '';
+      const mfSign = mf != null ? (mf >= 0 ? '+' : '') : '';
       const tr = document.createElement('tr');
-      tr.innerHTML = '<td>' + (i.rank ?? '') + '</td><td>' + (i.name ?? i.code) + '</td><td>' + (i.price ?? '--') + '</td><td class="' + c + '">' + s + Number(p).toFixed(2) + '%</td>';
+      tr.innerHTML = '<td>' + (i.rank ?? '') + '</td><td>' + (i.name ?? i.code) + '</td><td>' + (i.price ?? '--') + '</td><td class="' + c + '">' + s + Number(p).toFixed(2) + '%</td><td>' + _fmtYuan(i.amount) + '</td><td class="' + mfCls + '">' + (mf != null ? mfSign + _fmtYuan(mf) : '--') + '</td>';
       tb.appendChild(tr);
     });
   } catch (e) { console.error('fetchHotStocks', e); }

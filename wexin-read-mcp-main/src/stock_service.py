@@ -18,7 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import math
+
 import re
 
 import akshare as ak
@@ -29,6 +29,7 @@ from stock_utils import (
     TTL_KLINE,
     TTL_REALTIME,
     TTL_REALTIME_REFRESH,
+    _clean,
     cache,
     detect_market,
     get_exchange,
@@ -48,7 +49,7 @@ _patch_requests = patch_requests
 
 # ─── 腾讯行情 API ───
 
-_QT_URL = "http://qt.gtimg.cn/q={exchange}{code}"
+_QT_URL = "https://qt.gtimg.cn/q={exchange}{code}"
 # 字段索引: 1=名称 3=最新价 4=昨收 5=今开 31=涨跌额 32=涨跌幅
 # 33=最高 34=最低 36=成交量(手) 37=成交额(万) 38=换手率
 # 39=市盈率 43=振幅 44=总市值(亿) 45=流通市值(亿) 46=市净率
@@ -82,19 +83,6 @@ def _parse_tencent_quote(raw: str, symbol: str) -> dict | None:
     }
 
 
-def _clean(v):
-    """将 NaN/NaT/numpy 类型转为 JSON 安全的 Python 原生类型。"""
-    if v is None:
-        return None
-    # numpy 类型 → Python 原生
-    if hasattr(v, "item"):
-        try:
-            v = v.item()
-        except (ValueError, TypeError):
-            pass
-    if isinstance(v, float) and math.isnan(v):
-        return None
-    return v
 
 
 # ─── K 线列名别名映射（防御 AKShare 版本漂移）───
@@ -416,6 +404,9 @@ class StockService:
 
     async def search_stock(self, keyword: str) -> dict:
         """搜索股票，支持 A 股/美股/港股。"""
+        if not keyword or not keyword.strip():
+            return {"success": True, "data": []}
+
         cache_key = f"search:{keyword}"
         cached = cache.get(cache_key)
         if cached is not None:

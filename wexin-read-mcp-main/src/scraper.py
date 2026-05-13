@@ -46,6 +46,7 @@ class WeixinScraper:
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/125.0.0.0 Safari/537.36"
             ),
+            proxy={"server": "direct"},  # 绕过系统代理，避免 VPN 干扰国内站点访问
             java_script_enabled=True,
         )
         # 隐藏自动化标志

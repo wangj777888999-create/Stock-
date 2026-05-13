@@ -113,7 +113,7 @@ def _clean(v):
             return None
     except (TypeError, ValueError):
         pass
-    if isinstance(v, float) and math.isnan(v):
+    if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
         return None
     if hasattr(v, "item"):
         try:
