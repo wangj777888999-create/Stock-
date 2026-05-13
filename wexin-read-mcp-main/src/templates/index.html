@@ -2682,10 +2682,11 @@ function drawTickChart(code, data, prevClose) {
   }
 
   // 转换 "09:30" 时间格式为 unix 时间戳（秒）
+  // 用空格分隔符而非 T，与现有 K 线格式一致（浏览器解析为本地时间）
   const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
   const chartData = data.map(d => {
     if (d.price == null) return null;
-    return { time: Math.floor(new Date(today + 'T' + d.time + ':00').getTime() / 1000), value: d.price };
+    return { time: Math.floor(new Date(today + ' ' + d.time + ':00').getTime() / 1000), value: d.price };
   }).filter(Boolean);
   if (chartData.length > 0) series.setData(chartData);
 
