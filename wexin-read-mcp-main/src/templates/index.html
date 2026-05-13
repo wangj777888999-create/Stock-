@@ -1203,6 +1203,15 @@ textarea.form-input {
         <svg viewBox="0 0 20 20" fill="none"><path d="M5 13l4-4 3 5 4-6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="17" cy="4" r="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M3 17h14M3 13v4M17 13v4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         <span>模拟交易</span>
       </button>
+      <button class="nav-item" data-view="roles" onclick="switchView('roles', this)">
+        <svg viewBox="0 0 20 20" fill="none" width="16" height="16">
+          <rect x="2" y="3" width="7" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+          <rect x="11" y="3" width="7" height="9" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+          <circle cx="5.5" cy="7.5" r="1.5" fill="currentColor"/>
+          <circle cx="14.5" cy="7.5" r="1.5" fill="currentColor"/>
+        </svg>
+        <span>角色验证</span>
+      </button>
       <button class="nav-item" data-view="analysis" onclick="switchView('analysis', this)">
         <svg viewBox="0 0 20 20" fill="none"><path d="M3 17V8l4-4 3 5 4-6 3 5v9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 14h16" stroke="currentColor" stroke-width="1.1" stroke-dasharray="2 2.5" stroke-linecap="round"/></svg>
         <span>技术分析</span>
@@ -2131,6 +2140,105 @@ textarea.form-input {
         </div>
       </div>
 
+      <!-- ==================== VIEW: ROLES ==================== -->
+      <div id="view-roles" class="view">
+        <div id="roles-cards-panel">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+            <h2 style="margin:0;font-size:18px;font-weight:600">角色列表</h2>
+            <button class="btn btn-primary btn-sm" onclick="rolesShowCreate()">+ 新增角色</button>
+          </div>
+          <div id="roles-cards-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px"></div>
+        </div>
+        <div id="roles-detail-panel" style="display:none">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+            <button class="btn btn-ghost btn-sm" onclick="rolesBackToCards()">← 返回</button>
+            <span id="roles-detail-name" style="font-size:18px;font-weight:600"></span>
+            <span id="roles-detail-label" style="font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600"></span>
+          </div>
+          <div id="roles-detail-account" style="margin-bottom:12px;color:#888;font-size:13px"></div>
+          <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap" id="roles-detail-stats"></div>
+          <div style="display:flex;gap:8px;margin-bottom:16px">
+            <button class="btn btn-primary btn-sm" onclick="rolesShowOpenForm()">+ 开仓</button>
+            <button class="btn btn-outline btn-sm" onclick="rolesShowImportModal()">📄 CSV 导入</button>
+            <button class="btn btn-ghost btn-sm" onclick="rolesShowEdit()">✏️ 编辑</button>
+            <button class="btn btn-ghost btn-sm" onclick="rolesDelete()" style="color:var(--red)">删除</button>
+          </div>
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-header"><div class="card-title">当前持仓</div></div>
+            <div class="card-body" style="overflow-x:auto;padding:0">
+              <table class="data-table"><thead><tr>
+                <th>代码</th><th>方向</th><th>买入价</th><th>现价</th><th>数量</th><th>浮动盈亏</th><th>日期</th><th>备注</th><th>操作</th>
+              </tr></thead><tbody id="roles-positions-tbody"></tbody></table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">已平仓记录</div></div>
+            <div class="card-body" style="overflow-x:auto;padding:0">
+              <table class="data-table"><thead><tr>
+                <th>代码</th><th>方向</th><th>买入价</th><th>卖出价</th><th>数量</th><th>盈亏</th><th>日期</th><th>备注</th>
+              </tr></thead><tbody id="roles-history-tbody"></tbody></table>
+            </div>
+          </div>
+        </div>
+        <!-- Role Form Modal -->
+        <div id="roles-form-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1001;justify-content:center;align-items:center">
+          <div style="background:#1a1a2e;padding:24px;border-radius:8px;min-width:360px;border:1px solid #333">
+            <h3 style="margin:0 0 16px;color:#eee" id="roles-form-title">新增角色</h3>
+            <div style="display:grid;gap:10px">
+              <input id="roles-form-name" placeholder="角色名称" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee">
+              <input id="roles-form-capital" type="number" placeholder="初始资金 (默认 100000)" value="100000" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee">
+              <div style="display:flex;gap:8px;align-items:center">
+                <span style="color:#888;font-size:13px">卡片颜色:</span>
+                <input id="roles-form-color" type="color" value="#2563EB" style="width:36px;height:28px;border:none;border-radius:4px;cursor:pointer">
+              </div>
+              <textarea id="roles-form-notes" placeholder="备注 (可选)" rows="2" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;resize:vertical"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('roles-form-modal').style.display='none'">取消</button>
+              <button class="btn btn-primary btn-sm" id="roles-form-submit-btn" onclick="rolesSave()">确认创建</button>
+            </div>
+          </div>
+        </div>
+        <!-- Trade Modal -->
+        <div id="roles-trade-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1001;justify-content:center;align-items:center">
+          <div style="background:#1a1a2e;padding:24px;border-radius:8px;min-width:380px;border:1px solid #333">
+            <h3 style="margin:0 0 16px;color:#eee">开仓</h3>
+            <div style="display:grid;gap:10px">
+              <input id="roles-trade-symbol" placeholder="股票代码 (例如 600519)" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee">
+              <div style="display:flex;gap:10px">
+                <select id="roles-trade-direction" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;flex:1">
+                  <option value="long">做多</option><option value="short">做空</option>
+                </select>
+                <input id="roles-trade-price" type="number" step="0.01" placeholder="成交价" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;flex:1">
+              </div>
+              <div style="display:flex;gap:10px">
+                <input id="roles-trade-qty" type="number" placeholder="数量(股)" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;flex:1">
+                <input id="roles-trade-fee" type="number" step="0.01" placeholder="手续费" value="5" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;flex:1">
+              </div>
+              <input id="roles-trade-date" type="date" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee">
+              <input id="roles-trade-note" placeholder="备注(可选)" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee">
+            </div>
+            <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('roles-trade-modal').style.display='none'">取消</button>
+              <button class="btn btn-primary btn-sm" onclick="rolesOpen()">确认开仓</button>
+            </div>
+          </div>
+        </div>
+        <!-- CSV Import Modal -->
+        <div id="roles-import-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1001;justify-content:center;align-items:center">
+          <div style="background:#1a1a2e;padding:24px;border-radius:8px;min-width:400px;border:1px solid #333">
+            <h3 style="margin:0 0 12px;color:#eee">导入交割单 CSV</h3>
+            <p style="color:#888;font-size:12px;margin-bottom:12px">列：symbol, direction, price, quantity, fee, trade_date, close_price(可选), close_date(可选), note(可选)</p>
+            <input type="file" id="roles-import-file" accept=".csv" style="margin-bottom:12px;color:#eee">
+            <div id="roles-import-result" style="font-size:12px;margin-bottom:12px"></div>
+            <div style="display:flex;gap:10px;justify-content:flex-end">
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('roles-import-modal').style.display='none'">关闭</button>
+              <button class="btn btn-primary btn-sm" onclick="rolesImportCSV()">开始导入</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ==================== VIEW: ANALYSIS ==================== -->
       <div id="view-analysis" class="view">
 
@@ -2534,6 +2642,7 @@ const topbarMeta = {
   fund:     { title: '基金', sub: 'ETF 板块分类 · 基金搜索 · 实时行情' },
   watchlist: { title: '自选股', sub: '添加/删除 · 实时行情 · 30s自动刷新' },
   sim: { title: '模拟交易', sub: '虚拟盘 · 开仓/平仓 · 盈亏统计' },
+  roles: { title: '角色验证', sub: '多角色模拟交易 · 交割单导入 · 反向指标验证' },
   sector:   { title: '板块', sub: '行业板块 · 概念板块 · 涨跌幅热力图 · 成分股 · K线' },
   analysis: { title: '技术分析', sub: '画图工具 · 形态识别 · 分析笔记' },
   cockpit: { title: '驾驶舱', sub: '市场情绪 · 核心指数 · 分时行情总览' },
@@ -2842,6 +2951,12 @@ function switchView(view, el) {
   if (view === 'fund' && !_fundLoaded) { loadFundBoards(); _fundLoaded = true; }
   if (view === 'watchlist') { loadWatchlist(); }
   if (view === 'sim') { loadSim(); }
+  if (view === 'roles') {
+    _rolesActiveId = null;
+    document.getElementById('roles-cards-panel').style.display = 'block';
+    document.getElementById('roles-detail-panel').style.display = 'none';
+    loadRoles();
+  }
   if (view === 'sector') { loadSectorBoards(); }
   if (view === 'analysis') { taInitView(); }
   if (view === 'cockpit') { initCockpit(); }
@@ -5549,6 +5664,252 @@ function simCloseForm(id) {
   }).then(r=>r.json()).then(j=>{
     if(j.success) loadSim(); else alert(j.error);
   });
+}
+
+/* ===== 角色验证 ===== */
+let _rolesActiveId = null;
+let _rolesEditingId = null;
+
+async function loadRoles() {
+  try {
+    const r = await fetch('/api/roles/list');
+    const j = await r.json();
+    if (!j.success) return;
+    renderRoleCards(j.data);
+  } catch(e) { console.error('loadRoles', e); }
+}
+
+function renderRoleCards(roles) {
+  const grid = document.getElementById('roles-cards-grid');
+  if (!roles.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#888;padding:40px">暂无角色，点击上方按钮创建</div>';
+    return;
+  }
+  const labelColors = {
+    '反向指标': { bg: 'rgba(239,68,68,0.15)', color: 'var(--red)' },
+    '正向指标': { bg: 'rgba(34,197,94,0.15)', color: 'var(--green)' },
+    '随机漫步': { bg: 'rgba(156,163,175,0.15)', color: '#9ca3af' },
+  };
+  grid.innerHTML = roles.map(r => {
+    const lc = labelColors[r.label] || labelColors['随机漫步'];
+    const pnlSign = r.total_pnl >= 0 ? '+' : '';
+    const pnlColor = r.total_pnl >= 0 ? 'var(--red)' : 'var(--green)';
+    return '<div class="card" style="cursor:pointer;border-left:4px solid ' + r.avatar_color + ';padding:20px" onclick="rolesOpenDetail(' + r.id + ',\'' + escapeHtml(r.name) + '\')">'
+      + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">'
+      + '<div style="width:40px;height:40px;border-radius:50%;background:' + r.avatar_color + '20;color:' + r.avatar_color + ';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px">' + (r.name[0] || '?') + '</div>'
+      + '<div><div style="font-weight:600;font-size:15px">' + escapeHtml(r.name) + '</div>'
+      + '<div style="font-size:11px;color:var(--ink-3)">' + r.total_trades + ' 笔交易</div></div></div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
+      + '<div><span style="font-size:11px;color:var(--ink-3)">胜率</span> <span style="font-weight:600">' + (r.win_rate * 100).toFixed(0) + '%</span></div>'
+      + '<div><span style="font-size:11px;color:var(--ink-3)">收益率</span> <span style="font-weight:600;color:' + (r.total_pnl >= 0 ? 'var(--red)' : 'var(--green)') + '">' + (r.total_pnl_pct >= 0 ? '+' : '') + r.total_pnl_pct.toFixed(1) + '%</span></div>'
+      + '<div><span style="font-size:11px;color:var(--ink-3)">总PnL</span> <span style="font-weight:600">' + _fmtYuan(r.total_pnl) + '</span></div>'
+      + '<div><span style="font-size:11px;color:var(--ink-3)">持仓</span> <span style="font-weight:600">' + r.open_positions + '</span></div></div>'
+      + '<div style="font-size:11px;color:var(--ink-3);margin-bottom:8px">资金: ' + r.initial_capital.toLocaleString() + ' | 权益: ' + r.current_equity.toLocaleString() + '</div>'
+      + '<span style="display:inline-block;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;background:' + lc.bg + ';color:' + lc.color + '">' + r.label + '</span>'
+      + '</div>';
+  }).join('');
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function rolesOpenDetail(roleId, name) {
+  _rolesActiveId = roleId;
+  document.getElementById('roles-cards-panel').style.display = 'none';
+  document.getElementById('roles-detail-panel').style.display = 'block';
+  document.getElementById('roles-detail-name').textContent = name;
+  await rolesRefreshDetail();
+}
+
+async function rolesRefreshDetail() {
+  const id = _rolesActiveId;
+  if (!id) return;
+  try {
+    const [accR, statsR, posR, histR] = await Promise.all([
+      fetch('/api/roles/' + id + '/account'), fetch('/api/roles/' + id + '/stats'),
+      fetch('/api/roles/' + id + '/positions'), fetch('/api/roles/' + id + '/history'),
+    ]);
+    const [acc, stats, pos, hist] = await Promise.all([accR.json(), statsR.json(), posR.json(), histR.json()]);
+
+    if (acc.success) {
+      const a = acc.data;
+      document.getElementById('roles-detail-account').innerHTML =
+        '资金: ' + a.initial_capital.toLocaleString()
+        + ' | 权益: ' + a.total_equity.toLocaleString()
+        + ' | 已实现P&L: <span style="color:' + (a.closed_pnl >= 0 ? 'var(--red)' : 'var(--green)') + '">' + _fmtYuan(a.closed_pnl) + '</span>'
+        + ' | 收益率: ' + (a.total_return_pct >= 0 ? '+' : '') + a.total_return_pct + '%';
+    }
+    if (stats.success) {
+      const s = stats.data;
+      document.getElementById('roles-detail-stats').innerHTML =
+        '<div class="card" style="padding:12px;text-align:center;min-width:80px"><div style="font-size:20px;font-weight:700">' + s.total_trades + '</div><div style="font-size:11px;color:#888">总交易</div></div>'
+        + '<div class="card" style="padding:12px;text-align:center;min-width:80px"><div style="font-size:20px;font-weight:700">' + (s.win_rate * 100).toFixed(0) + '%</div><div style="font-size:11px;color:#888">胜率</div></div>'
+        + '<div class="card" style="padding:12px;text-align:center;min-width:80px"><div style="font-size:20px;font-weight:700;color:' + (s.total_pnl >= 0 ? 'var(--red)' : 'var(--green)') + '">' + _fmtYuan(s.total_pnl) + '</div><div style="font-size:11px;color:#888">总PnL</div></div>'
+        + '<div class="card" style="padding:12px;text-align:center;min-width:80px"><div style="font-size:20px;font-weight:700">' + (acc.success ? acc.data.positions_count : 0) + '</div><div style="font-size:11px;color:#888">持仓</div></div>';
+    }
+    if (pos.success) {
+      const tb = document.getElementById('roles-positions-tbody');
+      tb.innerHTML = pos.data.map(p => {
+        const upnl = p.unrealized_pnl != null ? _fmtYuan(p.unrealized_pnl) : '--';
+        const upnlCls = p.unrealized_pnl >= 0 ? 'text-red' : 'text-green';
+        return '<tr><td>' + p.symbol + '</td><td>' + (p.direction === 'short' ? '做空' : '做多') + '</td>'
+          + '<td>' + (p.price != null ? p.price.toFixed(2) : '--') + '</td>'
+          + '<td>' + (p.current_price != null ? p.current_price.toFixed(2) : '--') + '</td>'
+          + '<td>' + p.quantity + '</td>'
+          + '<td class="' + upnlCls + '">' + upnl + '</td>'
+          + '<td>' + (p.trade_date || '') + '</td>'
+          + '<td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (p.note || '') + '</td>'
+          + '<td><button class="btn btn-ghost btn-sm" onclick="rolesCloseForm(' + p.id + ')">平仓</button></td></tr>';
+      }).join('') || '<tr><td colspan="9" style="color:#888;text-align:center">暂无持仓</td></tr>';
+    }
+    if (hist.success) {
+      const tb = document.getElementById('roles-history-tbody');
+      tb.innerHTML = hist.data.map(h => {
+        const pnlCls = h.pnl >= 0 ? 'text-red' : 'text-green';
+        return '<tr><td>' + h.symbol + '</td><td>' + (h.direction === 'short' ? '做空' : '做多') + '</td>'
+          + '<td>' + (h.price != null ? h.price.toFixed(2) : '--') + '</td>'
+          + '<td>' + (h.close_price != null ? h.close_price.toFixed(2) : '--') + '</td>'
+          + '<td>' + h.quantity + '</td>'
+          + '<td class="' + pnlCls + '">' + _fmtYuan(h.pnl) + '</td>'
+          + '<td>' + (h.closed_at || '') + '</td>'
+          + '<td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (h.note || '') + '</td></tr>';
+      }).join('') || '<tr><td colspan="8" style="color:#888;text-align:center">暂无记录</td></tr>';
+    }
+    // Label badge
+    if (stats.success) {
+      const s = stats.data;
+      const lbl = document.getElementById('roles-detail-label');
+      const total = s.total_trades;
+      let label = '随机漫步', bg = 'rgba(156,163,175,0.15)', color = '#9ca3af';
+      if (total >= 10) {
+        if (s.win_rate >= 0.55) { label = '正向指标'; bg = 'rgba(34,197,94,0.15)'; color = 'var(--green)'; }
+        else if (s.win_rate <= 0.35) { label = '反向指标'; bg = 'rgba(239,68,68,0.15)'; color = 'var(--red)'; }
+      }
+      lbl.textContent = label;
+      lbl.style.background = bg;
+      lbl.style.color = color;
+    }
+  } catch(e) { console.error('rolesRefreshDetail', e); }
+}
+
+function rolesBackToCards() {
+  _rolesActiveId = null;
+  document.getElementById('roles-cards-panel').style.display = 'block';
+  document.getElementById('roles-detail-panel').style.display = 'none';
+  loadRoles();
+}
+
+function rolesShowCreate() {
+  _rolesEditingId = null;
+  document.getElementById('roles-form-title').textContent = '新增角色';
+  document.getElementById('roles-form-name').value = '';
+  document.getElementById('roles-form-capital').value = '100000';
+  document.getElementById('roles-form-color').value = '#2563EB';
+  document.getElementById('roles-form-notes').value = '';
+  document.getElementById('roles-form-submit-btn').textContent = '确认创建';
+  document.getElementById('roles-form-modal').style.display = 'flex';
+}
+
+function rolesShowEdit() {
+  if (!_rolesActiveId) return;
+  fetch('/api/roles/' + _rolesActiveId).then(r => r.json()).then(j => {
+    if (!j.success) return;
+    _rolesEditingId = _rolesActiveId;
+    const d = j.data;
+    document.getElementById('roles-form-title').textContent = '编辑角色';
+    document.getElementById('roles-form-name').value = d.name || '';
+    document.getElementById('roles-form-capital').value = d.initial_capital || 100000;
+    document.getElementById('roles-form-color').value = d.avatar_color || '#2563EB';
+    document.getElementById('roles-form-notes').value = d.notes || '';
+    document.getElementById('roles-form-submit-btn').textContent = '保存修改';
+    document.getElementById('roles-form-modal').style.display = 'flex';
+  });
+}
+
+async function rolesSave() {
+  const name = document.getElementById('roles-form-name').value.trim();
+  if (!name) return alert('请输入角色名称');
+  const body = {
+    name: name,
+    initial_capital: parseFloat(document.getElementById('roles-form-capital').value) || 100000,
+    avatar_color: document.getElementById('roles-form-color').value,
+    notes: document.getElementById('roles-form-notes').value,
+  };
+  const url = _rolesEditingId ? '/api/roles/' + _rolesEditingId : '/api/roles/create';
+  const method = _rolesEditingId ? 'PUT' : 'POST';
+  const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json();
+  if (j.success) {
+    document.getElementById('roles-form-modal').style.display = 'none';
+    if (_rolesEditingId) rolesRefreshDetail(); else loadRoles();
+  }
+}
+
+async function rolesDelete() {
+  if (!_rolesActiveId) return;
+  if (!confirm('确定删除该角色？交易记录会保留。')) return;
+  const r = await fetch('/api/roles/' + _rolesActiveId, { method: 'DELETE' });
+  const j = await r.json();
+  if (j.success) rolesBackToCards();
+}
+
+function rolesShowOpenForm() {
+  document.getElementById('roles-trade-modal').style.display = 'flex';
+  document.getElementById('roles-trade-date').value = new Date().toISOString().slice(0, 10);
+}
+
+async function rolesOpen() {
+  const body = {
+    symbol: document.getElementById('roles-trade-symbol').value.trim(),
+    direction: document.getElementById('roles-trade-direction').value,
+    price: parseFloat(document.getElementById('roles-trade-price').value) || 0,
+    quantity: parseFloat(document.getElementById('roles-trade-qty').value) || 0,
+    fee: parseFloat(document.getElementById('roles-trade-fee').value) || 0,
+    trade_date: document.getElementById('roles-trade-date').value,
+    note: document.getElementById('roles-trade-note').value,
+  };
+  if (!body.symbol || !body.price || !body.quantity) return alert('请填写完整信息');
+  const r = await fetch('/api/roles/' + _rolesActiveId + '/open', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  const j = await r.json();
+  if (j.success) {
+    document.getElementById('roles-trade-modal').style.display = 'none';
+    rolesRefreshDetail();
+  } else { alert(j.error); }
+}
+
+function rolesCloseForm(tradeId) {
+  const price = prompt('平仓价格:');
+  if (!price) return;
+  const date = new Date().toISOString().slice(0, 10);
+  fetch('/api/roles/' + _rolesActiveId + '/close', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: tradeId, close_price: parseFloat(price), close_date: date, fee: 0, note: '' }),
+  }).then(r => r.json()).then(j => {
+    if (j.success) rolesRefreshDetail(); else alert(j.error);
+  });
+}
+
+function rolesShowImportModal() {
+  document.getElementById('roles-import-modal').style.display = 'flex';
+  document.getElementById('roles-import-result').textContent = '';
+}
+
+async function rolesImportCSV() {
+  const fileInput = document.getElementById('roles-import-file');
+  const file = fileInput.files[0];
+  if (!file) return alert('请选择 CSV 文件');
+  const form = new FormData();
+  form.append('file', file);
+  const r = await fetch('/api/roles/' + _rolesActiveId + '/import-csv', { method: 'POST', body: form });
+  const j = await r.json();
+  document.getElementById('roles-import-result').textContent =
+    '导入 ' + j.imported + ' 条' + (j.skipped ? '，跳过 ' + j.skipped + ' 条' : '');
+  if (j.success) rolesRefreshDetail();
 }
 
 // ==================== 板块功能 JS ====================
