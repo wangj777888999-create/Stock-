@@ -1073,6 +1073,34 @@ textarea.form-input {
   background: var(--blue-s); color: var(--blue); border: 1px solid rgba(37,99,235,0.15);
   display: inline-block; margin: 2px 3px 0 0;
 }
+
+/* ===== 驾驶舱 ===== */
+.cockpit-sentiment { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
+.cockpit-sentiment .card { min-height: 120px; }
+.cockpit-sentiment .card-body { padding: 14px 16px; }
+.sentiment-label { font-size: 12px; color: #94a3b8; margin-bottom: 8px; }
+.sentiment-value { font-size: 22px; font-weight: 700; color: #1e293b; }
+.sentiment-sub { font-size: 12px; color: #64748b; margin-top: 6px; }
+.text-red { color: #ef4444 !important; }
+.text-green { color: #22c55e !important; }
+.cockpit-indices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.cockpit-indices .card { min-height: 180px; }
+.cockpit-indices .card-header { padding: 10px 16px; }
+.cockpit-indices .card-body { padding: 0 8px 8px; }
+.ck-index-header { display: flex; align-items: baseline; gap: 8px; }
+.ck-index-price { font-size: 18px; font-weight: 700; color: #1e293b; }
+.ck-index-change { font-size: 13px; font-weight: 600; }
+.ck-chart-wrap { height: 120px; }
+.ck-chart-wrap canvas { width: 100% !important; }
+
+@media (max-width: 1200px) {
+  .cockpit-sentiment { grid-template-columns: repeat(2, 1fr); }
+  .cockpit-indices { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+  .cockpit-sentiment { grid-template-columns: 1fr; }
+  .cockpit-indices { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
@@ -1131,7 +1159,11 @@ textarea.form-input {
 
     <nav class="sidebar-nav">
       <div class="nav-section-label">工作台</div>
-      <button class="nav-item active" data-view="task" onclick="switchView('task', this)">
+      <button class="nav-item active" data-view="cockpit" onclick="switchView('cockpit', this)">
+        <svg viewBox="0 0 20 20" fill="none"><rect x="2" y="3" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M6 9l3 2 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 18h8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <span>驾驶舱</span>
+      </button>
+      <button class="nav-item" data-view="task" onclick="switchView('task', this)">
         <svg viewBox="0 0 20 20" fill="none"><path d="M10 3v14M3 10h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         <span>文章收集</span>
       </button>
@@ -1200,8 +1232,60 @@ textarea.form-input {
 
     <div class="content-wrap">
 
+      <!-- ==================== VIEW: COCKPIT ==================== -->
+      <div id="view-cockpit" class="view active">
+
+        <!-- 情绪面板 -->
+        <div class="cockpit-sentiment">
+          <!-- 涨跌家数 -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">涨跌家数</div></div>
+            <div class="card-body">
+              <div class="sentiment-label">上涨 / 下跌 / 平盘</div>
+              <div class="sentiment-value">
+                <span class="text-red" id="ck-up">--</span> / <span class="text-green" id="ck-down">--</span> / <span id="ck-flat">--</span>
+              </div>
+              <div class="sentiment-sub">涨跌比 <span id="ck-ratio">--</span></div>
+            </div>
+          </div>
+          <!-- 涨跌停 -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">涨跌停</div></div>
+            <div class="card-body">
+              <div class="sentiment-label">涨停 / 跌停</div>
+              <div class="sentiment-value">
+                <span class="text-red" id="ck-up-limit">--</span> / <span class="text-green" id="ck-down-limit">--</span>
+              </div>
+              <div class="sentiment-sub">涨停池 <span id="ck-up-pool">--</span> · 炸板 <span id="ck-broken">--</span></div>
+            </div>
+          </div>
+          <!-- 成交量 -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">成交量</div></div>
+            <div class="card-body">
+              <div class="sentiment-label">两市成交额</div>
+              <div class="sentiment-value" id="ck-volume">--</div>
+              <div class="sentiment-sub" id="ck-vol-sub"></div>
+            </div>
+          </div>
+          <!-- 资金流向 -->
+          <div class="card">
+            <div class="card-header"><div class="card-title">资金流向</div></div>
+            <div class="card-body">
+              <div class="sentiment-label">主力净流入</div>
+              <div class="sentiment-value" id="ck-main-net">--</div>
+              <div class="sentiment-sub" id="ck-flow-sub"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 指数分时图 -->
+        <div class="cockpit-indices" id="ck-indices-grid"></div>
+
+      </div>
+
       <!-- ==================== VIEW: TASK ==================== -->
-      <div id="view-task" class="view active">
+      <div id="view-task" class="view">
 
         <!-- Flow Steps -->
         <div class="flow-steps" id="flowSteps">
@@ -2430,7 +2514,211 @@ const topbarMeta = {
   sim: { title: '模拟交易', sub: '虚拟盘 · 开仓/平仓 · 盈亏统计' },
   sector:   { title: '板块', sub: '行业板块 · 概念板块 · 涨跌幅热力图 · 成分股 · K线' },
   analysis: { title: '技术分析', sub: '画图工具 · 形态识别 · 分析笔记' },
+  cockpit: { title: '驾驶舱', sub: '市场情绪 · 核心指数 · 分时行情总览' },
 };
+
+/* ===== 驾驶舱 ===== */
+let _cockpitInterval = null;
+let _cockpitCharts = {};
+let _cockpitSeries = {};
+
+function _fmtYuan(n) {
+  if (n == null || isNaN(n)) return '--';
+  const abs = Math.abs(n);
+  if (abs >= 1e12) return (n / 1e12).toFixed(2) + '万亿';
+  if (abs >= 1e8) return (n / 1e8).toFixed(2) + '亿';
+  if (abs >= 1e4) return (n / 1e4).toFixed(2) + '万';
+  return n.toFixed(2);
+}
+function _fmtPct(n) {
+  if (n == null || isNaN(n)) return '--';
+  return (n > 0 ? '+' : '') + n.toFixed(2) + '%';
+}
+function _flowColor(n) {
+  if (n == null) return '';
+  return n > 0 ? 'text-red' : n < 0 ? 'text-green' : '';
+}
+
+async function fetchSentiment() {
+  try {
+    const r = await fetch('/api/cockpit/sentiment');
+    const j = await r.json();
+    if (!j.success || !j.data) return;
+    const d = j.data;
+    // 涨跌家数
+    if (d.rise_fall) {
+      const rf = d.rise_fall;
+      document.getElementById('ck-up').textContent = rf.up ?? '--';
+      document.getElementById('ck-down').textContent = rf.down ?? '--';
+      document.getElementById('ck-flat').textContent = rf.flat ?? '--';
+      document.getElementById('ck-ratio').textContent = rf.ratio != null ? rf.ratio.toFixed(4) : '--';
+    }
+    // 涨跌停
+    if (d.limit) {
+      const lm = d.limit;
+      document.getElementById('ck-up-limit').textContent = lm.up_limit ?? '--';
+      document.getElementById('ck-down-limit').textContent = lm.down_limit ?? '--';
+      document.getElementById('ck-up-pool').textContent = lm.up_limit_pool ?? '--';
+      document.getElementById('ck-broken').textContent = lm.broken != null ? lm.broken : '--';
+    }
+    // 成交量
+    const volEl = document.getElementById('ck-volume');
+    if (d.volume && d.volume.total_yuan != null) {
+      volEl.textContent = _fmtYuan(d.volume.total_yuan);
+    } else {
+      volEl.textContent = '--';
+    }
+    // 资金流向
+    if (d.flow) {
+      const mainNetEl = document.getElementById('ck-main-net');
+      const val = d.flow.main_net;
+      mainNetEl.textContent = _fmtYuan(val);
+      mainNetEl.className = 'sentiment-value ' + _flowColor(val);
+    }
+  } catch (e) { console.error('fetchSentiment error', e); }
+}
+
+function _ckBuildIndexCards(data) {
+  const grid = document.getElementById('ck-indices-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  data.forEach(item => {
+    const code = item.code;
+    const changePct = item.prev_close ? ((item.price - item.prev_close) / item.prev_close * 100) : null;
+    const isUp = changePct >= 0;
+    const cls = isUp ? 'text-red' : 'text-green';
+    const sign = isUp ? '+' : '';
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-header">
+        <div class="ck-index-header">
+          <span style="font-weight:600;color:#1e293b;">${item.name}</span>
+          <span class="ck-index-price" id="ck-price-${code}">${item.price?.toFixed(2) ?? '--'}</span>
+          <span class="ck-index-change ${cls}" id="ck-change-${code}">${changePct != null ? sign + changePct.toFixed(2) + '%' : '--'}</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="ck-chart-wrap" id="ck-chart-${code}"></div>
+      </div>`;
+    grid.appendChild(card);
+  });
+}
+
+async function fetchIndices() {
+  try {
+    const r = await fetch('/api/cockpit/indices');
+    const j = await r.json();
+    if (!j.success || !j.data) return;
+    const grid = document.getElementById('ck-indices-grid');
+    const needsBuild = grid.children.length === 0;
+    if (needsBuild) {
+      _ckBuildIndexCards(j.data);
+    } else {
+      j.data.forEach(item => {
+        const code = item.code;
+        const priceEl = document.getElementById('ck-price-' + code);
+        const changeEl = document.getElementById('ck-change-' + code);
+        if (priceEl) priceEl.textContent = item.price?.toFixed(2) ?? '--';
+        if (changeEl) {
+          const pct = item.prev_close ? ((item.price - item.prev_close) / item.prev_close * 100) : null;
+          const isUp = pct >= 0;
+          changeEl.textContent = pct != null ? (isUp ? '+' : '') + pct.toFixed(2) + '%' : '--';
+          changeEl.className = 'ck-index-change ' + (isUp ? 'text-red' : 'text-green');
+        }
+      });
+    }
+    // fetch ticks for each index
+    j.data.forEach(item => fetchTick(item.code));
+  } catch (e) { console.error('fetchIndices error', e); }
+}
+
+async function fetchTick(code) {
+  try {
+    const r = await fetch('/api/cockpit/tick/' + code);
+    const j = await r.json();
+    if (!j.success || !j.data || !j.data.data) return;
+    drawTickChart(code, j.data.data, j.data.prev_close);
+  } catch (e) { console.error('fetchTick error', code, e); }
+}
+
+function drawTickChart(code, data, prevClose) {
+  const container = document.getElementById('ck-chart-' + code);
+  if (!container || !data || data.length === 0) return;
+
+  // destroy existing chart
+  if (_cockpitCharts[code]) {
+    try { _cockpitCharts[code].remove(); } catch(e) {}
+    delete _cockpitCharts[code];
+    delete _cockpitSeries[code];
+  }
+
+  const isUp = data.length > 0 && prevClose ? data[data.length - 1].price >= prevClose : true;
+  const lineColor = isUp ? '#ef4444' : '#22c55e';
+  const topColor = isUp ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)';
+  const bottomColor = isUp ? 'rgba(239,68,68,0.02)' : 'rgba(34,197,94,0.02)';
+
+  const chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: 120,
+    layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 10 },
+    grid: { vertLines: { visible: false }, horzLines: { visible: false } },
+    rightPriceScale: { visible: false },
+    timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
+    crosshair: { horzLine: { visible: false }, vertLine: { visible: false } },
+  });
+
+  const series = chart.addAreaSeries({
+    lineColor,
+    topColor,
+    bottomColor,
+    lineWidth: 1.5,
+  });
+
+  // mark prev close line
+  if (prevClose) {
+    series.createPriceLine({ price: prevClose, color: '#94a3b8', lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
+  }
+
+  const chartData = data.map(d => ({ time: d.time, value: d.price })).filter(d => d.value != null);
+  if (chartData.length > 0) series.setData(chartData);
+
+  _cockpitCharts[code] = chart;
+  _cockpitSeries[code] = series;
+
+  // resize
+  const ro = new ResizeObserver(() => {
+    if (_cockpitCharts[code]) chart.applyOptions({ width: container.clientWidth });
+  });
+  ro.observe(container);
+}
+
+async function initCockpit() {
+  // build index cards first
+  await fetchIndices();
+  await fetchSentiment();
+  // start auto-refresh
+  if (_cockpitInterval) clearInterval(_cockpitInterval);
+  _cockpitInterval = setInterval(() => {
+    const panel = document.getElementById('view-cockpit');
+    if (!panel || !panel.classList.contains('active')) {
+      clearInterval(_cockpitInterval);
+      _cockpitInterval = null;
+      return;
+    }
+    fetchSentiment();
+    fetchIndices();
+  }, 5000);
+}
+
+function cleanupCockpit() {
+  if (_cockpitInterval) { clearInterval(_cockpitInterval); _cockpitInterval = null; }
+  Object.keys(_cockpitCharts).forEach(code => {
+    try { _cockpitCharts[code].remove(); } catch(e) {}
+  });
+  _cockpitCharts = {};
+  _cockpitSeries = {};
+}
 
 let _fundLoaded = false;
 
@@ -2452,6 +2740,8 @@ function switchView(view, el) {
     clearInterval(_watchlistInterval);
     _watchlistInterval = null;
   }
+  // 离开驾驶舱时清理
+  if (view !== 'cockpit') cleanupCockpit();
   // 博主管理 & 文章收集 需要登录
   if ((view === 'task' || view === 'bloggers') && !_mpLoggedIn) {
     if (el) el.classList.remove('active');
@@ -2476,6 +2766,7 @@ function switchView(view, el) {
   if (view === 'sim') { loadSim(); }
   if (view === 'sector') { loadSectorBoards(); }
   if (view === 'analysis') { taInitView(); }
+  if (view === 'cockpit') { initCockpit(); }
 }
 
 /* ============================================================
