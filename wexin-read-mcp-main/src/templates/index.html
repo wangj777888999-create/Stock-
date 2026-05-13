@@ -1092,6 +1092,12 @@ textarea.form-input {
 .ck-index-change { font-size: 13px; font-weight: 600; }
 .ck-chart-wrap { height: 120px; }
 .ck-chart-wrap canvas { width: 100% !important; }
+.cockpit-hot-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+.hot-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.hot-table th { padding: 8px 12px; text-align: left; color: #94a3b8; font-weight: 500; border-bottom: 1px solid #e2e8f0; }
+.hot-table td { padding: 6px 12px; color: #334155; border-bottom: 1px solid #f1f5f9; }
+.hot-table tr:hover { background: #f8fafc; }
+@media (max-width: 768px) { .cockpit-hot-row { grid-template-columns: 1fr; } }
 
 @media (max-width: 1200px) {
   .cockpit-sentiment { grid-template-columns: repeat(2, 1fr); }
@@ -1275,6 +1281,22 @@ textarea.form-input {
               <div class="sentiment-label">主力净流入</div>
               <div class="sentiment-value" id="ck-main-net">--</div>
               <div class="sentiment-sub" id="ck-flow-sub"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 热门股票 & 行业排名 -->
+        <div class="cockpit-hot-row">
+          <div class="card">
+            <div class="card-header"><div class="card-title">今日热门股 Top10</div></div>
+            <div class="card-body" style="padding:0">
+              <table class="hot-table"><thead><tr><th>#</th><th>名称</th><th>最新价</th><th>涨跌幅</th></tr></thead><tbody id="ck-hot-body"></tbody></table>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div class="card-title">行业涨幅榜 Top10</div></div>
+            <div class="card-body" style="padding:0">
+              <table class="hot-table"><thead><tr><th>#</th><th>板块</th><th>涨跌幅</th><th>领涨股</th></tr></thead><tbody id="ck-industry-body"></tbody></table>
             </div>
           </div>
         </div>
@@ -2579,6 +2601,44 @@ async function fetchSentiment() {
   } catch (e) { console.error('fetchSentiment error', e); }
 }
 
+async function fetchHotStocks() {
+  try {
+    const r = await fetch('/api/signal/hot?limit=10');
+    const j = await r.json();
+    if (!j.success || !j.data) return;
+    const tb = document.getElementById('ck-hot-body');
+    if (!tb) return;
+    tb.innerHTML = '';
+    j.data.forEach(i => {
+      const p = i.change_pct != null ? i.change_pct : 0;
+      const c = p >= 0 ? 'text-red' : 'text-green';
+      const s = p >= 0 ? '+' : '';
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + (i.rank ?? '') + '</td><td>' + (i.name ?? i.code) + '</td><td>' + (i.price ?? '--') + '</td><td class="' + c + '">' + s + Number(p).toFixed(2) + '%</td>';
+      tb.appendChild(tr);
+    });
+  } catch (e) { console.error('fetchHotStocks', e); }
+}
+
+async function fetchIndustryRank() {
+  try {
+    const r = await fetch('/api/signal/industry_rank?limit=10');
+    const j = await r.json();
+    if (!j.success || !j.data) return;
+    const tb = document.getElementById('ck-industry-body');
+    if (!tb) return;
+    tb.innerHTML = '';
+    j.data.forEach(i => {
+      const p = i.change_pct != null ? parseFloat(i.change_pct) : 0;
+      const c = p >= 0 ? 'text-red' : 'text-green';
+      const s = p >= 0 ? '+' : '';
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + (i.rank ?? '') + '</td><td>' + i.name + '</td><td class="' + c + '">' + s + Number(p).toFixed(2) + '%</td><td>' + (i.lead_stock ?? '--') + '</td>';
+      tb.appendChild(tr);
+    });
+  } catch (e) { console.error('fetchIndustryRank', e); }
+}
+
 function _ckBuildIndexCards(data) {
   const grid = document.getElementById('ck-indices-grid');
   if (!grid) return;
@@ -2702,9 +2762,10 @@ function drawTickChart(code, data, prevClose) {
 }
 
 async function initCockpit() {
-  // build index cards first
   await fetchIndices();
   await fetchSentiment();
+  fetchHotStocks();
+  fetchIndustryRank();
   // start auto-refresh
   if (_cockpitInterval) clearInterval(_cockpitInterval);
   _cockpitInterval = setInterval(() => {
@@ -2716,6 +2777,8 @@ async function initCockpit() {
     }
     fetchSentiment();
     fetchIndices();
+    fetchHotStocks();
+    fetchIndustryRank();
   }, 5000);
 }
 
