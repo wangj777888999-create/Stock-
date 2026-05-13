@@ -40,7 +40,6 @@ _AUX_INDICES = [
 _AKSHARE_TIMEOUT = 10
 
 
-
 # ─── 情绪聚合 ───
 
 async def get_sentiment() -> dict:
@@ -362,17 +361,21 @@ async def get_us_sentiment() -> dict:
         return cached
 
     async def _fetch_vix():
-        url = "https://qt.gtimg.cn/q=us.VIX"
-        r = await get_async_client().get(url, timeout=8)
-        text = r.content.decode("gbk", errors="replace")
-        start = text.find('"')
-        end = text.rfind('"')
-        if start == -1 or end <= start:
-            return None
-        fields = text[start + 1: end].split("~")
         try:
-            return float(fields[3])
-        except (IndexError, ValueError):
+            url = "https://qt.gtimg.cn/q=us.VIX"
+            r = await get_async_client().get(url, timeout=8)
+            text = r.content.decode("gbk", errors="replace")
+            start = text.find('"')
+            end = text.rfind('"')
+            if start == -1 or end <= start:
+                return None
+            fields = text[start + 1: end].split("~")
+            try:
+                return float(fields[3])
+            except (IndexError, ValueError):
+                return None
+        except Exception as e:
+            logger.warning(f"VIX 获取失败: {e}")
             return None
 
     async def _fetch_breadth():
@@ -391,13 +394,7 @@ async def get_us_sentiment() -> dict:
             logger.warning(f"美股涨跌家数获取失败: {e}")
             return None
 
-    vix, breadth = await asyncio.gather(
-        _fetch_vix(), _fetch_breadth(), return_exceptions=True
-    )
-    if isinstance(vix, Exception):
-        vix = None
-    if isinstance(breadth, Exception):
-        breadth = None
+    vix, breadth = await asyncio.gather(_fetch_vix(), _fetch_breadth())
 
     resp = {"success": True, "data": {"vix": vix, "breadth": breadth}}
     cache.set(cache_key, resp, 30)
@@ -432,11 +429,9 @@ async def get_us_indices_quotes() -> dict:
             start = line.find('"')
             end = line.rfind('"')
             if start == -1 or end <= start:
-                i += 1
                 continue
             fields = line[start + 1: end].split("~")
             if len(fields) < 38:
-                i += 1
                 continue
             data.append({
                 "code": US_INDICES[i]["code"],

@@ -238,7 +238,7 @@ def init_db(db_path: str | None = None) -> None:
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 industry    TEXT NOT NULL,
                 purpose     TEXT DEFAULT 'investment',
-                report_text TEXT,
+                report_text TEXT NOT NULL DEFAULT '',
                 created_at  TEXT DEFAULT (datetime('now'))
             );
         """)

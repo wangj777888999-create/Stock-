@@ -14,6 +14,12 @@ class AnalyzeRequest(BaseModel):
     purpose: str = "investment"
 
 
+class SaveReportRequest(BaseModel):
+    industry: str
+    purpose: str = "investment"
+    report_text: str
+
+
 @router.post("/analyze")
 async def api_industry_analyze(req: AnalyzeRequest):
     """流式行业分析（SSE）。"""
@@ -29,11 +35,13 @@ async def api_industry_analyze(req: AnalyzeRequest):
 
 
 @router.post("/reports")
-async def api_industry_save(industry: str, purpose: str, report_text: str):
+async def api_industry_save(req: SaveReportRequest):
     """保存分析报告。"""
-    if not industry.strip() or not report_text.strip():
+    if not req.industry.strip() or not req.report_text.strip():
         raise HTTPException(status_code=400, detail="行业名称和报告内容不能为空")
-    report_id = industry_service.save_report(industry.strip(), purpose, report_text)
+    if req.purpose not in _VALID_PURPOSES:
+        raise HTTPException(status_code=400, detail=f"purpose 必须是 {_VALID_PURPOSES} 之一")
+    report_id = industry_service.save_report(req.industry.strip(), req.purpose, req.report_text)
     return {"success": True, "id": report_id}
 
 

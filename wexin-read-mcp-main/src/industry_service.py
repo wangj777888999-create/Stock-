@@ -5,6 +5,8 @@ import json
 import logging
 from typing import AsyncGenerator
 
+import httpx
+
 from database import get_db
 from http_client import get_async_client
 from state import config
@@ -152,9 +154,12 @@ async def stream_analysis(industry: str, purpose: str) -> AsyncGenerator[str, No
                         yield f"data: {json.dumps(delta, ensure_ascii=False)}\n\n"
                 except (json.JSONDecodeError, KeyError, IndexError):
                     continue
+    except httpx.HTTPStatusError as e:
+        logger.error(f"AI API 返回错误: {e.response.status_code}")
+        yield f"data: [ERROR] AI 服务返回 {e.response.status_code} 错误\n\n"
     except Exception as e:
         logger.error(f"AI 流式调用失败: {e}")
-        yield f"data: [ERROR] AI 调用失败: {e}\n\n"
+        yield f"data: [ERROR] AI 调用失败\n\n"
 
 
 def save_report(industry: str, purpose: str, report_text: str) -> int:

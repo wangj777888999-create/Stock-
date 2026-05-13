@@ -6,6 +6,7 @@ import cockpit_service
 router = APIRouter(prefix="/api/cockpit", tags=["驾驶舱"])
 
 _TICK_RE = re.compile(r"^(sh|sz|bj)?\d{6}$")
+_US_CODE_RE = re.compile(r"^[A-Z]{1,6}$")
 
 
 @router.get("/sentiment")
@@ -27,8 +28,6 @@ async def api_cockpit_tick(code: str):
         raise HTTPException(status_code=400, detail=f"无效指数代码: {code}")
     return await cockpit_service.get_tick_data(code)
 
-
-_US_CODE_RE = re.compile(r"^[A-Z]{1,6}$")
 
 
 @router.get("/us/sentiment")
