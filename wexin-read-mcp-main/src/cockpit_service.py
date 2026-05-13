@@ -125,8 +125,6 @@ async def get_sentiment() -> dict:
             try:
                 row = df_flow.iloc[-1]  # 最新一行
                 main_net = _clean(row.get("主力净流入-净额") or 0)
-                total_yuan = _clean(row.get("上证-收盘价") or 0)  # 该表无成交额列，用收盘价代替
-                volume_data = {"total_yuan": None}  # fund_flow 表无成交额字段
                 flow_data = {"main_net": main_net}
             except Exception as e:
                 logger.warning(f"解析资金流向失败: {e}")
@@ -168,6 +166,13 @@ async def get_indices_quotes() -> dict:
         r = await get_async_client().get(url, timeout=10)
         text = r.content.decode("gbk", errors="replace")
 
+        def _tf(fields, idx):
+            """从腾讯 ~-分隔字段中安全提取浮点数。"""
+            try:
+                return float(fields[idx])
+            except (IndexError, ValueError):
+                return None
+
         data = []
         lines = [line.strip() for line in text.strip().split(";") if line.strip()]
         for line in lines:
@@ -179,21 +184,15 @@ async def get_indices_quotes() -> dict:
             if len(fields) < 38:
                 continue
 
-            def _f(idx):
-                try:
-                    return float(fields[idx])
-                except (IndexError, ValueError):
-                    return None
-
             data.append({
                 "code": fields[2] if len(fields) > 2 else "",
                 "name": fields[1] if len(fields) > 1 else "",
-                "price": _f(3),
-                "prev_close": _f(4),
-                "change": _f(31),
-                "change_pct": _f(32),
-                "volume": _f(36),
-                "amount": _f(37),
+                "price": _tf(fields, 3),
+                "prev_close": _tf(fields, 4),
+                "change": _tf(fields, 31),
+                "change_pct": _tf(fields, 32),
+                "volume": _tf(fields, 36),
+                "amount": _tf(fields, 37),
             })
 
         resp = {"success": True, "data": data}

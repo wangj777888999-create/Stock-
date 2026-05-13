@@ -2521,6 +2521,7 @@ const topbarMeta = {
 let _cockpitInterval = null;
 let _cockpitCharts = {};
 let _cockpitSeries = {};
+let _cockpitObservers = {};
 
 function _fmtYuan(n) {
   if (n == null || isNaN(n)) return '--';
@@ -2691,6 +2692,7 @@ function drawTickChart(code, data, prevClose) {
     if (_cockpitCharts[code]) chart.applyOptions({ width: container.clientWidth });
   });
   ro.observe(container);
+  _cockpitObservers[code] = ro;
 }
 
 async function initCockpit() {
@@ -2713,6 +2715,10 @@ async function initCockpit() {
 
 function cleanupCockpit() {
   if (_cockpitInterval) { clearInterval(_cockpitInterval); _cockpitInterval = null; }
+  Object.keys(_cockpitObservers).forEach(code => {
+    try { _cockpitObservers[code].disconnect(); } catch(e) {}
+  });
+  _cockpitObservers = {};
   Object.keys(_cockpitCharts).forEach(code => {
     try { _cockpitCharts[code].remove(); } catch(e) {}
   });

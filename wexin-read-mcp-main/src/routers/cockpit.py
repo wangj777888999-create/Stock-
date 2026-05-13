@@ -1,8 +1,11 @@
 """驾驶舱路由 — 市场情绪、指数报价、分时数据。"""
-from fastapi import APIRouter
+import re
+from fastapi import APIRouter, HTTPException
 import cockpit_service
 
 router = APIRouter(prefix="/api/cockpit", tags=["驾驶舱"])
+
+_TICK_RE = re.compile(r"^(sh|sz|bj)?\d{6}$")
 
 
 @router.get("/sentiment")
@@ -20,4 +23,6 @@ async def api_cockpit_indices():
 @router.get("/tick/{code}")
 async def api_cockpit_tick(code: str):
     """获取指定指数的分时数据。"""
+    if not _TICK_RE.match(code):
+        raise HTTPException(status_code=400, detail=f"无效指数代码: {code}")
     return await cockpit_service.get_tick_data(code)
