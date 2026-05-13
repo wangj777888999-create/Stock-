@@ -11,6 +11,12 @@ stock_service = StockService()
 INITIAL_CAPITAL = 100000.0
 
 
+def _get_default_role_id():
+    db = get_db()
+    row = db.execute("SELECT id FROM roles ORDER BY id LIMIT 1").fetchone()
+    return row[0] if row else None
+
+
 class SimOpen(BaseModel):
     symbol: str
     market: str = ""
@@ -31,43 +37,52 @@ class SimClose(BaseModel):
 
 
 @router.post("/open")
-async def open_trade(req: SimOpen):
+async def open_trade(req: SimOpen, role_id: int | None = None):
     symbol = normalize_symbol(req.symbol)
     market = req.market or detect_market(req.symbol)
+    rid = role_id or _get_default_role_id()
     db = get_db()
     db.execute(
-        """INSERT INTO sim_trades (symbol, market, direction, price, quantity, fee, trade_date, note)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (symbol, market, req.direction, req.price, req.quantity, req.fee, req.trade_date, req.note),
+        """INSERT INTO sim_trades (role_id, symbol, market, direction, price, quantity, fee, trade_date, note)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (rid, symbol, market, req.direction, req.price, req.quantity, req.fee, req.trade_date, req.note),
     )
     db.commit()
     return {"success": True, "id": db.execute("SELECT last_insert_rowid()").fetchone()[0]}
 
 
 @router.post("/close")
-async def close_trade(req: SimClose):
+async def close_trade(req: SimClose, role_id: int | None = None):
+    rid = role_id or _get_default_role_id()
     db = get_db()
-    row = db.execute("SELECT price, quantity, fee, direction FROM sim_trades WHERE id=? AND status='open'", (req.id,)).fetchone()
+    row = db.execute(
+        "SELECT price, quantity, fee, direction FROM sim_trades WHERE id=? AND status='open' AND role_id=?",
+        (req.id, rid),
+    ).fetchone()
     if not row:
         return {"success": False, "error": "未找到该持仓或已平仓"}
     price, quantity, open_fee, direction = row
     pnl = (req.close_price - price) * quantity - open_fee - req.fee
     if direction == "short":
         pnl = (price - req.close_price) * quantity - open_fee - req.fee
-    db.execute(
-        "UPDATE sim_trades SET status='closed', closed_at=?, close_price=?, pnl=? WHERE id=?",
-        (req.close_date, req.close_price, round(pnl, 2), req.id),
+    cur = db.execute(
+        "UPDATE sim_trades SET status='closed', closed_at=?, close_price=?, pnl=?, note=? WHERE id=? AND status='open'",
+        (req.close_date, req.close_price, round(pnl, 2), req.note, req.id),
     )
+    if cur.rowcount == 0:
+        return {"success": False, "error": "平仓失败，持仓状态已变更"}
     db.commit()
     return {"success": True, "pnl": round(pnl, 2)}
 
 
 @router.get("/positions")
-async def get_positions():
+async def get_positions(role_id: int | None = None):
+    rid = role_id or _get_default_role_id()
     db = get_db()
     rows = db.execute(
         "SELECT id, symbol, market, direction, price, quantity, fee, trade_date, note, created_at "
-        "FROM sim_trades WHERE status='open' ORDER BY created_at DESC"
+        "FROM sim_trades WHERE status='open' AND role_id=? ORDER BY created_at DESC",
+        (rid,),
     ).fetchall()
 
     positions = []
@@ -95,12 +110,13 @@ async def get_positions():
 
 
 @router.get("/history")
-async def get_history(page: int = 1):
+async def get_history(page: int = 1, role_id: int | None = None):
+    rid = role_id or _get_default_role_id()
     db = get_db()
     offset = (page - 1) * 20
     rows = db.execute(
-        "SELECT * FROM sim_trades WHERE status='closed' ORDER BY closed_at DESC LIMIT 20 OFFSET ?",
-        (offset,),
+        "SELECT * FROM sim_trades WHERE status='closed' AND role_id=? ORDER BY closed_at DESC LIMIT 20 OFFSET ?",
+        (rid, offset),
     ).fetchall()
     data = [{
         "id": r[0], "symbol": r[1], "market": r[2], "direction": r[3],
@@ -112,10 +128,12 @@ async def get_history(page: int = 1):
 
 
 @router.get("/stats")
-async def get_stats():
+async def get_stats(role_id: int | None = None):
+    rid = role_id or _get_default_role_id()
     db = get_db()
     rows = db.execute(
-        "SELECT pnl FROM sim_trades WHERE status='closed' AND pnl IS NOT NULL"
+        "SELECT pnl FROM sim_trades WHERE status='closed' AND pnl IS NOT NULL AND role_id=?",
+        (rid,),
     ).fetchall()
     if not rows:
         return {"success": True, "data": {"total_trades": 0, "win_count": 0, "lose_count": 0, "win_rate": 0, "total_pnl": 0}}
@@ -135,11 +153,17 @@ async def get_stats():
 
 
 @router.get("/account")
-async def get_account():
+async def get_account(role_id: int | None = None):
+    rid = role_id or _get_default_role_id()
     db = get_db()
-    closed_pnl = db.execute("SELECT COALESCE(SUM(pnl),0) FROM sim_trades WHERE status='closed'").fetchone()[0] or 0
+    role = db.execute("SELECT initial_capital FROM roles WHERE id=?", (rid,)).fetchone()
+    cap = role[0] if role else INITIAL_CAPITAL
+    closed_pnl = db.execute(
+        "SELECT COALESCE(SUM(pnl),0) FROM sim_trades WHERE status='closed' AND role_id=?", (rid,)
+    ).fetchone()[0] or 0
     open_rows = db.execute(
-        "SELECT symbol, direction, price, quantity, fee FROM sim_trades WHERE status='open'"
+        "SELECT symbol, direction, price, quantity, fee FROM sim_trades WHERE status='open' AND role_id=?",
+        (rid,),
     ).fetchall()
 
     market_value = 0.0
@@ -153,10 +177,10 @@ async def get_account():
             market_value += r[2] * r[3]
 
     return {"success": True, "data": {
-        "initial_capital": INITIAL_CAPITAL,
+        "initial_capital": cap,
         "closed_pnl": round(closed_pnl, 2),
         "market_value": round(market_value, 2),
-        "total_equity": round(INITIAL_CAPITAL + closed_pnl, 2),
-        "total_return_pct": round(closed_pnl / INITIAL_CAPITAL * 100, 2),
+        "total_equity": round(cap + closed_pnl, 2),
+        "total_return_pct": round(closed_pnl / cap * 100, 2) if cap else 0,
         "positions_count": len(open_rows),
     }}

@@ -76,6 +76,7 @@ from routers.journal import router as journal_router
 from routers.verify import router as verify_router
 from routers.stats import router as stats_router
 from routers.articles import router as articles_router
+from routers.roles import router as roles_router
 
 app.include_router(stock_router)
 app.include_router(market_router)
@@ -88,6 +89,7 @@ app.include_router(journal_router)
 app.include_router(verify_router)
 app.include_router(stats_router)
 app.include_router(articles_router)
+app.include_router(roles_router)
 from routers.sector import router as sector_router
 app.include_router(sector_router)
 from routers.analysis import router as analysis_router
