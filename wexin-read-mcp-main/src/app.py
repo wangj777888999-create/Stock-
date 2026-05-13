@@ -98,6 +98,8 @@ from routers.cockpit import router as cockpit_router
 app.include_router(cockpit_router)
 from routers.signal import router as signal_router
 app.include_router(signal_router)
+from routers.industry import router as industry_router
+app.include_router(industry_router)
 
 
 @app.get("/", response_class=HTMLResponse)
