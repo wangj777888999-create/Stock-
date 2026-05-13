@@ -221,6 +221,17 @@ def init_db(db_path: str | None = None) -> None:
                 enabled     INTEGER DEFAULT 1,
                 created_at  TEXT    DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS roles (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                name            TEXT NOT NULL,
+                avatar_color    TEXT DEFAULT '#2563EB',
+                initial_capital REAL NOT NULL DEFAULT 100000.0,
+                notes           TEXT DEFAULT '',
+                is_active       INTEGER DEFAULT 1,
+                created_at      TEXT DEFAULT (datetime('now')),
+                updated_at      TEXT DEFAULT (datetime('now'))
+            );
         """)
 
         # 清理过期缓存
@@ -244,6 +255,8 @@ def _migrate():
         "ALTER TABLE blogger_calls ADD COLUMN ai_reason TEXT",
         "ALTER TABLE blogger_calls ADD COLUMN status TEXT DEFAULT 'pending'",
         "ALTER TABLE blogger_calls ADD COLUMN user_confirmed INTEGER DEFAULT 0",
+        # 多角色系统
+        "ALTER TABLE sim_trades ADD COLUMN role_id INTEGER REFERENCES roles(id)",
     ]
     for sql in migrations:
         try:
@@ -252,6 +265,20 @@ def _migrate():
             if "duplicate column name" not in str(e).lower():
                 logger.error(f"数据库迁移失败: {sql} — {e}")
                 raise
+
+    # 角色数据迁移：创建默认角色并挂入旧交易
+    existing = _db.execute("SELECT id FROM roles LIMIT 1").fetchone()
+    if not existing:
+        _db.execute(
+            "INSERT INTO roles (name, initial_capital, notes) VALUES (?, ?, ?)",
+            ("默认账户", 100000.0, "从旧版单账户模拟交易迁移"),
+        )
+        default_id = _db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        _db.execute(
+            "UPDATE sim_trades SET role_id = ? WHERE role_id IS NULL",
+            (default_id,),
+        )
+        logger.info(f"角色迁移完成：创建默认账户 id={default_id}")
 
 
 def close_db() -> None:
