@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <style>
 /* ============================================================
    DESIGN TOKENS
@@ -1112,6 +1113,31 @@ textarea.form-input {
 .ck-market-tab { padding: 6px 18px; font-size: 13px; font-weight: 500; border-radius: 6px; border: none; background: transparent; color: var(--ink-2); cursor: pointer; transition: background .15s, color .15s; }
 .ck-market-tab.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
 .ck-closed-tip { font-size: 12px; color: var(--ink-3); text-align: center; padding: 20px 0; }
+/* ── 行业调研 ── */
+.industry-layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; height: calc(100vh - 120px); }
+.industry-left { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.industry-input-card { flex-shrink: 0; }
+.industry-history { flex: 1; overflow-y: auto; min-height: 0; }
+.industry-history-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 6px; cursor: pointer; transition: background .12s; font-size: 13px; }
+.industry-history-item:hover { background: var(--surface-2); }
+.industry-history-item .ind-name { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.industry-history-item .ind-date { font-size: 11px; color: var(--ink-3); }
+.industry-right { display: flex; flex-direction: column; min-height: 0; }
+.industry-output { flex: 1; overflow-y: auto; padding: 20px 24px; background: var(--surface); border-radius: 10px; border: 1px solid rgba(0,0,0,.06); }
+.industry-output .ind-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--ink-3); gap: 8px; }
+.industry-output .ind-empty strong { font-size: 14px; color: var(--ink-2); }
+.industry-output h1,.industry-output h2,.industry-output h3 { margin: 1em 0 .4em; }
+.industry-output p { margin: .4em 0; line-height: 1.7; }
+.industry-output ul,.industry-output ol { padding-left: 1.5em; margin: .4em 0; }
+.industry-output table { border-collapse: collapse; width: 100%; margin: .8em 0; }
+.industry-output th,.industry-output td { border: 1px solid rgba(0,0,0,.1); padding: 6px 10px; font-size: 13px; }
+.industry-output th { background: var(--surface-2); font-weight: 600; }
+.industry-output blockquote { border-left: 3px solid var(--blue); padding-left: 12px; color: var(--ink-2); margin: .6em 0; }
+.industry-output-actions { display: flex; justify-content: flex-end; padding: 8px 0 0; }
+.ind-purpose-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.ind-purpose-btn { padding: 4px 12px; border-radius: 20px; border: 1px solid rgba(0,0,0,.12); background: transparent; font-size: 12px; cursor: pointer; transition: background .12s, border-color .12s; }
+.ind-purpose-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+@media (max-width: 768px) { .industry-layout { grid-template-columns: 1fr; height: auto; } }
 
 </style>
 </head>
@@ -1217,6 +1243,10 @@ textarea.form-input {
           <circle cx="14.5" cy="7.5" r="1.5" fill="currentColor"/>
         </svg>
         <span>角色验证</span>
+      </button>
+      <button class="nav-item" data-view="industry" onclick="switchView('industry', this)">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M2 17V7l6-4 4 3 4-3v14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 17V11h4v6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <span>行业调研</span>
       </button>
       <button class="nav-item" data-view="analysis" onclick="switchView('analysis', this)">
         <svg viewBox="0 0 20 20" fill="none"><path d="M3 17V8l4-4 3 5 4-6 3 5v9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 14h16" stroke="currentColor" stroke-width="1.1" stroke-dasharray="2 2.5" stroke-linecap="round"/></svg>
@@ -2476,6 +2506,46 @@ textarea.form-input {
         </div><!-- /taMainArea -->
       </div><!-- /view-analysis -->
 
+      <!-- ==================== VIEW: INDUSTRY ==================== -->
+      <div id="view-industry" class="view">
+        <div class="industry-layout">
+          <div class="industry-left">
+            <div class="card industry-input-card">
+              <div class="card-header"><div class="card-title">行业调研</div></div>
+              <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
+                <input id="ind-input" class="input" placeholder="输入行业名称，如：新能源汽车、医疗器械…" style="font-size:13px;">
+                <div style="font-size:12px;color:var(--ink-2);font-weight:500;">分析目的</div>
+                <div class="ind-purpose-row">
+                  <button class="ind-purpose-btn active" data-purpose="investment" onclick="indSelectPurpose(this)">投资选股</button>
+                  <button class="ind-purpose-btn" data-purpose="startup" onclick="indSelectPurpose(this)">创业选赛道</button>
+                  <button class="ind-purpose-btn" data-purpose="career" onclick="indSelectPurpose(this)">择业找方向</button>
+                  <button class="ind-purpose-btn" data-purpose="full" onclick="indSelectPurpose(this)">完整行研</button>
+                </div>
+                <button id="ind-run-btn" class="btn btn-primary" onclick="indStartAnalysis()" style="font-size:13px;">开始分析</button>
+              </div>
+            </div>
+            <div class="card industry-history" style="padding:0;">
+              <div class="card-header" style="padding:10px 14px;"><div class="card-title" style="font-size:13px;">历史报告</div></div>
+              <div id="ind-history-list" style="padding:4px 0;">
+                <div style="padding:16px;font-size:12px;color:var(--ink-3);text-align:center;">暂无历史报告</div>
+              </div>
+            </div>
+          </div>
+          <div class="industry-right">
+            <div class="industry-output" id="ind-output">
+              <div class="ind-empty">
+                <svg width="40" height="40" viewBox="0 0 20 20" fill="none"><path d="M2 17V7l6-4 4 3 4-3v14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 17V11h4v6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
+                <strong>输入行业名称，开始 AI 分析</strong>
+                <span style="font-size:12px;">基于肖璟《如何快速了解一个行业》六步框架</span>
+              </div>
+            </div>
+            <div class="industry-output-actions" id="ind-save-row" style="display:none;">
+              <button class="btn btn-primary btn-sm" onclick="indSaveReport()">保存报告</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- ==================== VIEW: CONFIG ==================== -->
       <div id="view-config" class="view">
 
@@ -2677,6 +2747,7 @@ const topbarMeta = {
   sector:   { title: '板块', sub: '行业板块 · 概念板块 · 涨跌幅热力图 · 成分股 · K线' },
   analysis: { title: '技术分析', sub: '画图工具 · 形态识别 · 分析笔记' },
   cockpit: { title: '驾驶舱', sub: '市场情绪 · 核心指数 · 分时行情总览' },
+  industry: { title: '行业调研', sub: 'AI 六步框架 · 流式分析 · 报告存档' },
 };
 
 /* ===== 驾驶舱 ===== */
@@ -3137,6 +3208,7 @@ function switchView(view, el) {
   if (view === 'sector') { loadSectorBoards(); }
   if (view === 'analysis') { taInitView(); }
   if (view === 'cockpit') { initCockpit(); }
+  if (view === 'industry') { indLoadHistory(); }
 }
 
 /* ============================================================
@@ -7282,6 +7354,125 @@ async function taDeleteNote(id, e) {
     await fetch(`/api/analysis/notes/${id}`, { method: 'DELETE' });
     taLoadNotes();
   } catch(e) {}
+}
+
+/* ============================================================
+   行业调研
+   ============================================================ */
+let _indPurpose = 'investment';
+let _indCurrentText = '';
+let _indCurrentIndustry = '';
+let _indCurrentPurpose = 'investment';
+let _indStreaming = false;
+
+function indSelectPurpose(btn) {
+  _indPurpose = btn.dataset.purpose;
+  document.querySelectorAll('.ind-purpose-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+async function indStartAnalysis() {
+  const industry = document.getElementById('ind-input').value.trim();
+  if (!industry) { toast('请输入行业名称', 'amber'); return; }
+  if (_indStreaming) return;
+  _indStreaming = true;
+  _indCurrentText = '';
+  _indCurrentIndustry = industry;
+  _indCurrentPurpose = _indPurpose;
+  const btn = document.getElementById('ind-run-btn');
+  btn.textContent = '分析中…'; btn.disabled = true;
+  document.getElementById('ind-save-row').style.display = 'none';
+  const output = document.getElementById('ind-output');
+  output.innerHTML = '<div style="padding:12px;font-size:13px;color:var(--ink-2);">正在分析，请稍候…</div>';
+  try {
+    const resp = await fetch('/api/industry/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ industry, purpose: _indPurpose }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      output.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">请求失败: ${err.detail || resp.status}</div>`;
+      return;
+    }
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const payload = line.slice(6).trim();
+        if (payload === '[DONE]') { document.getElementById('ind-save-row').style.display = ''; break; }
+        if (payload.startsWith('[ERROR]')) { output.innerHTML += `<div style="color:var(--red);font-size:13px;padding:8px 0;">${payload}</div>`; break; }
+        try {
+          const token = JSON.parse(payload);
+          _indCurrentText += token;
+          output.innerHTML = marked.parse(_indCurrentText);
+          output.scrollTop = output.scrollHeight;
+        } catch(e) {}
+      }
+    }
+  } catch(e) {
+    output.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">连接失败: ${e.message}</div>`;
+  } finally {
+    _indStreaming = false; btn.textContent = '开始分析'; btn.disabled = false;
+  }
+}
+
+async function indSaveReport() {
+  if (!_indCurrentText) return;
+  try {
+    const params = new URLSearchParams({ industry: _indCurrentIndustry, purpose: _indCurrentPurpose, report_text: _indCurrentText });
+    const r = await fetch('/api/industry/reports?' + params.toString(), { method: 'POST' });
+    const j = await r.json();
+    if (j.success) { toast('报告已保存', 'green'); document.getElementById('ind-save-row').style.display = 'none'; indLoadHistory(); }
+  } catch(e) { toast('保存失败', 'red'); }
+}
+
+async function indLoadHistory() {
+  try {
+    const r = await fetch('/api/industry/reports');
+    const j = await r.json();
+    const list = document.getElementById('ind-history-list');
+    if (!j.success || !j.data || j.data.length === 0) {
+      list.innerHTML = '<div style="padding:16px;font-size:12px;color:var(--ink-3);text-align:center;">暂无历史报告</div>';
+      return;
+    }
+    list.innerHTML = j.data.map(item => `
+      <div class="industry-history-item" onclick="indViewReport(${item.id})">
+        <div class="ind-name">${item.industry}</div>
+        <div class="ind-date">${item.created_at.slice(0, 10)}</div>
+        <button class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 6px;" onclick="event.stopPropagation();indDeleteReport(${item.id})">删除</button>
+      </div>`).join('');
+  } catch(e) { console.error('indLoadHistory', e); }
+}
+
+async function indViewReport(id) {
+  try {
+    const r = await fetch('/api/industry/reports/' + id);
+    const j = await r.json();
+    if (!j.success || !j.data) return;
+    _indCurrentText = j.data.report_text || '';
+    _indCurrentIndustry = j.data.industry;
+    _indCurrentPurpose = j.data.purpose;
+    document.getElementById('ind-input').value = j.data.industry;
+    document.getElementById('ind-output').innerHTML = marked.parse(_indCurrentText);
+    document.getElementById('ind-save-row').style.display = 'none';
+  } catch(e) { console.error('indViewReport', e); }
+}
+
+async function indDeleteReport(id) {
+  if (!confirm('确认删除此报告？')) return;
+  try {
+    await fetch('/api/industry/reports/' + id, { method: 'DELETE' });
+    toast('已删除', 'green');
+    indLoadHistory();
+  } catch(e) { toast('删除失败', 'red'); }
 }
 
 </script>
