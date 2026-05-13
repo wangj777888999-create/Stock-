@@ -94,6 +94,8 @@ from routers.analysis import router as analysis_router
 app.include_router(analysis_router)
 from routers.cockpit import router as cockpit_router
 app.include_router(cockpit_router)
+from routers.signal import router as signal_router
+app.include_router(signal_router)
 
 
 @app.get("/", response_class=HTMLResponse)
