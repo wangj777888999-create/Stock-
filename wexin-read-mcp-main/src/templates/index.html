@@ -1107,6 +1107,12 @@ textarea.form-input {
   .cockpit-sentiment { grid-template-columns: 1fr; }
   .cockpit-indices { grid-template-columns: 1fr; }
 }
+/* ── 驾驶舱 Tab 切换 ── */
+.ck-market-tabs { display: flex; gap: 4px; margin-bottom: 16px; background: var(--surface-2); border-radius: 8px; padding: 4px; width: fit-content; }
+.ck-market-tab { padding: 6px 18px; font-size: 13px; font-weight: 500; border-radius: 6px; border: none; background: transparent; color: var(--ink-2); cursor: pointer; transition: background .15s, color .15s; }
+.ck-market-tab.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.ck-closed-tip { font-size: 12px; color: var(--ink-3); text-align: center; padding: 20px 0; }
+
 </style>
 </head>
 <body>
@@ -1250,68 +1256,93 @@ textarea.form-input {
       <!-- ==================== VIEW: COCKPIT ==================== -->
       <div id="view-cockpit" class="view active">
 
-        <!-- 情绪面板 -->
-        <div class="cockpit-sentiment">
-          <!-- 涨跌家数 -->
-          <div class="card">
-            <div class="card-header"><div class="card-title">涨跌家数</div></div>
-            <div class="card-body">
-              <div class="sentiment-label">上涨 / 下跌 / 平盘</div>
-              <div class="sentiment-value">
-                <span class="text-red" id="ck-up">--</span> / <span class="text-green" id="ck-down">--</span> / <span id="ck-flat">--</span>
-              </div>
-              <div class="sentiment-sub">涨跌比 <span id="ck-ratio">--</span></div>
-            </div>
-          </div>
-          <!-- 涨跌停 -->
-          <div class="card">
-            <div class="card-header"><div class="card-title">涨跌停</div></div>
-            <div class="card-body">
-              <div class="sentiment-label">涨停 / 跌停</div>
-              <div class="sentiment-value">
-                <span class="text-red" id="ck-up-limit">--</span> / <span class="text-green" id="ck-down-limit">--</span>
-              </div>
-              <div class="sentiment-sub">涨停池 <span id="ck-up-pool">--</span> · 炸板 <span id="ck-broken">--</span></div>
-            </div>
-          </div>
-          <!-- 成交量 -->
-          <div class="card">
-            <div class="card-header"><div class="card-title">成交量</div></div>
-            <div class="card-body">
-              <div class="sentiment-label">两市成交额</div>
-              <div class="sentiment-value" id="ck-volume">--</div>
-              <div class="sentiment-sub" id="ck-vol-sub"></div>
-            </div>
-          </div>
-          <!-- 资金流向 -->
-          <div class="card">
-            <div class="card-header"><div class="card-title">资金流向</div></div>
-            <div class="card-body">
-              <div class="sentiment-label">主力净流入</div>
-              <div class="sentiment-value" id="ck-main-net">--</div>
-              <div class="sentiment-sub" id="ck-flow-sub"></div>
-            </div>
-          </div>
+        <!-- 市场切换 Tab -->
+        <div class="ck-market-tabs">
+          <button class="ck-market-tab active" data-market="a" onclick="switchCkMarket('a')">A股</button>
+          <button class="ck-market-tab" data-market="us" onclick="switchCkMarket('us')">美股</button>
         </div>
 
-        <!-- 热门股票 & 行业排名 -->
-        <div class="cockpit-hot-row">
-          <div class="card">
-            <div class="card-header"><div class="card-title">今日热门股 Top10</div></div>
-            <div class="card-body" style="padding:0">
-              <table class="hot-table"><thead><tr><th>#</th><th>名称</th><th>最新价</th><th>涨跌幅</th><th>成交额</th><th>主力净流入</th></tr></thead><tbody id="ck-hot-body"></tbody></table>
+        <!-- ── A股面板 ── -->
+        <div id="ck-panel-a">
+          <div class="cockpit-sentiment">
+            <div class="card">
+              <div class="card-header"><div class="card-title">涨跌家数</div></div>
+              <div class="card-body">
+                <div class="sentiment-label">上涨 / 下跌 / 平盘</div>
+                <div class="sentiment-value">
+                  <span class="text-red" id="ck-up">--</span> / <span class="text-green" id="ck-down">--</span> / <span id="ck-flat">--</span>
+                </div>
+                <div class="sentiment-sub">涨跌比 <span id="ck-ratio">--</span></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">涨跌停</div></div>
+              <div class="card-body">
+                <div class="sentiment-label">涨停 / 跌停</div>
+                <div class="sentiment-value">
+                  <span class="text-red" id="ck-up-limit">--</span> / <span class="text-green" id="ck-down-limit">--</span>
+                </div>
+                <div class="sentiment-sub">涨停池 <span id="ck-up-pool">--</span> · 炸板 <span id="ck-broken">--</span></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">成交量</div></div>
+              <div class="card-body">
+                <div class="sentiment-label">两市成交额</div>
+                <div class="sentiment-value" id="ck-volume">--</div>
+                <div class="sentiment-sub" id="ck-vol-sub"></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">资金流向</div></div>
+              <div class="card-body">
+                <div class="sentiment-label">主力净流入</div>
+                <div class="sentiment-value" id="ck-main-net">--</div>
+                <div class="sentiment-sub" id="ck-flow-sub"></div>
+              </div>
             </div>
           </div>
-          <div class="card">
-            <div class="card-header"><div class="card-title">行业涨幅榜 Top10</div></div>
-            <div class="card-body" style="padding:0">
-              <table class="hot-table"><thead><tr><th>#</th><th>板块</th><th>涨跌幅</th><th>领涨股</th></tr></thead><tbody id="ck-industry-body"></tbody></table>
+          <div class="cockpit-hot-row">
+            <div class="card">
+              <div class="card-header"><div class="card-title">今日热门股 Top10</div></div>
+              <div class="card-body" style="padding:0">
+                <table class="hot-table"><thead><tr><th>#</th><th>名称</th><th>最新价</th><th>涨跌幅</th><th>成交额</th><th>主力净流入</th></tr></thead><tbody id="ck-hot-body"></tbody></table>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">行业涨幅榜 Top10</div></div>
+              <div class="card-body" style="padding:0">
+                <table class="hot-table"><thead><tr><th>#</th><th>板块</th><th>涨跌幅</th><th>领涨股</th></tr></thead><tbody id="ck-industry-body"></tbody></table>
+              </div>
             </div>
           </div>
+          <div class="cockpit-indices" id="ck-indices-grid"></div>
         </div>
 
-        <!-- 指数分时图 -->
-        <div class="cockpit-indices" id="ck-indices-grid"></div>
+        <!-- ── 美股面板 ── -->
+        <div id="ck-panel-us" style="display:none">
+          <div class="cockpit-sentiment">
+            <div class="card">
+              <div class="card-header"><div class="card-title">VIX 恐慌指数</div></div>
+              <div class="card-body">
+                <div class="sentiment-label">当前水平</div>
+                <div class="sentiment-value" id="us-vix">--</div>
+                <div class="sentiment-sub" id="us-vix-level">--</div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header"><div class="card-title">涨跌家数</div></div>
+              <div class="card-body">
+                <div class="sentiment-label">上涨 / 下跌 / 平盘</div>
+                <div class="sentiment-value">
+                  <span class="text-red" id="us-up">--</span> / <span class="text-green" id="us-down">--</span> / <span id="us-flat">--</span>
+                </div>
+                <div class="sentiment-sub" id="us-breadth-sub"></div>
+              </div>
+            </div>
+          </div>
+          <div class="cockpit-indices" id="us-indices-grid"></div>
+        </div>
 
       </div>
 
@@ -2649,10 +2680,14 @@ const topbarMeta = {
 };
 
 /* ===== 驾驶舱 ===== */
+let _ckActiveMarket = 'a';
 let _cockpitInterval = null;
 let _cockpitCharts = {};
 let _cockpitSeries = {};
 let _cockpitObservers = {};
+let _usCharts = {};
+let _usSeries = {};
+let _usObservers = {};
 
 function _fmtYuan(n) {
   if (n == null || isNaN(n)) return '--';
@@ -2874,23 +2909,27 @@ function drawTickChart(code, data, prevClose) {
 }
 
 async function initCockpit() {
+  _ckActiveMarket = 'a';
+  document.getElementById('ck-panel-a').style.display = '';
+  document.getElementById('ck-panel-us').style.display = 'none';
+  document.querySelectorAll('.ck-market-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.market === 'a')
+  );
   await fetchIndices();
   await fetchSentiment();
   fetchHotStocks();
   fetchIndustryRank();
-  // start auto-refresh
   if (_cockpitInterval) clearInterval(_cockpitInterval);
   _cockpitInterval = setInterval(() => {
     const panel = document.getElementById('view-cockpit');
     if (!panel || !panel.classList.contains('active')) {
-      clearInterval(_cockpitInterval);
-      _cockpitInterval = null;
-      return;
+      clearInterval(_cockpitInterval); _cockpitInterval = null; return;
     }
-    fetchSentiment();
-    fetchIndices();
-    fetchHotStocks();
-    fetchIndustryRank();
+    if (_ckActiveMarket === 'a') {
+      fetchSentiment(); fetchIndices(); fetchHotStocks(); fetchIndustryRank();
+    } else {
+      fetchUsSentiment(); fetchUsIndices();
+    }
   }, 5000);
 }
 
@@ -2905,6 +2944,144 @@ function cleanupCockpit() {
   });
   _cockpitCharts = {};
   _cockpitSeries = {};
+  Object.keys(_usObservers).forEach(code => {
+    try { _usObservers[code].disconnect(); } catch(e) {}
+  });
+  _usObservers = {};
+  Object.keys(_usCharts).forEach(code => {
+    try { _usCharts[code].remove(); } catch(e) {}
+  });
+  _usCharts = {};
+  _usSeries = {};
+}
+
+/* ── 美股面板函数 ── */
+
+function switchCkMarket(market) {
+  _ckActiveMarket = market;
+  document.getElementById('ck-panel-a').style.display = market === 'a' ? '' : 'none';
+  document.getElementById('ck-panel-us').style.display = market === 'us' ? '' : 'none';
+  document.querySelectorAll('.ck-market-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.market === market)
+  );
+  if (market === 'us') { fetchUsSentiment(); fetchUsIndices(); }
+}
+
+async function fetchUsSentiment() {
+  try {
+    const r = await fetch('/api/cockpit/us/sentiment');
+    const j = await r.json();
+    if (!j.success || !j.data) return;
+    const d = j.data;
+    if (d.vix != null) {
+      document.getElementById('us-vix').textContent = d.vix.toFixed(2);
+      const lvl = d.vix < 15 ? '低恐慌' : d.vix < 25 ? '中等恐慌' : '高恐慌';
+      const cls = d.vix < 15 ? 'text-green' : d.vix < 25 ? '' : 'text-red';
+      const el = document.getElementById('us-vix-level');
+      el.textContent = lvl; el.className = 'sentiment-sub ' + cls;
+    }
+    if (d.breadth) {
+      document.getElementById('us-up').textContent = d.breadth.up ?? '--';
+      document.getElementById('us-down').textContent = d.breadth.down ?? '--';
+      document.getElementById('us-flat').textContent = d.breadth.flat ?? '--';
+      const total = (d.breadth.up || 0) + (d.breadth.down || 0) + (d.breadth.flat || 0);
+      document.getElementById('us-breadth-sub').textContent = total > 0 ? '涨跌比 ' + (d.breadth.up / total).toFixed(4) : '';
+    }
+  } catch(e) { console.error('fetchUsSentiment error', e); }
+}
+
+function _usBuildIndexCards(data) {
+  const grid = document.getElementById('us-indices-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  data.forEach(item => {
+    const code = item.code;
+    const changePct = item.prev_close && item.price ? ((item.price - item.prev_close) / item.prev_close * 100) : null;
+    const isUp = changePct == null ? true : changePct >= 0;
+    const cls = isUp ? 'text-red' : 'text-green';
+    const sign = isUp ? '+' : '';
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-header">
+        <div class="ck-index-header">
+          <span style="font-weight:600;color:#1e293b;">${item.name}</span>
+          <span class="ck-index-price" id="us-price-${code}">${item.price != null ? item.price.toFixed(2) : '--'}</span>
+          <span class="ck-index-change ${cls}" id="us-change-${code}">${changePct != null ? sign + changePct.toFixed(2) + '%' : '--'}</span>
+        </div>
+      </div>
+      <div class="card-body"><div class="ck-chart-wrap" id="us-chart-${code}"></div></div>`;
+    grid.appendChild(card);
+  });
+}
+
+async function fetchUsIndices() {
+  try {
+    const r = await fetch('/api/cockpit/us/indices');
+    const j = await r.json();
+    if (!j.success || !j.data) return;
+    const grid = document.getElementById('us-indices-grid');
+    if (grid.children.length === 0) {
+      _usBuildIndexCards(j.data);
+    } else {
+      j.data.forEach(item => {
+        const priceEl = document.getElementById('us-price-' + item.code);
+        const changeEl = document.getElementById('us-change-' + item.code);
+        if (priceEl && item.price != null) priceEl.textContent = item.price.toFixed(2);
+        if (changeEl && item.price != null && item.prev_close) {
+          const pct = (item.price - item.prev_close) / item.prev_close * 100;
+          const isUp = pct >= 0;
+          changeEl.textContent = (isUp ? '+' : '') + pct.toFixed(2) + '%';
+          changeEl.className = 'ck-index-change ' + (isUp ? 'text-red' : 'text-green');
+        }
+      });
+    }
+    j.data.forEach(item => fetchUsTick(item.code));
+  } catch(e) { console.error('fetchUsIndices error', e); }
+}
+
+async function fetchUsTick(code) {
+  try {
+    const r = await fetch('/api/cockpit/us/tick/' + code);
+    const j = await r.json();
+    if (!j.success) return;
+    const container = document.getElementById('us-chart-' + code);
+    if (!container) return;
+    if (j.closed || !j.data || j.data.data.length === 0) {
+      container.innerHTML = '<div class="ck-closed-tip">已收盘 · 昨收 ' + (j.data?.prev_close ?? '--') + '</div>';
+      return;
+    }
+    _drawUsTickChart(code, j.data.data, j.data.prev_close);
+  } catch(e) { console.error('fetchUsTick error', code, e); }
+}
+
+function _drawUsTickChart(code, data, prevClose) {
+  const container = document.getElementById('us-chart-' + code);
+  if (!container || !data || data.length === 0) return;
+  if (_usCharts[code]) { try { _usCharts[code].remove(); } catch(e) {} delete _usCharts[code]; delete _usSeries[code]; }
+  const isUp = prevClose ? data[data.length - 1].price >= prevClose : true;
+  const lineColor = isUp ? '#ef4444' : '#22c55e';
+  const topColor = isUp ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)';
+  const bottomColor = isUp ? 'rgba(239,68,68,0.02)' : 'rgba(34,197,94,0.02)';
+  const chart = LightweightCharts.createChart(container, {
+    width: container.clientWidth, height: 120,
+    layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 10 },
+    grid: { vertLines: { visible: false }, horzLines: { visible: false } },
+    rightPriceScale: { visible: false },
+    timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
+    crosshair: { horzLine: { visible: false }, vertLine: { visible: false } },
+  });
+  const series = chart.addAreaSeries({ lineColor, topColor, bottomColor, lineWidth: 1.5 });
+  if (prevClose) series.createPriceLine({ price: prevClose, color: '#94a3b8', lineWidth: 1, lineStyle: 2, axisLabelVisible: false });
+  const today = new Date().toISOString().slice(0, 10);
+  const chartData = data.map(d => {
+    if (d.price == null) return null;
+    return { time: Math.floor(new Date(today + ' ' + d.time + ':00').getTime() / 1000), value: d.price };
+  }).filter(Boolean);
+  if (chartData.length > 0) series.setData(chartData);
+  _usCharts[code] = chart; _usSeries[code] = series;
+  const ro = new ResizeObserver(() => { if (_usCharts[code]) chart.applyOptions({ width: container.clientWidth }); });
+  ro.observe(container); _usObservers[code] = ro;
 }
 
 let _fundLoaded = false;
