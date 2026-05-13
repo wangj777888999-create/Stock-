@@ -79,6 +79,8 @@ async def list_roles():
             COUNT(CASE WHEN t.status='closed' AND t.pnl > 0 THEN 1 END) as win_count,
             COUNT(CASE WHEN t.status='closed' AND t.pnl <= 0 THEN 1 END) as lose_count,
             COALESCE(SUM(CASE WHEN t.status='closed' THEN t.pnl END), 0) as total_pnl,
+            COALESCE(SUM(CASE WHEN t.status='closed' AND t.pnl > 0 THEN t.pnl ELSE 0 END), 0) as total_win_pnl,
+            COALESCE(SUM(CASE WHEN t.status='closed' AND t.pnl <= 0 THEN t.pnl ELSE 0 END), 0) as total_lose_pnl,
             COUNT(CASE WHEN t.status='open' THEN 1 END) as open_positions
         FROM roles r
         LEFT JOIN sim_trades t ON r.id = t.role_id
@@ -94,6 +96,8 @@ async def list_roles():
         wr = wins / total if total > 0 else 0
         pnl = r["total_pnl"]
         cap = r["initial_capital"]
+        avg_win = round(r["total_win_pnl"] / wins, 2) if wins > 0 else 0
+        avg_lose = round(r["total_lose_pnl"] / r["lose_count"], 2) if r["lose_count"] > 0 else 0
         data.append({
             "id": r["id"],
             "name": r["name"],
@@ -108,6 +112,8 @@ async def list_roles():
             "total_pnl_pct": round(pnl / cap * 100, 2) if cap > 0 else 0,
             "open_positions": r["open_positions"],
             "current_equity": round(cap + pnl, 2),
+            "avg_win": avg_win,
+            "avg_lose": avg_lose,
             "label": _label(wr, total),
         })
     return {"success": True, "data": data}
@@ -183,11 +189,13 @@ async def role_close(role_id: int, req: RoleTradeClose):
     pnl = (req.close_price - price) * quantity - open_fee - req.fee
     if direction == "short":
         pnl = (price - req.close_price) * quantity - open_fee - req.fee
-    db.execute(
-        "UPDATE sim_trades SET status='closed', closed_at=?, close_price=?, pnl=?, note=? WHERE id=?",
+    cur = db.execute(
+        "UPDATE sim_trades SET status='closed', closed_at=?, close_price=?, pnl=?, note=? WHERE id=? AND status='open'",
         (req.close_date, req.close_price, round(pnl, 2), req.note, req.id),
     )
     db.commit()
+    if cur.rowcount == 0:
+        return {"success": False, "error": "平仓失败，持仓状态已变更"}
     return {"success": True, "pnl": round(pnl, 2)}
 
 
@@ -341,6 +349,7 @@ async def import_csv_for_role(role_id: int, file: UploadFile):
                 close_price = float(close_price_str)
                 status = "closed"
                 closed_at = close_date
+                # CSV fee is treated as total round-trip fee (open + close)
                 pnl = (close_price - price) * qty - fee
                 if direction == "short":
                     pnl = (price - close_price) * qty - fee
