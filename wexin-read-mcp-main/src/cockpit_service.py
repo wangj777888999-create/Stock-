@@ -341,3 +341,207 @@ async def get_tick_data(code: str) -> dict:
     except Exception as e:
         logger.error(f"获取分时数据失败 {code}: {e}")
         return {"success": False, "error": f"获取分时数据失败: {e}"}
+
+
+# ─── 美股指数列表 ───
+
+US_INDICES = [
+    {"code": "INX",  "name": "标普500",  "qt": "us.INX"},
+    {"code": "IXIC", "name": "纳斯达克", "qt": "us.IXIC"},
+    {"code": "DJI",  "name": "道琼斯",   "qt": "us.DJI"},
+    {"code": "RUT",  "name": "罗素2000", "qt": "us.RUT"},
+    {"code": "VIX",  "name": "VIX",      "qt": "us.VIX"},
+]
+
+
+async def get_us_sentiment() -> dict:
+    """美股情绪：VIX水平 + 涨跌家数（AKShare stock_us_spot_em）。"""
+    cache_key = "cockpit:us:sentiment"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    async def _fetch_vix():
+        url = "https://qt.gtimg.cn/q=us.VIX"
+        r = await get_async_client().get(url, timeout=8)
+        text = r.content.decode("gbk", errors="replace")
+        start = text.find('"')
+        end = text.rfind('"')
+        if start == -1 or end <= start:
+            return None
+        fields = text[start + 1: end].split("~")
+        try:
+            return float(fields[3])
+        except (IndexError, ValueError):
+            return None
+
+    async def _fetch_breadth():
+        try:
+            df = await asyncio.wait_for(
+                asyncio.to_thread(patch_requests, ak.stock_us_spot_em),
+                timeout=_AKSHARE_TIMEOUT,
+            )
+            if df is None or df.empty:
+                return None
+            up = int((df["涨跌幅"] > 0).sum())
+            down = int((df["涨跌幅"] < 0).sum())
+            flat = int((df["涨跌幅"] == 0).sum())
+            return {"up": up, "down": down, "flat": flat}
+        except Exception as e:
+            logger.warning(f"美股涨跌家数获取失败: {e}")
+            return None
+
+    vix, breadth = await asyncio.gather(
+        _fetch_vix(), _fetch_breadth(), return_exceptions=True
+    )
+    if isinstance(vix, Exception):
+        vix = None
+    if isinstance(breadth, Exception):
+        breadth = None
+
+    resp = {"success": True, "data": {"vix": vix, "breadth": breadth}}
+    cache.set(cache_key, resp, 30)
+    return resp
+
+
+async def get_us_indices_quotes() -> dict:
+    """批量获取 5 个美股指数实时报价（腾讯 API）。"""
+    cache_key = "cockpit:us:indices"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        codes = ",".join(idx["qt"] for idx in US_INDICES)
+        url = f"https://qt.gtimg.cn/q={codes}"
+        r = await get_async_client().get(url, timeout=10)
+        text = r.content.decode("gbk", errors="replace")
+
+        def _tf(fields, idx):
+            try:
+                return float(fields[idx])
+            except (IndexError, ValueError):
+                return None
+
+        data = []
+        lines = [line.strip() for line in text.strip().split(";") if line.strip()]
+        i = 0
+        for line in lines:
+            if i >= len(US_INDICES):
+                break
+            start = line.find('"')
+            end = line.rfind('"')
+            if start == -1 or end <= start:
+                i += 1
+                continue
+            fields = line[start + 1: end].split("~")
+            if len(fields) < 38:
+                i += 1
+                continue
+            data.append({
+                "code": US_INDICES[i]["code"],
+                "name": US_INDICES[i]["name"],
+                "price": _tf(fields, 3),
+                "prev_close": _tf(fields, 4),
+                "change": _tf(fields, 31),
+                "change_pct": _tf(fields, 32),
+            })
+            i += 1
+
+        resp = {"success": True, "data": data}
+        cache.set(cache_key, resp, 5)
+        return resp
+
+    except Exception as e:
+        logger.error(f"获取美股指数报价失败: {e}")
+        return {"success": False, "error": f"获取美股指数报价失败: {e}"}
+
+
+async def get_us_tick_data(code: str) -> dict:
+    """获取美股指数分时数据（腾讯美股分钟 API）。"""
+    cache_key = f"cockpit:us:tick:{code}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    idx_info = next((idx for idx in US_INDICES if idx["code"] == code), None)
+    if idx_info is None:
+        return {"success": False, "error": f"未知美股指数代码: {code}"}
+
+    qt_code = idx_info["qt"]
+
+    try:
+        async def _fetch_min():
+            url = f"https://web.ifzq.gtimg.cn/appstock/app/usaminute/query?code={qt_code}"
+            r = await get_async_client().get(url, timeout=10)
+            raw = r.content.decode("gbk", errors="replace")
+            match = re.search(r'\{.*\}', raw, re.DOTALL)
+            if not match:
+                return None
+            payload = json.loads(match.group())
+            if payload.get("code") != 0:
+                return None
+            data_node = (
+                payload.get("data", {}).get(qt_code, {}).get("data", {}).get("data", [])
+                or payload.get("data", {}).get(qt_code.replace(".", ""), {}).get("data", {}).get("data", [])
+            )
+            return data_node
+
+        async def _fetch_prev_close():
+            url = f"https://qt.gtimg.cn/q={qt_code}"
+            r = await get_async_client().get(url, timeout=8)
+            text = r.content.decode("gbk", errors="replace")
+            start = text.find('"')
+            end = text.rfind('"')
+            if start == -1 or end <= start:
+                return None
+            fields = text[start + 1: end].split("~")
+            try:
+                return float(fields[4])
+            except (IndexError, ValueError):
+                return None
+
+        min_raw, prev_close = await asyncio.gather(
+            _fetch_min(), _fetch_prev_close(), return_exceptions=True
+        )
+        if isinstance(prev_close, Exception) or prev_close is None:
+            prev_close = 0.0
+
+        if isinstance(min_raw, Exception) or not min_raw:
+            resp = {
+                "success": True,
+                "closed": True,
+                "data": {"code": idx_info["code"], "name": idx_info["name"], "prev_close": prev_close, "data": []},
+            }
+            cache.set(cache_key, resp, 30)
+            return resp
+
+        tick_list = []
+        prev_vol = 0
+        for item in min_raw:
+            parts = item.split()
+            if len(parts) < 3:
+                continue
+            try:
+                hhmm = parts[0]
+                price = float(parts[1])
+                cum_vol = float(parts[2])
+                minute_vol = max(0, cum_vol - prev_vol)
+                prev_vol = cum_vol
+                tick_list.append({"time": f"{hhmm[:2]}:{hhmm[2:]}", "price": price, "volume": minute_vol})
+            except (ValueError, IndexError):
+                continue
+
+        resp = {
+            "success": True,
+            "closed": False,
+            "data": {"code": idx_info["code"], "name": idx_info["name"], "prev_close": prev_close, "data": tick_list},
+        }
+        cache.set(cache_key, resp, 5)
+        return resp
+
+    except asyncio.TimeoutError:
+        return {"success": False, "error": "美股分时数据获取超时"}
+    except Exception as e:
+        logger.error(f"获取美股分时数据失败 {code}: {e}")
+        return {"success": False, "error": f"获取美股分时数据失败: {e}"}

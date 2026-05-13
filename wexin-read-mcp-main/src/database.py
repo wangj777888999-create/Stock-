@@ -233,6 +233,14 @@ def init_db(db_path: str | None = None) -> None:
                 created_at      TEXT DEFAULT (datetime('now')),
                 updated_at      TEXT DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS industry_reports (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                industry    TEXT NOT NULL,
+                purpose     TEXT DEFAULT 'investment',
+                report_text TEXT,
+                created_at  TEXT DEFAULT (datetime('now'))
+            );
         """)
 
         # 清理过期缓存
