@@ -547,46 +547,48 @@ class StockService:
                             "volume": int(float(item["volume"])),
                         })
                 else:
-                    # A 股日/周/月：优先 AKShare，失败时降级到腾讯 API
-                    records = None
-                    # --- 方案 A：AKShare ---
+                    # A 股日/周/月：三源竞速 (AKShare / 腾讯 / mootdx)
+                    from services.mootdx_provider import fetch_mootdx_kline
+                    from services.source_racer import race_sources
+
                     period_map = {"day": "daily", "week": "weekly", "month": "monthly"}
                     ak_period = period_map.get(period, "daily")
-                    try:
-                        df = await asyncio.wait_for(
-                            asyncio.to_thread(
-                                _patch_requests, ak.stock_zh_a_hist,
-                                symbol=norm, period=ak_period,
-                                start_date="20050101", end_date="20300101", adjust="qfq",
-                            ),
-                            timeout=5.0,
-                        )
-                        if df is not None and not df.empty:
-                            col_map = {f: _resolve_col(df.columns, a) for f, a in KLINE_COL_ALIASES.items()}
-                            missing = [f for f, c in col_map.items() if c is None]
-                            if missing:
-                                logger.error(f"K线列名映射失败 ({symbol}): 缺少 {missing}，实际列={list(df.columns)}")
-                            else:
+
+                    async def _ak():
+                        try:
+                            df = await asyncio.wait_for(
+                                asyncio.to_thread(
+                                    _patch_requests, ak.stock_zh_a_hist,
+                                    symbol=norm, period=ak_period,
+                                    start_date="20050101", end_date="20300101", adjust="qfq",
+                                ),
+                                timeout=5.0,
+                            )
+                            if df is not None and not df.empty:
+                                col_map = {f: _resolve_col(df.columns, a) for f, a in KLINE_COL_ALIASES.items()}
+                                missing = [f for f, c in col_map.items() if c is None]
+                                if missing:
+                                    return None
                                 if count < 99999:
                                     df = df.tail(count)
-                                records = []
+                                recs = []
                                 for _, row in df.iterrows():
                                     rec = _extract_kline_row(row, col_map)
                                     if rec:
-                                        records.append(rec)
-                    except (asyncio.TimeoutError, Exception) as e:
-                        logger.warning(f"AKShare 获取K线失败 ({symbol})，尝试腾讯API降级: {e}")
+                                        recs.append(rec)
+                                return recs if recs else None
+                        except Exception:
+                            return None
 
-                    # --- 方案 B：腾讯 API 降级 ---
-                    if not records:
-                        exchange_prefix = get_exchange(norm)
-                        tencent_period = {"day": "day", "week": "week", "month": "month"}[period]
-                        tencent_url = (
-                            f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
-                            f"?param={exchange_prefix}{norm},{tencent_period},,,{min(count, 640)},qfq"
-                        )
+                    async def _tx():
                         try:
-                            r = await get_async_client().get(tencent_url, timeout=10)
+                            exchange_prefix = get_exchange(norm)
+                            tencent_period = {"day": "day", "week": "week", "month": "month"}[period]
+                            url = (
+                                f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+                                f"?param={exchange_prefix}{norm},{tencent_period},,,{min(count, 640)},qfq"
+                            )
+                            r = await get_async_client().get(url, timeout=10)
                             data = r.json()
                             kdata_node = data.get("data", {}).get(f"{exchange_prefix}{norm}", {})
                             kdata = kdata_node.get(tencent_period, []) or \
@@ -594,10 +596,9 @@ class StockService:
                                     kdata_node.get("qfqday", []) or \
                                     kdata_node.get("day", [])
                             if kdata:
-                                records = []
+                                recs = []
                                 for item in kdata:
-                                    # 腾讯格式: [date, open, close, high, low, volume]
-                                    records.append({
+                                    recs.append({
                                         "date": item[0],
                                         "open": float(item[1]) if item[1] else None,
                                         "close": float(item[2]) if item[2] else None,
@@ -605,9 +606,21 @@ class StockService:
                                         "low": float(item[4]) if item[4] else None,
                                         "volume": float(item[5]) if len(item) > 5 and item[5] else None,
                                     })
-                                logger.info(f"腾讯API降级成功 ({symbol})，获取 {len(records)} 条")
-                        except Exception as e2:
-                            logger.error(f"腾讯API降级也失败 ({symbol}): {e2}")
+                                return recs if recs else None
+                        except Exception:
+                            return None
+
+                    async def _mootdx():
+                        return await fetch_mootdx_kline(norm, period, count)
+
+                    winner_sid, records = await race_sources(
+                        [("akshare", _ak), ("tencent", _tx), ("mootdx", _mootdx)],
+                        timeout=8.0,
+                        validate=lambda r: bool(r) and len(r) > 0,
+                    )
+
+                    if winner_sid:
+                        logger.debug(f"K线竞速胜出: {winner_sid} ({symbol})")
 
                     if not records:
                         return {"success": False, "error": "暂无K线数据"}
