@@ -36,6 +36,7 @@ def init_db(db_path: str | None = None) -> None:
             db_path = Path(__file__).parent.parent / "data.db"
 
         _db = sqlite3.connect(str(db_path), check_same_thread=False)
+        _db.row_factory = sqlite3.Row
         _db.execute("PRAGMA journal_mode=WAL")
         _db.execute("PRAGMA busy_timeout=5000")
 
