@@ -5262,6 +5262,8 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('schedEnabledLabel').textContent = cb.checked ? '已启用' : '已禁用';
     });
   }
+  // 驾驶舱为默认首页，加载时自动初始化
+  initCockpit();
 });
 
 let _watchlistInterval = null;
