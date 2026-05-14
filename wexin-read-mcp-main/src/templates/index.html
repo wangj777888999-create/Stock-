@@ -1113,6 +1113,8 @@ textarea.form-input {
 .ck-market-tab { padding: 6px 18px; font-size: 13px; font-weight: 500; border-radius: 6px; border: none; background: transparent; color: var(--ink-2); cursor: pointer; transition: background .15s, color .15s; }
 .ck-market-tab.active { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
 .ck-closed-tip { font-size: 12px; color: var(--ink-3); text-align: center; padding: 20px 0; }
+.ck-closed-label { position: absolute; top: 4px; right: 6px; font-size: 10px; color: #94a3b8; background: rgba(255,255,255,0.85); padding: 1px 6px; border-radius: 3px; pointer-events: none; z-index: 2; }
+.ck-chart-wrap { position: relative; }
 /* ── 行业调研 ── */
 .industry-layout { display: grid; grid-template-columns: 300px 1fr; gap: 16px; height: calc(100vh - 120px); }
 .industry-left { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
@@ -1139,6 +1141,18 @@ textarea.form-input {
 .ind-purpose-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
 @media (max-width: 768px) { .industry-layout { grid-template-columns: 1fr; height: auto; } }
 
+/* 股票代码自动补全下拉 — 用于暗色 modal */
+.stock-suggest-dd { position:absolute; top:100%; left:0; right:0; z-index:1100; background:#1a1a2e; border:1px solid #444; border-top:none; border-radius:0 0 4px 4px; max-height:240px; overflow-y:auto; box-shadow:0 6px 18px rgba(0,0,0,.4); }
+.stock-suggest-dd .item { padding:8px 12px; cursor:pointer; display:flex; gap:10px; align-items:center; border-bottom:1px solid #2a2a3e; }
+.stock-suggest-dd .item:last-child { border-bottom:none; }
+.stock-suggest-dd .item:hover, .stock-suggest-dd .item.active { background:#272749; }
+.stock-suggest-dd .code { font-family:var(--mono,monospace); font-size:12px; color:#aaa; min-width:64px; }
+.stock-suggest-dd .name { font-size:13px; color:#eee; }
+.stock-suggest-dd .mkt { font-size:11px; color:#888; margin-left:auto; }
+
+/* AI 服务商预设按钮 */
+.ai-provider-btn { padding:4px 12px; border-radius:16px; font-size:12px; }
+.ai-provider-btn.active { background:var(--red); color:#fff; border-color:var(--red); }
 </style>
 </head>
 <body>
@@ -2179,7 +2193,10 @@ textarea.form-input {
           <div style="background:#1a1a2e;padding:24px;border-radius:8px;min-width:380px;border:1px solid #333">
             <h3 style="margin:0 0 16px;color:#eee">模拟开仓</h3>
             <div style="display:grid;gap:10px">
-              <input id="sim-form-symbol" placeholder="股票代码 (例如 600519)" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee">
+              <div style="position:relative">
+                <input id="sim-form-symbol" placeholder="股票代码或名称 (例如 600519/茅台)" autocomplete="off" style="width:100%;box-sizing:border-box;padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee">
+                <div id="sim-form-symbol-dd" class="stock-suggest-dd" style="display:none"></div>
+              </div>
               <div style="display:flex;gap:10px">
                 <select id="sim-form-direction" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;flex:1">
                   <option value="long">做多</option><option value="short">做空</option>
@@ -2265,7 +2282,10 @@ textarea.form-input {
           <div style="background:#1a1a2e;padding:24px;border-radius:8px;min-width:380px;border:1px solid #333">
             <h3 style="margin:0 0 16px;color:#eee">开仓</h3>
             <div style="display:grid;gap:10px">
-              <input id="roles-trade-symbol" placeholder="股票代码 (例如 600519)" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee">
+              <div style="position:relative">
+                <input id="roles-trade-symbol" placeholder="股票代码或名称 (例如 600519/茅台)" autocomplete="off" style="width:100%;box-sizing:border-box;padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee">
+                <div id="roles-trade-symbol-dd" class="stock-suggest-dd" style="display:none"></div>
+              </div>
               <div style="display:flex;gap:10px">
                 <select id="roles-trade-direction" style="padding:8px;background:#111;border:1px solid #444;border-radius:4px;color:#eee;flex:1">
                   <option value="long">做多</option><option value="short">做空</option>
@@ -2667,10 +2687,26 @@ textarea.form-input {
             <svg class="config-chevron" width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
           </div>
           <div class="config-section-body">
+            <div class="form-group">
+              <label class="form-label">服务商预设</label>
+              <div id="cfgAiProviderBtns" style="display:flex;flex-wrap:wrap;gap:6px;">
+                <button type="button" class="btn btn-ghost btn-sm ai-provider-btn" data-provider="openai">OpenAI</button>
+                <button type="button" class="btn btn-ghost btn-sm ai-provider-btn" data-provider="deepseek">DeepSeek</button>
+                <button type="button" class="btn btn-ghost btn-sm ai-provider-btn" data-provider="dashscope">通义千问</button>
+                <button type="button" class="btn btn-ghost btn-sm ai-provider-btn" data-provider="moonshot">Moonshot</button>
+                <button type="button" class="btn btn-ghost btn-sm ai-provider-btn" data-provider="zhipu">智谱 GLM</button>
+                <button type="button" class="btn btn-ghost btn-sm ai-provider-btn" data-provider="anthropic">Anthropic</button>
+                <button type="button" class="btn btn-ghost btn-sm ai-provider-btn" data-provider="custom">自定义</button>
+              </div>
+            </div>
             <div class="form-group"><label class="form-label">API Key</label><input type="password" id="cfgAiKey" class="form-input" placeholder="sk-xxxx"></div>
             <div class="form-row">
               <div><label class="form-label">Base URL</label><input type="text" id="cfgAiBaseUrl" class="form-input" placeholder="https://api.openai.com/v1"></div>
-              <div><label class="form-label">模型名称</label><input type="text" id="cfgAiModel" class="form-input" placeholder="gpt-4o-mini"></div>
+              <div>
+                <label class="form-label">模型名称</label>
+                <input type="text" id="cfgAiModel" class="form-input" list="cfgAiModelList" placeholder="gpt-4o-mini">
+                <datalist id="cfgAiModelList"></datalist>
+              </div>
             </div>
           </div>
         </div>
@@ -2943,7 +2979,20 @@ function drawTickChart(code, data, prevClose) {
     layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 10 },
     grid: { vertLines: { visible: false }, horzLines: { visible: false } },
     rightPriceScale: { visible: false },
-    timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
+    timeScale: {
+      borderVisible: false, timeVisible: true, secondsVisible: false,
+      tickMarkFormatter: (time) => {
+        const d = new Date(time * 1000);
+        return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+      },
+    },
+    localization: {
+      locale: 'zh-CN',
+      timeFormatter: (time) => {
+        const d = new Date(time * 1000);
+        return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+      },
+    },
     crosshair: { horzLine: { visible: false }, vertLine: { visible: false } },
   });
 
@@ -3118,11 +3167,20 @@ async function fetchUsTick(code) {
     if (!j.success) return;
     const container = document.getElementById('us-chart-' + code);
     if (!container) return;
-    if (j.closed || !j.data || j.data.data.length === 0) {
-      container.innerHTML = '<div class="ck-closed-tip">已收盘 · 昨收 ' + (j.data?.prev_close ?? '--') + '</div>';
+    if ((j.closed || !j.data || j.data.data.length === 0) && (!j.data || !j.data.data || j.data.data.length === 0)) {
+      container.innerHTML = '<div class="ck-closed-tip">暂无数据 · 昨收 ' + (j.data?.prev_close ?? '--') + '</div>';
       return;
     }
     _drawUsTickChart(code, j.data.data, j.data.prev_close);
+    if (j.closed) {
+      const wrap = document.getElementById('us-chart-' + code);
+      if (wrap && !wrap.querySelector('.ck-closed-label')) {
+        const label = document.createElement('div');
+        label.className = 'ck-closed-label';
+        label.textContent = '已收盘';
+        wrap.appendChild(label);
+      }
+    }
   } catch(e) { console.error('fetchUsTick error', code, e); }
 }
 
@@ -3139,7 +3197,20 @@ function _drawUsTickChart(code, data, prevClose) {
     layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 10 },
     grid: { vertLines: { visible: false }, horzLines: { visible: false } },
     rightPriceScale: { visible: false },
-    timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
+    timeScale: {
+      borderVisible: false, timeVisible: true, secondsVisible: false,
+      tickMarkFormatter: (time) => {
+        const d = new Date(time * 1000);
+        return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+      },
+    },
+    localization: {
+      locale: 'zh-CN',
+      timeFormatter: (time) => {
+        const d = new Date(time * 1000);
+        return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+      },
+    },
     crosshair: { horzLine: { visible: false }, vertLine: { visible: false } },
   });
   const series = chart.addAreaSeries({ lineColor, topColor, bottomColor, lineWidth: 1.5 });
@@ -3284,6 +3355,53 @@ function setFlowStep(n) {
 /* ============================================================
    CONFIG
    ============================================================ */
+
+// AI 服务商预设：base_url + 常用模型列表
+const AI_PROVIDERS = {
+  openai:    { name: 'OpenAI',     base: 'https://api.openai.com/v1',                models: ['gpt-4o-mini','gpt-4o','gpt-4.1-mini','gpt-4.1','o4-mini','o3-mini'] },
+  deepseek:  { name: 'DeepSeek',   base: 'https://api.deepseek.com/v1',              models: ['deepseek-chat','deepseek-reasoner'] },
+  dashscope: { name: '通义千问',     base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', models: ['qwen-plus','qwen-turbo','qwen-max','qwen2.5-72b-instruct','qwen3-coder-plus'] },
+  moonshot:  { name: 'Moonshot',   base: 'https://api.moonshot.cn/v1',               models: ['moonshot-v1-8k','moonshot-v1-32k','moonshot-v1-128k','kimi-k2-0905-preview'] },
+  zhipu:     { name: '智谱 GLM',    base: 'https://open.bigmodel.cn/api/paas/v4',     models: ['glm-4-plus','glm-4-air','glm-4-flash','glm-4.5'] },
+  anthropic: { name: 'Anthropic',  base: 'https://api.anthropic.com/v1',             models: ['claude-opus-4-7','claude-sonnet-4-6','claude-haiku-4-5-20251001'] },
+  custom:    { name: '自定义',      base: '',                                         models: [] },
+};
+
+function _detectAiProvider(baseUrl) {
+  if (!baseUrl) return 'openai';
+  for (const [key, p] of Object.entries(AI_PROVIDERS)) {
+    if (p.base && baseUrl.startsWith(p.base.replace(/\/v\d+$/, ''))) return key;
+  }
+  return 'custom';
+}
+
+function applyAiProvider(key, opts = {}) {
+  const p = AI_PROVIDERS[key];
+  if (!p) return;
+  document.querySelectorAll('.ai-provider-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.provider === key)
+  );
+  // 更新模型 datalist
+  const dl = document.getElementById('cfgAiModelList');
+  if (dl) dl.innerHTML = p.models.map(m => `<option value="${m}">`).join('');
+  // 自定义不覆盖现有值；其他默认填充 base + 第一个模型
+  if (key === 'custom') return;
+  if (opts.fillBase !== false) document.getElementById('cfgAiBaseUrl').value = p.base;
+  const modelInput = document.getElementById('cfgAiModel');
+  if (opts.fillModel !== false && (!modelInput.value || !p.models.includes(modelInput.value))) {
+    modelInput.value = p.models[0] || '';
+  }
+}
+
+// 绑定一次按钮点击
+function _bindAiProviderBtns() {
+  document.querySelectorAll('.ai-provider-btn').forEach(btn => {
+    if (btn._bound) return;
+    btn._bound = true;
+    btn.addEventListener('click', () => applyAiProvider(btn.dataset.provider));
+  });
+}
+
 async function loadConfig() {
   try {
     const cfg = await (await fetch('/api/config')).json();
@@ -3297,6 +3415,9 @@ async function loadConfig() {
     document.getElementById('cfgAiKey').placeholder = cfg.ai_api_key ? '已保存 (留空不修改)' : 'sk-xxxx';
     document.getElementById('cfgAiBaseUrl').value = cfg.ai_base_url || '';
     document.getElementById('cfgAiModel').value = cfg.ai_model || '';
+    // 根据现有 base_url 高亮对应服务商并填充模型列表（不覆盖用户已有值）
+    _bindAiProviderBtns();
+    applyAiProvider(_detectAiProvider(cfg.ai_base_url), { fillBase: false, fillModel: false });
     document.getElementById('cfgMpToken').value = cfg.mp_token || '';
     document.getElementById('cfgMpCookie').value = '';
     document.getElementById('cfgMpCookie').placeholder = cfg.mp_cookie ? '已保存 (留空不修改)' : '粘贴 mp.weixin.qq.com 完整 Cookie...';
@@ -5872,6 +5993,65 @@ async function loadSim() {
   } catch(e) { console.error(e); }
 }
 
+// ── 通用：股票代码自动补全 ───────────────────────────────
+// 给输入框 + 下拉容器接入 /api/stock/search 防抖搜索 + 键盘选择
+function attachStockAutocomplete(inputId, ddId) {
+  const input = document.getElementById(inputId);
+  const dd = document.getElementById(ddId);
+  if (!input || !dd || input._autocompleteAttached) return;
+  input._autocompleteAttached = true;
+  let timer = null;
+  let activeIdx = -1;
+  let items = [];
+
+  const close = () => { dd.style.display = 'none'; activeIdx = -1; };
+  const render = () => {
+    if (!items.length) { close(); return; }
+    dd.innerHTML = items.map((s, i) => `
+      <div class="item${i===activeIdx?' active':''}" data-i="${i}">
+        <span class="code">${escapeHtml(s.code||'')}</span>
+        <span class="name">${escapeHtml(s.name||'')}</span>
+        <span class="mkt">${escapeHtml(s.market||'')}</span>
+      </div>`).join('');
+    dd.style.display = '';
+    dd.querySelectorAll('.item').forEach(el => {
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        pick(items[parseInt(el.dataset.i)]);
+      });
+    });
+  };
+  const pick = (s) => {
+    if (!s) return;
+    input.value = s.code;
+    input.dataset.name = s.name || '';
+    input.dataset.market = s.market || '';
+    close();
+  };
+  const search = async () => {
+    const kw = input.value.trim();
+    if (!kw || kw.length < 1) { close(); return; }
+    try {
+      const j = await (await fetch('/api/stock/search?keyword=' + encodeURIComponent(kw))).json();
+      items = (j.success && Array.isArray(j.data)) ? j.data.slice(0, 10) : [];
+      activeIdx = -1;
+      render();
+    } catch (e) { close(); }
+  };
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(search, 200);
+  });
+  input.addEventListener('keydown', (e) => {
+    if (dd.style.display === 'none') return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); activeIdx = Math.min(items.length-1, activeIdx+1); render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); activeIdx = Math.max(0, activeIdx-1); render(); }
+    else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); pick(items[activeIdx]); }
+    else if (e.key === 'Escape') { close(); }
+  });
+  input.addEventListener('blur', () => setTimeout(close, 150));
+}
+
 function simShowOpenForm() {
   document.getElementById('sim-form-date').value = new Date().toISOString().slice(0,10);
   document.getElementById('sim-form-symbol').value = '';
@@ -5879,6 +6059,7 @@ function simShowOpenForm() {
   document.getElementById('sim-form-qty').value = '';
   document.getElementById('sim-form-note').value = '';
   document.getElementById('sim-modal').style.display = 'flex';
+  attachStockAutocomplete('sim-form-symbol', 'sim-form-symbol-dd');
 }
 
 async function simOpen() {
@@ -6108,6 +6289,7 @@ async function rolesDelete() {
 function rolesShowOpenForm() {
   document.getElementById('roles-trade-modal').style.display = 'flex';
   document.getElementById('roles-trade-date').value = new Date().toISOString().slice(0, 10);
+  attachStockAutocomplete('roles-trade-symbol', 'roles-trade-symbol-dd');
 }
 
 async function rolesOpen() {

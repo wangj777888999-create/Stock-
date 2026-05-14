@@ -280,6 +280,7 @@ class FundProvider(MarketProvider):
             # 3. 前十大持仓 — 尝试 AKShare
             holdings = []
             try:
+                import akshare as ak
                 saved = _no_proxy_env()
                 try:
                     hold_df = await asyncio.to_thread(
@@ -288,6 +289,10 @@ class FundProvider(MarketProvider):
                 finally:
                     _restore_env(saved)
                 if hold_df is not None and not hold_df.empty:
+                    # 接口返回多季度数据，只取最新一个季度的前十
+                    if "季度" in hold_df.columns:
+                        latest_q = hold_df["季度"].iloc[0]
+                        hold_df = hold_df[hold_df["季度"] == latest_q]
                     for _, r in hold_df.head(10).iterrows():
                         holdings.append({
                             "code": _clean(r.iloc[1]) if len(r) > 1 else None,
@@ -296,8 +301,8 @@ class FundProvider(MarketProvider):
                             "shares": _clean(r.iloc[4]) if len(r) > 4 else None,
                             "value": _clean(r.iloc[5]) if len(r) > 5 else None,
                         })
-            except Exception:
-                pass  # 持仓数据可能不可用
+            except Exception as e:
+                logger.warning(f"基金持仓获取失败({code}): {e}")
 
             resp = {"success": True, "data": {"info": info, "kline": kline, "holdings": holdings}}
             cache.set(ck, resp, _DF_TTL)
