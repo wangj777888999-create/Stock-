@@ -156,6 +156,12 @@ class AppConfig:
 
                     if not config.ai.api_key and "api_key" in data.get("ai", {}):
                         config.ai.api_key = data["ai"]["api_key"]
+                    # base_url 和 model 从文件加载（仅当环境变量未显式设置）
+                    ai_data = data.get("ai", {})
+                    if not os.getenv("AI_BASE_URL") and ai_data.get("base_url"):
+                        config.ai.base_url = ai_data["base_url"]
+                    if not os.getenv("AI_MODEL") and ai_data.get("model"):
+                        config.ai.model = ai_data["model"]
 
                     # 微信配置同样优先从环境变量
                     logger.info(f"已从配置文件加载非敏感配置: {config_path}")

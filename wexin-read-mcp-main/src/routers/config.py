@@ -40,6 +40,11 @@ async def save_config(req: ConfigRequest):
         config.email.sender_password = req.sender_password
     if req.ai_api_key != "__KEEP__":
         config.ai.api_key = req.ai_api_key
+    # base_url / model 同步更新内存，保存即生效，无需重启
+    if req.ai_base_url:
+        config.ai.base_url = req.ai_base_url
+    if req.ai_model:
+        config.ai.model = req.ai_model
     if req.wechat_cookie != "__KEEP__":
         config.wechat.cookie = req.wechat_cookie
     if req.mp_cookie != "__KEEP__":

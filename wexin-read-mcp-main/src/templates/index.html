@@ -7609,11 +7609,24 @@ async function indStartAnalysis() {
 async function indSaveReport() {
   if (!_indCurrentText) return;
   try {
-    const params = new URLSearchParams({ industry: _indCurrentIndustry, purpose: _indCurrentPurpose, report_text: _indCurrentText });
-    const r = await fetch('/api/industry/reports?' + params.toString(), { method: 'POST' });
+    const r = await fetch('/api/industry/reports', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        industry: _indCurrentIndustry,
+        purpose: _indCurrentPurpose,
+        report_text: _indCurrentText,
+      }),
+    });
     const j = await r.json();
-    if (j.success) { toast('报告已保存', 'green'); document.getElementById('ind-save-row').style.display = 'none'; indLoadHistory(); }
-  } catch(e) { toast('保存失败', 'red'); }
+    if (j.success) {
+      toast('报告已保存', 'green');
+      document.getElementById('ind-save-row').style.display = 'none';
+      indLoadHistory();
+    } else {
+      toast('保存失败：' + (j.detail || j.error || '未知错误'), 'red');
+    }
+  } catch(e) { toast('保存失败：' + e.message, 'red'); }
 }
 
 async function indLoadHistory() {
