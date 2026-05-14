@@ -348,7 +348,6 @@ US_INDICES = [
     {"code": "INX",  "name": "标普500",  "qt": "us.INX",  "yf": "^GSPC"},
     {"code": "IXIC", "name": "纳斯达克", "qt": "us.IXIC", "yf": "^IXIC"},
     {"code": "DJI",  "name": "道琼斯",   "qt": "us.DJI",  "yf": "^DJI"},
-    {"code": "RUT",  "name": "罗素2000", "qt": "us.RUT",  "yf": "^RUT"},
     {"code": "VIX",  "name": "VIX",      "qt": "us.VIX",  "yf": "^VIX"},
 ]
 
