@@ -3411,10 +3411,12 @@ async function loadConfig() {
     document.getElementById('cfgSenderPassword').value = '';
     document.getElementById('cfgSenderPassword').placeholder = cfg.sender_password ? '已保存 (留空不修改)' : '邮箱授权码';
     document.getElementById('cfgUseSSL').checked = cfg.use_ssl !== false;
-    document.getElementById('cfgAiKey').value = '';
-    document.getElementById('cfgAiKey').placeholder = cfg.ai_api_key ? '已保存 (留空不修改)' : 'sk-xxxx';
-    document.getElementById('cfgAiBaseUrl').value = cfg.ai_base_url || '';
-    document.getElementById('cfgAiModel').value = cfg.ai_model || '';
+    // 优先从 localStorage 恢复 API Key（服务端返回的是脱敏值 ******）
+    const cachedAiKey = localStorage.getItem('sp_ai_api_key');
+    document.getElementById('cfgAiKey').value = cachedAiKey || '';
+    document.getElementById('cfgAiKey').placeholder = (cfg.ai_api_key || cachedAiKey) ? '已保存 (留空不修改)' : 'sk-xxxx';
+    document.getElementById('cfgAiBaseUrl').value = cfg.ai_base_url || localStorage.getItem('sp_ai_base_url') || '';
+    document.getElementById('cfgAiModel').value = cfg.ai_model || localStorage.getItem('sp_ai_model') || '';
     // 根据现有 base_url 高亮对应服务商并填充模型列表（不覆盖用户已有值）
     _bindAiProviderBtns();
     applyAiProvider(_detectAiProvider(cfg.ai_base_url), { fillBase: false, fillModel: false });
@@ -3480,6 +3482,15 @@ async function saveConfig() {
   };
   try {
     const data = await (await fetch('/api/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })).json();
+    if (data.success) {
+      // 缓存 AI 配置到 localStorage，避免刷新后重新输入
+      const aiKeyVal = document.getElementById('cfgAiKey').value;
+      if (aiKeyVal && aiKeyVal !== '__KEEP__') {
+        localStorage.setItem('sp_ai_api_key', aiKeyVal);
+      }
+      localStorage.setItem('sp_ai_base_url', body.ai_base_url);
+      localStorage.setItem('sp_ai_model', body.ai_model);
+    }
     showToast(data.success ? '配置已保存' : '保存失败', data.success ? 'success' : 'error');
   } catch(e) { showToast('保存失败，请稍后重试', 'error'); }
 }

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>行业调研 — 四种分析目的对比</title>
+<style>
+  :root {
+    --bg: #f8f9fb; --surface: #fff; --border: rgba(0,0,0,.08);
+    --ink: #1a1a2e; --ink-2: #555; --ink-3: #999;
+    --blue: #2563eb; --blue-s: #eff6ff;
+    --green: #16a34a; --green-s: #f0fdf4;
+    --orange: #ea580c; --orange-s: #fff7ed;
+    --purple: #7c3aed; --purple-s: #f5f3ff;
+    --red: #dc2626; --red-s: #fef2f2;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif; background: var(--bg); color: var(--ink); line-height: 1.6; padding: 32px 24px; max-width: 1100px; margin: 0 auto; }
+
+  h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: var(--ink-3); margin-bottom: 28px; }
+  .subtitle code { background: var(--blue-s); color: var(--blue); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+
+  /* ── 概览卡片 ── */
+  .overview { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 32px; }
+  .ov-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 16px; border-top: 3px solid transparent; }
+  .ov-card.c1 { border-top-color: var(--blue); }
+  .ov-card.c2 { border-top-color: var(--green); }
+  .ov-card.c3 { border-top-color: var(--orange); }
+  .ov-card.c4 { border-top-color: var(--purple); }
+  .ov-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+  .ov-card .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 600; margin-bottom: 10px; }
+  .c1 .tag { background: var(--blue-s); color: var(--blue); }
+  .c2 .tag { background: var(--green-s); color: var(--green); }
+  .c3 .tag { background: var(--orange-s); color: var(--orange); }
+  .c4 .tag { background: var(--purple-s); color: var(--purple); }
+  .ov-card p { font-size: 12.5px; color: var(--ink-2); }
+
+  /* ── 六步框架 ── */
+  .framework { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 28px; }
+  .framework h2 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .framework .fw-sub { font-size: 12px; color: var(--ink-3); margin-bottom: 14px; }
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .step { padding: 12px 14px; background: var(--bg); border-radius: 8px; }
+  .step-num { font-size: 11px; font-weight: 700; color: var(--blue); margin-bottom: 2px; }
+  .step-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .step-desc { font-size: 11.5px; color: var(--ink-2); }
+
+  /* ── 对比表 ── */
+  .compare { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 28px; }
+  .compare h2 { font-size: 16px; font-weight: 700; padding: 18px 24px 4px; }
+  .compare .cm-sub { font-size: 12px; color: var(--ink-3); padding: 0 24px 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--bg); font-weight: 600; text-align: left; padding: 10px 16px; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+  td { padding: 10px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { font-weight: 600; white-space: nowrap; color: var(--ink-2); width: 120px; }
+  .cell-label { font-size: 11px; font-weight: 700; margin-bottom: 3px; }
+  .c1-label { color: var(--blue); }
+  .c2-label { color: var(--green); }
+  .c3-label { color: var(--orange); }
+  .c4-label { color: var(--purple); }
+  .dim-tag { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 8px; font-weight: 600; margin: 1px 2px; }
+  .dim-full { background: var(--purple-s); color: var(--purple); }
+  .dim-partial { background: #fef9c3; color: #a16207; }
+  .dim-skip { background: #f3f4f6; color: #bbb; }
+
+  /* ── 流程图 ── */
+  .flow { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; margin-bottom: 28px; }
+  .flow h2 { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+  .flow-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .flow-box { padding: 8px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 500; }
+  .flow-arrow { color: var(--ink-3); font-size: 18px; }
+  .fb1 { background: var(--blue-s); color: var(--blue); border: 1px solid rgba(37,99,235,.2); }
+  .fb2 { background: var(--green-s); color: var(--green); border: 1px solid rgba(22,163,74,.2); }
+  .fb3 { background: var(--bg); border: 1px solid var(--border); }
+
+  /* ── 总结 ── */
+  .summary { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; }
+  .summary h2 { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+  .summary ul { padding-left: 1.2em; }
+  .summary li { font-size: 13px; margin-bottom: 6px; color: var(--ink-2); }
+  .summary li strong { color: var(--ink); }
+
+  @media (max-width: 768px) {
+    .overview { grid-template-columns: 1fr 1fr; }
+    .steps { grid-template-columns: 1fr; }
+    body { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>行业调研 — 四种分析目的对比</h1>
+<p class="subtitle">底层共用同一套 <strong>肖璟六步框架</strong>，区别在于 AI 侧重输出的维度不同。定义在 <code>industry_service.py</code>，非 skill。</p>
+
+<!-- 概览 -->
+<div class="overview">
+  <div class="ov-card c1">
+    <span class="tag">投资选股</span>
+    <h3>investment</h3>
+    <p>从投资者视角判断"该不该买"。侧重生命周期、竞争格局、估值逻辑、景气度指标。</p>
+  </div>
+  <div class="ov-card c2">
+    <span class="tag">创业选赛道</span>
+    <h3>startup</h3>
+    <p>从创业者视角判断"能不能做"。侧重商业模式可行性、市场规模（TAM/SAM/SOM）、护城河。</p>
+  </div>
+  <div class="ov-card c3">
+    <span class="tag">择业找方向</span>
+    <h3>career</h3>
+    <p>从求职者视角判断"值不值得进"。侧重生命周期、行业前景、薪资水平、龙头公司。</p>
+  </div>
+  <div class="ov-card c4">
+    <span class="tag">完整行研</span>
+    <h3>full</h3>
+    <p>六个维度全覆盖，适合需要全面了解行业的场景。输出最完整、篇幅最长。</p>
+  </div>
+</div>
+
+<!-- 六步框架 -->
+<div class="framework">
+  <h2>底层框架：肖璟六步法</h2>
+  <div class="fw-sub">所有四种目的共用同一个 system prompt，AI 按此六步逐步分析</div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">STEP 1</div>
+      <div class="step-title">定义行业边界</div>
+      <div class="step-desc">横向：行业层级（申万/GICS）<br>纵向：产业链上下游梳理</div>
+    </div>
+    <div class="step">
+      <div class="step-num">STEP 2</div>
+      <div class="step-title">判断产业生命周期</div>
+      <div class="step-desc">以渗透率为核心标准<br>导入期 → 成长期 → 成熟期 → 衰退期</div>
+    </div>
+    <div class="step">
+      <div class="step-num">STEP 3</div>
+      <div class="step-title">按阶段聚焦分析</div>
+      <div class="step-desc">3A 可行性（导入期）<br>3B 规模性（成长期）<br>3C 防守性（成熟期）<br>3D 盈利性（成熟期）</div>
+    </div>
+    <div class="step">
+      <div class="step-num">STEP 4</div>
+      <div class="step-title">估值逻辑</div>
+      <div class="step-desc">导入期 PS/GMV → 成长期 PEG<br>成熟期 PE/DCF → 衰退期 PB</div>
+    </div>
+    <div class="step">
+      <div class="step-num">STEP 5</div>
+      <div class="step-title">PEST 外部因素</div>
+      <div class="step-desc">政策 / 经济 / 社会 / 技术<br>当前催化剂或压制因素</div>
+    </div>
+    <div class="step">
+      <div class="step-num">STEP 6</div>
+      <div class="step-title">景气度跟踪指标</div>
+      <div class="step-desc">量 / 价 / 利 / 库存 / 预期<br>推荐数据来源</div>
+    </div>
+  </div>
+</div>
+
+<!-- 对比表 -->
+<div class="compare">
+  <h2>四种目的：维度侧重对比</h2>
+  <div class="cm-sub"><span class="dim-tag dim-full">深度</span> = 重点展开 &nbsp; <span class="dim-tag dim-partial">提及</span> = 简要涉及 &nbsp; <span class="dim-tag dim-skip">—</span> = 不重点输出</div>
+  <table>
+    <thead>
+      <tr>
+        <th>分析维度</th>
+        <th><span class="c1-label">投资选股</span></th>
+        <th><span class="c2-label">创业选赛道</span></th>
+        <th><span class="c3-label">择业找方向</span></th>
+        <th><span class="c4-label">完整行研</span></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>行业边界 & 生命周期</td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+        <td><span class="dim-tag dim-partial">提及</span></td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+      </tr>
+      <tr>
+        <td>竞争格局</td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+        <td><span class="dim-tag dim-partial">提及</span></td>
+        <td><span class="dim-tag dim-full">深度</span> <small style="color:var(--ink-3)">龙头公司</small></td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+      </tr>
+      <tr>
+        <td>估值逻辑</td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+        <td><span class="dim-tag dim-skip">—</span></td>
+        <td><span class="dim-tag dim-skip">—</span></td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+      </tr>
+      <tr>
+        <td>景气度跟踪指标</td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+        <td><span class="dim-tag dim-skip">—</span></td>
+        <td><span class="dim-tag dim-skip">—</span></td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+      </tr>
+      <tr>
+        <td>商业模式可行性</td>
+        <td><span class="dim-tag dim-partial">提及</span></td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+        <td><span class="dim-tag dim-skip">—</span></td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+      </tr>
+      <tr>
+        <td>市场规模 TAM/SAM/SOM</td>
+        <td><span class="dim-tag dim-partial">提及</span></td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+        <td><span class="dim-tag dim-skip">—</span></td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+      </tr>
+      <tr>
+        <td>护城河构建路径</td>
+        <td><span class="dim-tag dim-partial">提及</span></td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+        <td><span class="dim-tag dim-skip">—</span></td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+      </tr>
+      <tr>
+        <td>薪资水平 & 就业前景</td>
+        <td><span class="dim-tag dim-skip">—</span></td>
+        <td><span class="dim-tag dim-skip">—</span></td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+        <td><span class="dim-tag dim-partial">提及</span></td>
+      </tr>
+      <tr>
+        <td>PEST 外部因素</td>
+        <td><span class="dim-tag dim-partial">提及</span></td>
+        <td><span class="dim-tag dim-partial">提及</span></td>
+        <td><span class="dim-tag dim-partial">提及</span></td>
+        <td><span class="dim-tag dim-full">深度</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 调用流程 -->
+<div class="flow">
+  <h2>实际调用流程</h2>
+  <div class="flow-row">
+    <div class="flow-box fb1">用户选择目的 + 输入行业名</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box fb2">POST /api/industry/analyze</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box fb3">industry_service.stream_analysis()</div>
+  </div>
+  <div class="flow-row" style="padding-left: 0;">
+    <div class="flow-box fb3" style="min-width:200px;">
+      <strong>user_prompt</strong> = 行业名 + 目的标签 + 侧重指令<br>
+      <small style="color:var(--ink-3)">例：「新能源汽车」+ 投资选股 + "重点输出：生命周期…"</small>
+    </div>
+    <span class="flow-arrow">+</span>
+    <div class="flow-box fb3" style="min-width:200px;">
+      <strong>system_prompt</strong> = 肖璟六步框架<br>
+      <small style="color:var(--ink-3)">所有目的共用，不变</small>
+    </div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box fb2">AI API（SSE 流式）</div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-box fb1">前端逐 token 渲染</div>
+  </div>
+</div>
+
+<!-- 总结 -->
+<div class="summary">
+  <h2>要点总结</h2>
+  <ul>
+    <li>四个选项 <strong>不是 skill 定义的</strong>，是 <code>industry_service.py</code> 中硬编码的 <code>_PURPOSE_FOCUS</code> 字典。</li>
+    <li>底层 <strong>system prompt 完全相同</strong>（肖璟六步框架），区别仅在 user prompt 中附加的"重点输出"指令。</li>
+    <li><strong>投资选股</strong>：最适合炒股场景，聚焦估值 + 景气度。</li>
+    <li><strong>创业选赛道</strong>：最适合评估新业务，聚焦商业可行性 + 市场天花板。</li>
+    <li><strong>择业找方向</strong>：最适合职业规划，聚焦行业前景 + 薪资 + 龙头公司。</li>
+    <li><strong>完整行研</strong>：六步全覆盖，篇幅最长，适合需要全面了解的场景。</li>
+  </ul>
+</div>
+
+</body>
+</html>
