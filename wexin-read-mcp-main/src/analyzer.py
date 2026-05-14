@@ -7,7 +7,7 @@ from datetime import datetime
 
 from agents import PERSONAS, Persona
 from config import AppConfig
-from http_client import get_async_client
+from http_client import get_async_proxy_client
 
 logger = logging.getLogger(__name__)
 
@@ -172,7 +172,7 @@ class ArticleAnalyzer:
     async def _call_ai(self, prompt: str, system: str) -> dict:
         """调用AI API进行分析（system prompt 由调用方决定）。"""
         try:
-            client = get_async_client()
+            client = get_async_proxy_client()
             response = await client.post(
                 f"{self.config.ai.base_url}/chat/completions",
                 headers={
@@ -265,7 +265,7 @@ confidence 含义：
         system = "你是股票文本扫描助手，任务是从文章中提取所有被提及的股票名称。只做扫描，不做荐股判断。输出严格 JSON。"
 
         try:
-            client = get_async_client()
+            client = get_async_proxy_client()
             response = await client.post(
                 f"{self.config.ai.base_url}/chat/completions",
                 headers={

@@ -8,7 +8,7 @@ from typing import AsyncGenerator
 import httpx
 
 from database import get_db
-from http_client import get_async_client
+from http_client import get_async_proxy_client
 from state import config
 
 logger = logging.getLogger("industry-service")
@@ -137,9 +137,25 @@ async def stream_analysis(industry: str, purpose: str) -> AsyncGenerator[str, No
     }
 
     try:
-        client = get_async_client()
+        client = get_async_proxy_client()
         async with client.stream("POST", url, headers=headers, json=payload, timeout=120.0) as response:
-            response.raise_for_status()
+            if response.status_code >= 400:
+                # 读取错误体并透传给前端（去掉敏感字段）
+                body = await response.aread()
+                try:
+                    err_json = json.loads(body.decode("utf-8", errors="replace"))
+                    err_msg = (
+                        err_json.get("error", {}).get("message")
+                        or err_json.get("message")
+                        or err_json.get("error")
+                        or body.decode("utf-8", errors="replace")[:300]
+                    )
+                except Exception:
+                    err_msg = body.decode("utf-8", errors="replace")[:300]
+                logger.error(f"AI API {response.status_code}: {err_msg}")
+                safe = json.dumps(f"[{response.status_code}] {err_msg}", ensure_ascii=False)
+                yield f"data: [ERROR] AI 调用失败 — {safe}\n\n"
+                return
             async for line in response.aiter_lines():
                 if not line.startswith("data: "):
                     continue
@@ -158,8 +174,9 @@ async def stream_analysis(industry: str, purpose: str) -> AsyncGenerator[str, No
         logger.error(f"AI API 返回错误: {e.response.status_code}")
         yield f"data: [ERROR] AI 服务返回 {e.response.status_code} 错误\n\n"
     except Exception as e:
-        logger.error(f"AI 流式调用失败: {e}")
-        yield f"data: [ERROR] AI 调用失败\n\n"
+        logger.error(f"AI 流式调用失败: {e}", exc_info=True)
+        msg = json.dumps(f"{type(e).__name__}: {str(e)[:300]}", ensure_ascii=False)
+        yield f"data: [ERROR] AI 调用异常 — {msg}\n\n"
 
 
 def save_report(industry: str, purpose: str, report_text: str) -> int:

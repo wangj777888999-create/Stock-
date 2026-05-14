@@ -63,3 +63,26 @@ def get_async_client() -> httpx.AsyncClient:
                     follow_redirects=True,
                 )
     return _async_client
+
+
+# ── 外网客户端：调用国外 AI API 等需要走系统代理时使用 ──────────────────
+_async_proxy_client: httpx.AsyncClient | None = None
+_async_proxy_client_lock = threading.Lock()
+
+
+def get_async_proxy_client() -> httpx.AsyncClient:
+    """返回走系统代理（HTTP_PROXY / HTTPS_PROXY 等）的 httpx.AsyncClient 单例。
+
+    用于访问国外 AI API（DeepSeek 国际节点、OpenAI、Anthropic 等）。
+    国内行情/AKShare 接口请继续使用 get_async_client()。
+    """
+    global _async_proxy_client
+    if _async_proxy_client is None:
+        with _async_proxy_client_lock:
+            if _async_proxy_client is None:
+                _async_proxy_client = httpx.AsyncClient(
+                    trust_env=True,
+                    timeout=httpx.Timeout(120.0, connect=10.0),
+                    follow_redirects=True,
+                )
+    return _async_proxy_client
