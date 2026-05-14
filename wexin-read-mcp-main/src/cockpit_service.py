@@ -345,12 +345,44 @@ async def get_tick_data(code: str) -> dict:
 # ─── 美股指数列表 ───
 
 US_INDICES = [
-    {"code": "INX",  "name": "标普500",  "qt": "us.INX"},
-    {"code": "IXIC", "name": "纳斯达克", "qt": "us.IXIC"},
-    {"code": "DJI",  "name": "道琼斯",   "qt": "us.DJI"},
-    {"code": "RUT",  "name": "罗素2000", "qt": "us.RUT"},
-    {"code": "VIX",  "name": "VIX",      "qt": "us.VIX"},
+    {"code": "INX",  "name": "标普500",  "qt": "us.INX",  "yf": "^GSPC"},
+    {"code": "IXIC", "name": "纳斯达克", "qt": "us.IXIC", "yf": "^IXIC"},
+    {"code": "DJI",  "name": "道琼斯",   "qt": "us.DJI",  "yf": "^DJI"},
+    {"code": "RUT",  "name": "罗素2000", "qt": "us.RUT",  "yf": "^RUT"},
+    {"code": "VIX",  "name": "VIX",      "qt": "us.VIX",  "yf": "^VIX"},
 ]
+
+
+async def _fetch_us_index_yf(code: str) -> dict | None:
+    """yfinance 兜底：腾讯无该指数数据时使用（如罗素2000）。"""
+    idx_info = next((idx for idx in US_INDICES if idx["code"] == code), None)
+    if idx_info is None or not idx_info.get("yf"):
+        return None
+    cache_key = f"cockpit:us:yf:{code}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    def _do():
+        try:
+            import yfinance as yf
+            fi = yf.Ticker(idx_info["yf"]).fast_info
+            price = float(fi.last_price)
+            prev_close = float(fi.previous_close)
+            change = price - prev_close
+            pct = (change / prev_close * 100) if prev_close else 0.0
+            return {"price": price, "prev_close": prev_close, "change": change, "change_pct": pct}
+        except Exception as e:
+            logger.warning(f"yfinance 指数获取失败 {code}: {e}")
+            return None
+
+    try:
+        result = await asyncio.wait_for(asyncio.to_thread(_do), timeout=_AKSHARE_TIMEOUT)
+    except asyncio.TimeoutError:
+        return None
+    if result is not None:
+        cache.set(cache_key, result, 60)
+    return result
 
 
 async def get_us_sentiment() -> dict:
@@ -378,7 +410,57 @@ async def get_us_sentiment() -> dict:
             logger.warning(f"VIX 获取失败: {e}")
             return None
 
+    async def _fetch_breadth_em():
+        """直接调用东方财富分页接口，比 akshare 整表更稳定。"""
+        client = get_async_client()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            "Referer": "https://quote.eastmoney.com/",
+        }
+        up = down = flat = 0
+        page_size = 500
+        for pn in range(1, 40):  # 最多 40*500 = 20000 只
+            url = (
+                "https://72.push2.eastmoney.com/api/qt/clist/get"
+                f"?pn={pn}&pz={page_size}&po=1&np=1&fltt=2&invt=2&fid=f3"
+                "&fs=m:105,m:106,m:107&fields=f3"
+            )
+            diff = None
+            for attempt in range(3):
+                try:
+                    r = await client.get(url, timeout=8, headers=headers)
+                    diff = r.json().get("data", {}).get("diff") or []
+                    break
+                except Exception:
+                    if attempt == 2:
+                        return None
+                    await asyncio.sleep(0.5)
+            if not diff:
+                break
+            for it in diff:
+                v = it.get("f3")
+                if v is None or v == "-":
+                    flat += 1
+                elif isinstance(v, (int, float)):
+                    if v > 0:
+                        up += 1
+                    elif v < 0:
+                        down += 1
+                    else:
+                        flat += 1
+                else:
+                    flat += 1
+            if len(diff) < page_size:
+                break
+        if up + down + flat == 0:
+            return None
+        return {"up": up, "down": down, "flat": flat}
+
     async def _fetch_breadth():
+        try:
+            return await asyncio.wait_for(_fetch_breadth_em(), timeout=20)
+        except Exception as e:
+            logger.warning(f"美股涨跌家数（东财）失败: {e}")
         try:
             df = await asyncio.wait_for(
                 asyncio.to_thread(patch_requests, ak.stock_us_spot_em),
@@ -391,7 +473,7 @@ async def get_us_sentiment() -> dict:
             flat = int((df["涨跌幅"] == 0).sum())
             return {"up": up, "down": down, "flat": flat}
         except Exception as e:
-            logger.warning(f"美股涨跌家数获取失败: {e}")
+            logger.warning(f"美股涨跌家数（AKShare）失败: {e}")
             return None
 
     vix, breadth = await asyncio.gather(_fetch_vix(), _fetch_breadth())
@@ -420,28 +502,37 @@ async def get_us_indices_quotes() -> dict:
             except (IndexError, ValueError):
                 return None
 
-        data = []
-        lines = [line.strip() for line in text.strip().split(";") if line.strip()]
-        i = 0
-        for line in lines:
-            if i >= len(US_INDICES):
-                break
-            start = line.find('"')
-            end = line.rfind('"')
-            if start == -1 or end <= start:
+        # 按变量名 v_us.XXX 映射，避免某些指数无返回时位移错位
+        parsed: dict[str, list[str]] = {}
+        for line in text.strip().split(";"):
+            line = line.strip()
+            m = re.match(r'v_(us\.[A-Z0-9]+)="([^"]*)"', line)
+            if not m:
                 continue
-            fields = line[start + 1: end].split("~")
-            if len(fields) < 38:
+            parsed[m.group(1)] = m.group(2).split("~")
+
+        data = []
+        for idx in US_INDICES:
+            fields = parsed.get(idx["qt"])
+            if fields is None or len(fields) < 38 or not _tf(fields, 3):
+                # 腾讯无数据：用 yfinance 兜底
+                yf_data = await _fetch_us_index_yf(idx["code"])
+                if yf_data is not None:
+                    data.append({"code": idx["code"], "name": idx["name"], **yf_data})
+                else:
+                    data.append({
+                        "code": idx["code"], "name": idx["name"],
+                        "price": None, "prev_close": None, "change": None, "change_pct": None,
+                    })
                 continue
             data.append({
-                "code": US_INDICES[i]["code"],
-                "name": US_INDICES[i]["name"],
+                "code": idx["code"],
+                "name": idx["name"],
                 "price": _tf(fields, 3),
                 "prev_close": _tf(fields, 4),
                 "change": _tf(fields, 31),
                 "change_pct": _tf(fields, 32),
             })
-            i += 1
 
         resp = {"success": True, "data": data}
         cache.set(cache_key, resp, 5)
@@ -467,7 +558,7 @@ async def get_us_tick_data(code: str) -> dict:
 
     try:
         async def _fetch_min():
-            url = f"https://web.ifzq.gtimg.cn/appstock/app/usaminute/query?code={qt_code}"
+            url = f"https://web.ifzq.gtimg.cn/appstock/app/usMinute/query?code={qt_code}"
             r = await get_async_client().get(url, timeout=10)
             raw = r.content.decode("gbk", errors="replace")
             match = re.search(r'\{.*\}', raw, re.DOTALL)
@@ -503,6 +594,13 @@ async def get_us_tick_data(code: str) -> dict:
             prev_close = 0.0
 
         if isinstance(min_raw, Exception) or not min_raw:
+            # 休市时返回上一交易日缓存的分时数据
+            last_key = f"cockpit:us:tick:last:{code}"
+            last_data = cache.get(last_key)
+            if last_data is not None:
+                resp = {"success": True, "closed": True, "data": last_data}
+                cache.set(cache_key, resp, 30)
+                return resp
             resp = {
                 "success": True,
                 "closed": True,
@@ -533,6 +631,9 @@ async def get_us_tick_data(code: str) -> dict:
             "data": {"code": idx_info["code"], "name": idx_info["name"], "prev_close": prev_close, "data": tick_list},
         }
         cache.set(cache_key, resp, 5)
+        # 长期缓存，供休市时展示
+        last_key = f"cockpit:us:tick:last:{code}"
+        cache.set(last_key, resp["data"], 86400)
         return resp
 
     except asyncio.TimeoutError:
