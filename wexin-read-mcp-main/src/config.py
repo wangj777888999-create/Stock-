@@ -24,6 +24,13 @@ def _get_env(key: str, default: str = "") -> str:
     return os.getenv(key, default) or default
 
 
+def _parse_float(val: str, default: float) -> float:
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return default
+
+
 def _get_env_int(key: str, default: int) -> int:
     """获取整数环境变量"""
     val = os.getenv(key)
@@ -116,7 +123,7 @@ class AppConfig:
             ai=AIConfig.from_env(),
             wechat=WeChatConfig.from_env(),
             max_concurrent_scrape=_get_env_int("MAX_CONCURRENT_SCRAPE", 3),
-            scrape_delay=float(_get_env("SCRAPE_DELAY", "2.0")),
+            scrape_delay=_parse_float(_get_env("SCRAPE_DELAY", "2.0"), 2.0),
         )
 
     @classmethod

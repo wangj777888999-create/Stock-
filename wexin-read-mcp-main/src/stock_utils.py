@@ -166,8 +166,8 @@ def cache_set(key: str, value: Any, ttl: int = TTL_DAILY) -> None:
             )
             db.commit()
             return
-        except sqlite3.OperationalError:
-            if attempt == 2:
+        except sqlite3.OperationalError as e:
+            if "database is locked" not in str(e).lower() or attempt == 2:
                 raise
             time.sleep(0.1)
 

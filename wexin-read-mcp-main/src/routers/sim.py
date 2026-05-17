@@ -42,13 +42,13 @@ async def open_trade(req: SimOpen, role_id: int | None = None):
     market = req.market or detect_market(req.symbol)
     rid = role_id or _get_default_role_id()
     db = get_db()
-    db.execute(
+    cur = db.execute(
         """INSERT INTO sim_trades (role_id, symbol, market, direction, price, quantity, fee, trade_date, note)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (rid, symbol, market, req.direction, req.price, req.quantity, req.fee, req.trade_date, req.note),
     )
     db.commit()
-    return {"success": True, "id": db.execute("SELECT last_insert_rowid()").fetchone()[0]}
+    return {"success": True, "id": cur.lastrowid}
 
 
 @router.post("/close")

@@ -4,6 +4,7 @@ import asyncio
 import re
 import json
 import logging
+import uuid
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -223,7 +224,7 @@ class BloggerManager:
                 }
 
         blogger = {
-            "id": f"b_{len(self.bloggers) + 1}_{int(datetime.now().timestamp())}",
+            "id": f"b_{uuid.uuid4().hex[:8]}",
             "name": info.get("name", "未知"),
             "biz": biz,
             "user_name": info.get("user_name", ""),

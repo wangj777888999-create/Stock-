@@ -37,7 +37,7 @@ def _fetch_hot_rank_list(limit: int = 100) -> list[dict]:
             },
             timeout=10,
         )
-        items = r.json()["data"]
+        items = r.json().get("data") or []
         result = []
         for item in items:
             sc = item["sc"]  # e.g. "SH601991", "SZ000001"

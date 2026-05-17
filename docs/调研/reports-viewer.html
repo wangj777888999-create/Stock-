@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StockPulse 调研报告集</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #222533;
+    --border: #2e3347;
+    --accent: #4f7cff;
+    --accent2: #7c5cfc;
+    --text: #e2e6f0;
+    --text-muted: #7b82a0;
+    --text-dim: #4a5068;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --code-bg: #161925;
+    --sidebar-w: 280px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ── */
+  #sidebar {
+    width: var(--sidebar-w);
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow-y: auto;
+  }
+  .sidebar-header {
+    padding: 24px 20px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-logo {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .sidebar-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+  }
+  .sidebar-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .report-list { padding: 12px 0; flex: 1; }
+
+  .report-card {
+    margin: 6px 12px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.18s ease;
+    position: relative;
+  }
+  .report-card:hover { background: var(--surface2); border-color: var(--border); }
+  .report-card.active {
+    background: linear-gradient(135deg, rgba(79,124,255,0.15), rgba(124,92,252,0.1));
+    border-color: rgba(79,124,255,0.4);
+  }
+  .report-card.active::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 50%;
+    transform: translateY(-50%);
+    width: 3px; height: 60%;
+    background: linear-gradient(180deg, var(--accent), var(--accent2));
+    border-radius: 0 2px 2px 0;
+  }
+  .card-num {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--accent);
+    margin-bottom: 5px;
+    text-transform: uppercase;
+  }
+  .report-card.active .card-num { color: var(--accent); }
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.4;
+    margin-bottom: 6px;
+  }
+  .card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .tag {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 20px;
+    background: var(--surface2);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+  .report-card.active .tag { background: rgba(79,124,255,0.1); border-color: rgba(79,124,255,0.3); }
+
+  /* ── Main ── */
+  #main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #topbar {
+    height: 52px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 32px;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+  .topbar-num {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+  .topbar-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    flex: 1;
+  }
+  .topbar-date {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  #content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 40px 60px;
+    max-width: 960px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  #content::-webkit-scrollbar { width: 6px; }
+  #content::-webkit-scrollbar-track { background: transparent; }
+  #content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Report typography ── */
+  .report-content h1 {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--text);
+    margin-bottom: 8px;
+    line-height: 1.2;
+  }
+  .report-content .meta-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 20px 0 32px;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.8;
+  }
+  .report-content .meta-block strong { color: var(--text); }
+  .report-content h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 40px 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .report-content h2::before {
+    content: '';
+    display: inline-block;
+    width: 4px; height: 20px;
+    background: linear-gradient(180deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+  }
+  .report-content h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 28px 0 12px;
+  }
+  .report-content h4 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 20px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .report-content p {
+    font-size: 14px;
+    line-height: 1.85;
+    color: var(--text);
+    margin-bottom: 14px;
+  }
+  .report-content ul, .report-content ol {
+    margin: 10px 0 16px 22px;
+  }
+  .report-content li {
+    font-size: 14px;
+    line-height: 1.8;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .report-content strong { color: #fff; font-weight: 700; }
+  .report-content em { color: var(--yellow); font-style: normal; }
+  .report-content code {
+    background: var(--code-bg);
+    color: #a5f3fc;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 12.5px;
+    border: 1px solid var(--border);
+  }
+  .report-content pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 16px 0 20px;
+    overflow-x: auto;
+    position: relative;
+  }
+  .report-content pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    font-size: 13px;
+    color: #c3d5ff;
+    line-height: 1.7;
+  }
+  .report-content hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 32px 0;
+  }
+  .report-content blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 12px 20px;
+    margin: 16px 0;
+    background: rgba(79,124,255,0.06);
+    border-radius: 0 8px 8px 0;
+    font-size: 13.5px;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  /* Tables */
+  .report-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0 24px;
+    font-size: 13px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .report-content th {
+    background: var(--surface2);
+    color: var(--text);
+    font-weight: 700;
+    padding: 11px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    letter-spacing: 0.3px;
+  }
+  .report-content td {
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(46,51,71,0.5);
+    color: var(--text);
+    line-height: 1.6;
+    vertical-align: top;
+  }
+  .report-content tr:last-child td { border-bottom: none; }
+  .report-content tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* Priority badges */
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+  }
+  .badge-p0 { background: rgba(52,211,153,0.15); color: var(--green); border: 1px solid rgba(52,211,153,0.3); }
+  .badge-p1 { background: rgba(251,191,36,0.12); color: var(--yellow); border: 1px solid rgba(251,191,36,0.3); }
+  .badge-p2 { background: rgba(248,113,113,0.12); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+
+  /* ── Progress indicator ── */
+  .progress-dots {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+  }
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .dot.active { background: var(--accent); transform: scale(1.3); }
+  .dot.done { background: var(--text-dim); }
+
+  /* Transitions */
+  .report-content { animation: fadeIn 0.25s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">StockPulse</div>
+    <div class="sidebar-title">调研报告集</div>
+    <div class="sidebar-sub">4 份报告 · 2026-05</div>
+  </div>
+  <div class="report-list">
+    <div class="report-card active" onclick="show(0)">
+      <div class="card-num">01</div>
+      <div class="card-title">a-stock-data 项目<br>全面调研报告</div>
+      <div class="card-tags">
+        <span class="tag">A股数据</span>
+        <span class="tag">开源</span>
+        <span class="tag">21端点</span>
+      </div>
+    </div>
+    <div class="report-card" onclick="show(1)">
+      <div class="card-num">02</div>
+      <div class="card-title">Kronos 金融市场<br>基础模型调研</div>
+      <div class="card-tags">
+        <span class="tag">AI模型</span>
+        <span class="tag">K线预测</span>
+        <span class="tag">AAAI2026</span>
+      </div>
+    </div>
+    <div class="report-card" onclick="show(2)">
+      <div class="card-num">03</div>
+      <div class="card-title">Claude 金融服务<br>参考实现调研</div>
+      <div class="card-tags">
+        <span class="tag">Anthropic</span>
+        <span class="tag">MCP</span>
+        <span class="tag">11 Agent</span>
+      </div>
+    </div>
+    <div class="report-card" onclick="show(3)">
+      <div class="card-num">04</div>
+      <div class="card-title">个人A股交易辅助<br>系统参考架构</div>
+      <div class="card-tags">
+        <span class="tag">场景流程</span>
+        <span class="tag">飞书推送</span>
+        <span class="tag">多Agent</span>
+      </div>
+    </div>
+  </div>
+  <div class="progress-dots">
+    <div class="dot active" onclick="show(0)"></div>
+    <div class="dot" onclick="show(1)"></div>
+    <div class="dot" onclick="show(2)"></div>
+    <div class="dot" onclick="show(3)"></div>
+    <span style="font-size:11px;color:var(--text-dim);margin-left:6px" id="progress-label">1 / 4</span>
+  </div>
+</div>
+
+<!-- Main -->
+<div id="main">
+  <div id="topbar">
+    <span class="topbar-num" id="tb-num">01</span>
+    <span class="topbar-title" id="tb-title">a-stock-data 项目全面调研报告</span>
+    <span class="topbar-date" id="tb-date">2026-05-13</span>
+  </div>
+  <div id="content"></div>
+</div>
+
+<script>
+const REPORTS = [
+  {
+    num: '01',
+    title: 'a-stock-data 项目全面调研报告',
+    date: '2026-05-13',
+    content: `
+<div class="report-content">
+<h1>a-stock-data 项目全面调研报告</h1>
+<div class="meta-block">
+  <strong>调研日期</strong>：2026-05-13<br>
+  <strong>项目地址</strong>：https://github.com/simonlin1212/a-stock-data<br>
+  <strong>当前版本</strong>：v2.1.0（2026-05-12）<br>
+  <strong>开源协议</strong>：Apache-2.0<br>
+  <strong>作者</strong>：Simon 林（硅基世纪）<br>
+  <strong>Star / Fork / Watchers</strong>：286 / 81 / 2
+</div>
+
+<h2>一、项目概述</h2>
+<h3>1.1 定位</h3>
+<p>a-stock-data 是一个面向中国 A 股市场的<strong>全栈数据工具包</strong>，以 Claude Code Skill（<code>SKILL.md</code>）的形式发布。将分散在 8 个公开数据源的 A 股原始数据封装为 AI 编程助手可直接调用的 21 个数据端点。核心卖点：<strong>零 API Key（7/8 源免费）、六层架构、开箱即用</strong>。</p>
+
+<h3>1.2 目标用户</h3>
+<p>AI 编程助手用户（Claude Code / Codex / OpenClaw），通过自然语言指令触发数据获取，无需记忆 API 参数。</p>
+
+<h3>1.3 版本演进</h3>
+<table>
+<tr><th>版本</th><th>日期</th><th>变化</th></tr>
+<tr><td>v1.0</td><td>2026-04</td><td>内部版，5 层架构，13 个端点</td></tr>
+<tr><td>v2.0</td><td>2026-05-11</td><td>首次开源，6 层架构（新增信号层），15 个端点</td></tr>
+<tr><td>v2.1</td><td>2026-05-12</td><td>新增 6 个端点（龙虎榜/解禁/行业/概念/资金流），北向自缓存，F10 优化</td></tr>
+</table>
+
+<h2>二、数据体系</h2>
+<h3>2.1 数据源全景</h3>
+<table>
+<tr><th>优先级</th><th>数据源</th><th>协议</th><th>鉴权</th><th>封 IP 风险</th><th>用途</th></tr>
+<tr><td>1</td><td><strong>mootdx</strong></td><td>TCP 7709</td><td>无</td><td>极低</td><td>K 线、盘口、逐笔、财务、F10</td></tr>
+<tr><td>2</td><td><strong>腾讯财经</strong></td><td>HTTP</td><td>无</td><td>低</td><td>PE/PB/市值/换手率/涨跌停价</td></tr>
+<tr><td>3</td><td><strong>akshare</strong></td><td>HTTP（聚合）</td><td>无</td><td>中（东财源）</td><td>研报/新闻/公告/龙虎榜/解禁/行业</td></tr>
+<tr><td>4</td><td><strong>iwencai</strong></td><td>HTTP POST</td><td>Bearer+X-Claw</td><td>低</td><td>自然语言选股/研报搜索</td></tr>
+<tr><td>5</td><td><strong>东财 PDF</strong></td><td>HTTP</td><td>Referer 头</td><td>低</td><td>研报 PDF 下载</td></tr>
+<tr><td>6</td><td><strong>同花顺热点</strong></td><td>HTTP</td><td>无</td><td>极低</td><td>强势股筛选 + 题材归因</td></tr>
+<tr><td>7</td><td><strong>同花顺北向</strong></td><td>HTTP</td><td>无</td><td>极低</td><td>沪深股通分钟级资金流</td></tr>
+<tr><td>8</td><td><strong>百度股市通</strong></td><td>HTTP</td><td>Referer 头</td><td>极低</td><td>概念板块/资金流向</td></tr>
+</table>
+
+<h3>2.2 数据端点清单（21 个）</h3>
+<h4>Layer 1：行情层</h4>
+<table>
+<tr><th>端点</th><th>数据内容</th><th>数据量</th></tr>
+<tr><td>mootdx 行情</td><td>K 线（日/周/月/分钟）、五档盘口、逐笔成交、实时报价 46 字段</td><td>无限流</td></tr>
+<tr><td>腾讯财经</td><td>PE(TTM)、PB、总市值、流通市值、换手率、涨跌停价</td><td>88 字段/股，批量请求</td></tr>
+</table>
+<h4>Layer 3：信号层（V2.1 新增 6 端点）</h4>
+<table>
+<tr><th>端点</th><th>数据源</th><th>响应速度</th></tr>
+<tr><td>同花顺强势股</td><td>当日走强股票 + 题材归因标签</td><td>73ms</td></tr>
+<tr><td>北向资金（实时）</td><td>沪股通/深股通分钟级流向</td><td>实时</td></tr>
+<tr><td>龙虎榜席位</td><td>上榜原因、买卖 TOP5 营业部</td><td>HTTP</td></tr>
+<tr><td>限售解禁日历</td><td>历史解禁记录 + 未来 90 天预警</td><td>HTTP</td></tr>
+<tr><td>行业横向对比</td><td>~90 行业涨跌排名 + 领涨股</td><td>HTTP</td></tr>
+<tr><td>百度资金流向</td><td>主力/散户/超大单分钟级 + 20 日历史</td><td>HTTP</td></tr>
+</table>
+
+<h2>三、架构设计</h2>
+<h3>3.1 整体形态</h3>
+<p>核心特点：<strong>单文件交付</strong>。整个项目是 1 个 <code>SKILL.md</code> 文件，结构化 Markdown + 内嵌 Python 代码块。无独立的 <code>.py</code> 文件，无法直接 <code>python run</code>。</p>
+
+<h3>3.2 关键设计决策</h3>
+<ul>
+<li><strong>mootdx TCP 作为行情主通道</strong> — 不走 HTTP，直接 TCP 二进制协议连接通达信服务器（端口 7709），无 HTTP 开销、无限流</li>
+<li><strong>akshare 作为聚合层</strong> — 大部分东财/同花顺/cninfo 端点通过 akshare 间接调用</li>
+<li><strong>无重试、无熔断</strong> — 所有调用失败即返回，无自动重试逻辑</li>
+<li><strong>无缓存（除北向）</strong> — 设计者认为 Skill 场景下用户只查一次，缓存收益低</li>
+</ul>
+
+<h2>四、内置投研流程</h2>
+<table>
+<tr><th>流程</th><th>步骤</th><th>耗时</th></tr>
+<tr><td><strong>单票估值</strong></td><td>实时行情 → 一致预期 EPS → 前向 PE → PE 消化年限 → PEG 校验</td><td>30s</td></tr>
+<tr><td><strong>批量对比</strong></td><td>多只股票横向估值对比（PE/PEG/增速）</td><td>1min</td></tr>
+<tr><td><strong>主题研报</strong></td><td>iwencai 多关键词搜索 → 东财 PDF 交叉验证</td><td>2min</td></tr>
+<tr><td><strong>新标的调研</strong></td><td>覆盖度 → 估值 → 概念板块 → 资金流向 → 龙虎榜 → 解禁预警</td><td>1min</td></tr>
+</table>
+
+<h2>五、代码质量评估</h2>
+<h3>5.1 优势</h3>
+<table>
+<tr><th>方面</th><th>表现</th></tr>
+<tr><td>实用性</td><td>每个函数附带可运行示例和预期输出</td></tr>
+<tr><td>诚实性</td><td>明确标注数据源停供（北向）、已知 bug（akshare LHB）、类型不一致（百度）</td></tr>
+<tr><td>踩坑文档</td><td>"踩坑提醒"模式直接降低使用成本</td></tr>
+</table>
+
+<h3>5.2 问题清单</h3>
+<table>
+<tr><th>类别</th><th>问题</th><th>严重度</th></tr>
+<tr><td><strong>测试</strong></td><td>无单元测试、无集成测试</td><td>🔴 高</td></tr>
+<tr><td><strong>错误处理</strong></td><td>部分抛异常、部分静默返回空、部分 try/pass（吞异常）</td><td>🔴 高</td></tr>
+<tr><td><strong>重试/熔断</strong></td><td>无任何重试逻辑、无超时设置</td><td>🔴 高</td></tr>
+<tr><td><strong>类型安全</strong></td><td>大部分函数无类型注解</td><td>🟡 中</td></tr>
+<tr><td><strong>输入验证</strong></td><td>无股票代码格式校验</td><td>🟡 中</td></tr>
+</table>
+
+<h2>六、与 StockPulse 全面对比</h2>
+<table>
+<tr><th>维度</th><th>a-stock-data</th><th>StockPulse</th><th>优势方</th></tr>
+<tr><td>A 股行情通道</td><td>mootdx TCP（极低延迟）</td><td>AKShare HTTP + 腾讯 HTTP</td><td><strong>a-stock-data</strong></td></tr>
+<tr><td>港/美/韩/日/ETF/加密</td><td>不支持</td><td>全支持</td><td><strong>StockPulse</strong></td></tr>
+<tr><td>龙虎榜</td><td>支持（席位聚合 + 全市场）</td><td>不支持</td><td><strong>a-stock-data</strong></td></tr>
+<tr><td>限售解禁</td><td>支持（历史 + 90 天预警）</td><td>不支持</td><td><strong>a-stock-data</strong></td></tr>
+<tr><td>北向资金</td><td>支持（实时 + 自缓存历史）</td><td>不支持</td><td><strong>a-stock-data</strong></td></tr>
+<tr><td>研报</td><td>支持（列表 + PDF + 一致预期 + NL 搜索）</td><td>不支持</td><td><strong>a-stock-data</strong></td></tr>
+<tr><td>AI 分析</td><td>无</td><td>内置 3 个人设分析引擎</td><td><strong>StockPulse</strong></td></tr>
+<tr><td>交易模拟/实盘</td><td>无</td><td>支持（模拟+实盘+统计）</td><td><strong>StockPulse</strong></td></tr>
+</table>
+
+<h2>七、可借鉴项优先级</h2>
+<table>
+<tr><th>优先级</th><th>项目</th><th>实施方式</th></tr>
+<tr><td><span class="badge badge-p0">P0</span></td><td>接入 mootdx 作为 A 股行情主通道</td><td>新增 mootdx_provider.py，K 线延迟 15s→2~3s</td></tr>
+<tr><td><span class="badge badge-p0">P0</span></td><td>限售解禁日历</td><td>akshare 原生支持，新增 Provider 即可</td></tr>
+<tr><td><span class="badge badge-p0">P0</span></td><td>同花顺强势股筛选</td><td>akshare 原生支持，新增 Provider 即可</td></tr>
+<tr><td><span class="badge badge-p1">P1</span></td><td>龙虎榜席位聚合</td><td>需调东财 datacenter API</td></tr>
+<tr><td><span class="badge badge-p1">P1</span></td><td>北向资金（实时 + 历史）</td><td>同花顺 API + 本地 SQLite 缓存</td></tr>
+<tr><td><span class="badge badge-p2">P2</span></td><td>研报检索 + PDF 下载</td><td>东财 API + akshare</td></tr>
+<tr><td><span class="badge badge-p2">P2</span></td><td>估值框架（PE/PEG/消化年限）</td><td>集成到分析引擎</td></tr>
+</table>
+
+<h2>八、结论</h2>
+<p>a-stock-data 与 StockPulse 是<strong>互补关系</strong>而非竞争关系：</p>
+<ul>
+<li>a-stock-data = 纯数据采集工具（AI Skill 形态，无分析/交易/前端）</li>
+<li>StockPulse = 完整投研系统（采集→分析→交易→统计，有前端/数据库/AI 引擎）</li>
+</ul>
+<p><strong>建议行动</strong>：短期接入 mootdx 作为 A 股行情主通道，补充限售解禁和行业对比；中期接入龙虎榜、北向资金；长期完善研报检索和估值框架。</p>
+</div>
+`
+  },
+  {
+    num: '02',
+    title: 'Kronos 金融市场基础模型调研',
+    date: '2026-05-17',
+    content: `
+<div class="report-content">
+<h1>Kronos 金融市场基础模型调研报告</h1>
+<div class="meta-block">
+  <strong>调研日期</strong>：2026-05-17<br>
+  <strong>来源</strong>：GitHub shiyu-coder/Kronos | 论文 arXiv:2508.02739 | AAAI 2026<br>
+  <strong>许可证</strong>：MIT（Kronos-large 受限）
+</div>
+
+<h2>一、项目定位</h2>
+<p><strong>全球首个专为金融 K 线设计的开源基础模型</strong>，覆盖 45+ 全球交易所数据，被 AAAI 2026 录用。GitHub 已获 <strong>25.2k Stars / 4.4k Forks</strong>，是当前量化领域最受关注的开源项目之一。</p>
+<p>核心思路：将 K 线序列视为"市场语言"，用类 GPT 的自回归 Transformer 进行建模与预测，而非套用通用时序预测框架。</p>
+
+<h2>二、核心架构：两阶段框架</h2>
+<pre><code>原始 OHLCV 数据
+  → [阶段1] 专用分词器 (Tokenizer)
+      将连续多维 K 线数据量化为层级化离散 Token
+      （降低计算复杂度 60-70%）
+  → [阶段2] 自回归 Transformer (Decoder-only)
+      因果掩码 + 大规模预训练
+      → 统一处理多种量化任务</code></pre>
+
+<p>关键设计点：</p>
+<ul>
+<li><strong>离散化分词</strong>：分词器将 OHLCV 连续值映射为离散 token，类似 BPE 对文字的处理</li>
+<li><strong>因果掩码</strong>：确保预测只依赖历史数据，无未来信息泄露</li>
+<li><strong>上下文长度</strong>：512 Token（mini 版 2048），约等价于数天分钟级行情窗口</li>
+<li><strong>多任务统一</strong>：同一套模型支持价格预测、波动率预测、合成 K 线生成等多种任务</li>
+</ul>
+
+<h2>三、模型家族</h2>
+<table>
+<tr><th>模型</th><th>参数量</th><th>上下文长度</th><th>定位</th><th>开放状态</th></tr>
+<tr><td>Kronos-mini</td><td>4.1M</td><td>2048</td><td>边缘部署 / 原型验证</td><td>✅ MIT 开源</td></tr>
+<tr><td>Kronos-small</td><td>24.7M</td><td>512</td><td>单资产预测</td><td>✅ MIT 开源</td></tr>
+<tr><td>Kronos-base</td><td>102.3M</td><td>512</td><td>组合管理</td><td>✅ MIT 开源</td></tr>
+<tr><td>Kronos-large</td><td>499.2M</td><td>512</td><td>机构级应用</td><td>❌ 受限（需机构合作）</td></tr>
+</table>
+
+<h2>四、训练数据</h2>
+<ul>
+<li><strong>规模</strong>：12 亿+ 条 K 线记录</li>
+<li><strong>来源</strong>：45+ 全球交易所，多市场、多周期联合预训练</li>
+<li><strong>细调支持</strong>：提供 A 股细调脚本（基于 Qlib 集成），适合本地化迁移</li>
+</ul>
+
+<h2>五、性能指标</h2>
+<table>
+<tr><th>任务</th><th>指标</th><th>结果</th></tr>
+<tr><td>价格序列预测 RankIC</td><td>vs 最佳 TSFM</td><td><strong>+93%</strong></td></tr>
+<tr><td>价格序列预测 RankIC</td><td>vs 最佳非预训练基线</td><td>+87%</td></tr>
+<tr><td>波动率预测 MAE</td><td>绝对降低</td><td>-9%</td></tr>
+<tr><td>合成 K 线生成保真度</td><td>生成质量提升</td><td>+22%</td></tr>
+<tr><td>加密货币小时级方向准确率</td><td>第三方评测</td><td>58–65%</td></tr>
+<tr><td>细调后精度提升（目标资产）</td><td>迁移效果</td><td>+15~25%</td></tr>
+</table>
+
+<h2>六、快速接入</h2>
+<p><strong>环境要求</strong>：Python 3.10+，16GB RAM，可选 CUDA 11.8+</p>
+<pre><code>from kronos import KronosPredictor
+
+# 从 HuggingFace Hub 加载模型
+predictor = KronosPredictor.from_pretrained("shiyu-coder/Kronos-base")
+
+# 批量预测（支持多序列并行推理）
+forecasts = predictor.predict_batch(
+    historical_ohlcv,      # 历史 OHLCV 数据
+    future_timestamps,     # 待预测时间戳
+    temperature=0.8,       # 控制预测多样性
+    top_p=0.9              # 核采样参数
+)</code></pre>
+
+<h2>七、与 StockPulse 的整合价值</h2>
+<table>
+<tr><th>现有模块</th><th>可整合方向</th></tr>
+<tr><td>stock_service.py（A 股行情）</td><td>接入 Kronos-base + Qlib 细调，生成 A 股 K 线预测信号</td></tr>
+<tr><td>analyzer.py（AI 文章分析）</td><td>结合 Kronos 价格预测，为 AI 多视角分析补充量化维度</td></tr>
+<tr><td>services/indicators.py（RSI/MACD 等）</td><td>Kronos 预测结果作为额外 alpha 因子，与传统指标联合使用</td></tr>
+<tr><td>watchlist / 模拟交易</td><td>Kronos 预测信号驱动自动开仓建议或回测验证</td></tr>
+</table>
+
+<p><strong>整合建议</strong>：先用 Kronos-small 在现有 watchlist 标的上做离线预测验证，确认信号质量后再接入实盘推荐流程。</p>
+
+<h2>八、风险与局限</h2>
+<ul>
+<li><strong>large 模型未开源</strong>：499.2M 参数的最强版本仅限机构合作，开源版本上限为 base（102.3M）</li>
+<li><strong>方向准确率上限</strong>：65% 方向准确率在噪声较大的市场中仍需配合止损策略</li>
+<li><strong>超参敏感性</strong>：temperature / top_p 对预测分布影响较大，需针对目标市场调参</li>
+<li><strong>延迟风险</strong>：base/small 版本在 CPU 环境下推理延迟较高，不适合高频场景</li>
+</ul>
+</div>
+`
+  },
+  {
+    num: '03',
+    title: 'Claude for Financial Services 调研报告',
+    date: '2026-05-17',
+    content: `
+<div class="report-content">
+<h1>Claude for Financial Services 调研报告</h1>
+<div class="meta-block">
+  <strong>调研日期</strong>：2026-05-17<br>
+  <strong>来源</strong>：GitHub anthropics/financial-services<br>
+  <strong>许可证</strong>：Apache 2.0 | Stars：23.9k | Forks：3.3k
+</div>
+
+<h2>一、项目定位</h2>
+<p>Anthropic 官方发布的<strong>金融服务领域参考实现</strong>，提供面向投行、股票研究、私募、财富管理等垂直场景的 Agent 集合、技能插件和数据连接器。同一套系统提示词和技能可部署在 Claude Cowork UI、Claude Code CLI 或 Managed Agents API（无头模式）三个环境中。</p>
+
+<h2>二、核心架构：三层模型</h2>
+<pre><code>┌──────────────────────────────────────────────┐
+│  AGENTS（命名工作流，11 个）                  │
+│  Pitch Agent / Market Researcher /            │
+│  GL Reconciler / Month-End Closer / ...       │
+└──────────────────────────────────────────────┘
+              ↓ 调用
+┌──────────────────────────────────────────────┐
+│  VERTICAL PLUGINS（垂直插件，含技能+命令）    │
+│  financial-analysis（核心）                   │
+│  investment-banking / equity-research /       │
+│  private-equity / wealth-management /         │
+│  fund-admin / operations                      │
+└──────────────────────────────────────────────┘
+              ↓ 接入数据
+┌──────────────────────────────────────────────┐
+│  MCP CONNECTORS（11 个数据源）                │
+│  Daloopa / Morningstar / S&P Global /         │
+│  FactSet / Moody's / LSEG / PitchBook / ...   │
+└──────────────────────────────────────────────┘</code></pre>
+
+<h2>三、Agent 生态（11 个）</h2>
+<table>
+<tr><th>类别</th><th>Agent</th><th>核心工作流</th><th>输出物</th></tr>
+<tr><td>咨询覆盖</td><td><strong>Pitch Agent</strong></td><td>可比交易/LBO 分析</td><td>带品牌的完整 Pitch Deck</td></tr>
+<tr><td>咨询覆盖</td><td><strong>Meeting Prep Agent</strong></td><td>会前研究</td><td>简报包</td></tr>
+<tr><td>研究建模</td><td><strong>Market Researcher</strong></td><td>行业/主题分析</td><td>行业综述 + 同业比较</td></tr>
+<tr><td>研究建模</td><td><strong>Earnings Reviewer</strong></td><td>财报电话 + 公告</td><td>模型更新 + 研报草稿</td></tr>
+<tr><td>研究建模</td><td><strong>Model Builder</strong></td><td>多模型构建</td><td>DCF / LBO / 三报表（Excel）</td></tr>
+<tr><td>基金运营</td><td><strong>GL Reconciler</strong></td><td>科目差异追踪</td><td>根因分析 + 审批路由</td></tr>
+<tr><td>基金运营</td><td><strong>Month-End Closer</strong></td><td>月末关账流程</td><td>计提 / 滚动表 / 差异说明</td></tr>
+<tr><td>运营合规</td><td><strong>KYC Screener</strong></td><td>开户文件解析</td><td>规则引擎标记 + 缺口识别</td></tr>
+</table>
+
+<h2>四、垂直插件命令速览</h2>
+<h3>financial-analysis（核心）</h3>
+<table>
+<tr><th>命令</th><th>功能</th></tr>
+<tr><td><code>/comps</code></td><td>交易可比（Trading Multiples vs. 同业）</td></tr>
+<tr><td><code>/dcf</code></td><td>DCF 模型（含 WACC、敏感性分析）</td></tr>
+<tr><td><code>/lbo</code></td><td>杠杆收购模型</td></tr>
+<tr><td><code>/3-statement-model</code></td><td>完整三报表模型</td></tr>
+<tr><td><code>/debug-model</code></td><td>Excel 公式审计 + 硬编码检测</td></tr>
+</table>
+
+<h3>equity-research</h3>
+<p><code>/earnings</code> / <code>/earnings-preview</code> / <code>/initiate</code> / <code>/model-update</code> / <code>/morning-note</code> / <code>/sector</code> / <code>/thesis</code> / <code>/catalysts</code> / <code>/screen</code></p>
+
+<h2>五、MCP 数据连接器（11 个）</h2>
+<table>
+<tr><th>数据源</th><th>数据类型</th></tr>
+<tr><td>Daloopa</td><td>市场 / 公司数据</td></tr>
+<tr><td>Morningstar</td><td>基金 / ETF</td></tr>
+<tr><td>S&P Global (Kensho)</td><td>Capital IQ 数据</td></tr>
+<tr><td>FactSet</td><td>股票研究 / 预测</td></tr>
+<tr><td>Moody's</td><td>信用评级 / 分析</td></tr>
+<tr><td>LSEG (Refinitiv)</td><td>债券 / 外汇 / 期权数据</td></tr>
+<tr><td>PitchBook</td><td>PE / VC 数据</td></tr>
+</table>
+
+<h2>六、三种部署方式</h2>
+<h3>方式一：Claude Cowork（UI）</h3>
+<p>Settings → Plugins → Add plugin → 粘贴仓库地址 → 从市场选择所需 Agent / 垂直插件</p>
+
+<h3>方式二：Claude Code（CLI）</h3>
+<pre><code>claude plugin marketplace add anthropics/financial-services
+claude plugin install financial-analysis@claude-for-financial-services
+claude plugin install pitch-agent@claude-for-financial-services</code></pre>
+
+<h3>方式三：Managed Agents API（无头/生产环境）</h3>
+<pre><code>export ANTHROPIC_API_KEY=sk-ant-...
+scripts/deploy-managed-agent.sh gl-reconciler</code></pre>
+
+<h2>七、与 StockPulse 的整合价值</h2>
+<table>
+<tr><th>本项目现有模块</th><th>可借鉴方向</th></tr>
+<tr><td>analyzer.py（AI 文章分析）</td><td>参考 equity-research 垂直插件的 /earnings / /thesis 技能设计，优化分析提示词结构</td></tr>
+<tr><td>agents/personas.py（3 个 AI 人设）</td><td>参考多 Agent 子 Agent 委托模式，实现人设间互相调用</td></tr>
+<tr><td>market/ Provider 模式</td><td>参考 11 个 MCP 连接器设计，规范化对接 AKShare / CoinGecko / 腾讯 API</td></tr>
+<tr><td>模拟/实盘交易</td><td>参考 /rebalance / /tlh 技能设计调仓建议与税损规则引擎</td></tr>
+</table>
+
+<p><strong>最高价值参考</strong>：<code>scripts/orchestrate.py</code> 的多 Agent 编排事件循环，以及技能系统的 Markdown+YAML 纯文件配置模式（零构建、热更新）。</p>
+
+<h2>八、重要限制与合规声明</h2>
+<blockquote>⚠️ 本项目不构成投资、法律、税务或会计建议。所有 Agent 输出均为草稿，须经有资质的专业人员审核后方可使用。</blockquote>
+<p>Agent <strong>不会</strong>：做出投资推荐、执行交易、绑定风险敞口、过账分录、批准开户申请。</p>
+</div>
+`
+  },
+  {
+    num: '04',
+    title: '个人 A 股交易辅助系统参考架构调研',
+    date: '2026-05-17',
+    content: `
+<div class="report-content">
+<h1>个人 A 股交易辅助系统参考架构调研报告</h1>
+<div class="meta-block">
+  <strong>调研日期</strong>：2026-05-17<br>
+  <strong>来源</strong>：公开分享的个人交易系统设计图（社区截图）<br>
+  <strong>系统别名</strong>：TradingAgents 个人版
+</div>
+
+<h2>一、系统定位</h2>
+<p><strong>目标用户</strong>：中低频个人 A 股投资者（不做高频/日内，以日线、隔日为主）</p>
+<p><strong>核心理念</strong>：把"选股 → 计划 → 盯盘 → 复盘 → 迭代"变成稳定可执行的流程，而非依赖盘感或随机操作。</p>
+
+<h3>设计原则</h3>
+<ul>
+<li><strong>稳定优先</strong> — 宁可漏信号，不做噪音</li>
+<li><strong>默认静默</strong> — 只在触发阈值时推送，不做状态播报</li>
+<li><strong>人工+AI 协作</strong> — AI 负责数据聚合与规则判断，人工做最终决策</li>
+<li><strong>可追溯</strong> — 每次推送同时落盘，便于后续复盘迭代</li>
+</ul>
+
+<h2>二、总体架构</h2>
+<p>系统由四层构成，单向数据流：</p>
+<pre><code>信息源 (Data Sources)
+    ↓
+DataHub（统一数据层 + 缓存落库）
+    ↓
+智能体系统 (Agents)：主调度 + 策略 A (Joyce) + 策略 B (Brooks)
+    ↓
+调度与输出 (Scheduler + 飞书机器人)</code></pre>
+
+<h3>2.1 信息源层</h3>
+<table>
+<tr><th>数据源</th><th>类型</th><th>说明</th></tr>
+<tr><td><strong>Tushare Pro</strong></td><td>结构化历史数据</td><td>日线/估值/财报/业绩，盘后延时更新</td></tr>
+<tr><td><strong>新浪财经/智研 MCP</strong></td><td>实时/分钟级</td><td>A/HK/US 实时报价（按额度限流），分钟K可选</td></tr>
+<tr><td><strong>用户手动导入</strong></td><td>非结构化</td><td>事件要点、公告摘要、观察清单、仓位初始化</td></tr>
+</table>
+
+<h3>2.2 DataHub 层</h3>
+<table>
+<tr><th>能力</th><th>实现方式</th></tr>
+<tr><td>增量拉取</td><td>仅拉取缺失/更新数据，不全量重建</td></tr>
+<tr><td>去重与补缺</td><td>检测缺失日期、异常值、延迟数据</td></tr>
+<tr><td>质量检查</td><td>对缺失率/异常值/更新时间窗口做门控</td></tr>
+<tr><td>多源降级</td><td>某源失败时自动切换备源</td></tr>
+<tr><td>落库</td><td>SQLite（轻量）或 DuckDB（分析型），结构统一</td></tr>
+</table>
+
+<h3>2.3 智能体系统</h3>
+<table>
+<tr><th>Agent</th><th>角色</th><th>核心工作</th></tr>
+<tr><td><strong>主调度 Agent</strong></td><td>编排者</td><td>选择场景、合并 A/B 输出、生成一页纸结论</td></tr>
+<tr><td><strong>Joyce（策略 A）</strong></td><td>VCP 价值龙头趋势</td><td>市场温度计→仓位上限；赛道白名单+龙头过滤→候选池 TopN</td></tr>
+<tr><td><strong>Brooks（策略 B）</strong></td><td>裸K价格行为</td><td>结构三态；High1/High2 信号+止损规则；强调尾盘确认</td></tr>
+</table>
+
+<h2>三、四大场景流程</h2>
+
+<h3>场景 01：盘前计划（Plan）</h3>
+<p><strong>触发时机</strong>：开盘前（如早 8:30）</p>
+<pre><code>DataHub 增量拉取 + 缓存落库（去重/补缺/质量检查）
+    ↓
+策略 Agent A (Joyce)：
+  市场温度计 → 今日仓位上限
+  赛道白名单 + 龙头过滤 → 候选池 TopN
+  盘前执行纪律
+    ↓
+策略 Agent B (Brooks)：
+  趋势/区间/反转三态判断
+  High1/High2 信号 + 止损规则
+    ↓
+主调度 Agent：
+  合并多方结论 → 一页纸
+  声明数据截止点 & 不可得项</code></pre>
+
+<p><strong>输出</strong>（飞书推送）：</p>
+<ol>
+<li>今日市场假设（宏观情绪/板块轮动）</li>
+<li>候选池 TopN（每只标的 3 条进池理由）</li>
+<li>持仓纪律/仓位上限</li>
+<li>观察阈值与风险清单</li>
+</ol>
+
+<h3>场景 02：盘中盯盘（Observe）</h3>
+<p><strong>触发时机</strong>：低频，仅阈值触发，默认静默</p>
+<pre><code>调度器：按市场时段低频巡检
+  A股 开盘/尾盘加密，其余 5-15 分钟
+  港/美：更低频（节省额度）
+    ↓
+规则引擎：只判断"触发/不触发"
+  涨跌幅阈值 | 连续异动 | 量能突变 | 重大事件
+    ↓
+降噪模块（硬规则）：
+  合并窗口 15 分钟（同标的多次触发合并）
+  单日上限 N 条（如 5 条）
+  只输出"触发项"，不刷常规状态</code></pre>
+
+<p><strong>输出</strong>：触发类型 | 标的 | 触发依据（价位/阈值/时间） | 建议动作</p>
+
+<h3>场景 03：盘后复盘（Review）</h3>
+<p><strong>触发时机</strong>：收盘后（如 15:30）</p>
+<pre><code>DataHub 入库 + 派生指标：
+  收益/回撤/振幅/趋势强弱/量价结构等
+  写入 bars_daily / daily_basic / signals
+    ↓
+策略复盘 — Joyce + Brooks 双视角：
+  Joyce：主线/龙头/仓位纪律是否执行到位
+  Brooks：结构三态 + 信号是否确认（尾盘）
+    ↓
+质量门控：
+  若数据缺失/延迟 → 报告降级并标注"仅供参考"
+  若盘中误报 → 更新阈值/合并策略/观察池</code></pre>
+
+<p><strong>输出</strong>：市场复盘 | 持仓复盘 | 候选池更新 | 明日计划 | 风险清单</p>
+
+<h3>场景 04：选股与题材挖掘（Discovery）</h3>
+<p><strong>触发时机</strong>：周末或行情平淡时段，非每日强制</p>
+<pre><code>第一层：可交易 & 可研究
+  剔除：ST/停牌/流动性差/财务异常
+  保留：成交额/市值/行业符合门槛
+    ↓
+第二层：策略打分（多维度）
+  VCP/趋势强度：缩量回调、关键均线、波动收缩
+  基本面/预期：业绩预告、估值合理性、确定性信号
+  风险：高位放量滞涨、补涨龙、跌破结构位
+    ↓
+第三层：生成"研究任务"
+  对 TopN 标的：产出研究提纲/关键问题/验证清单
+  可选：一键调用 upstream 深研</code></pre>
+
+<h2>四、核心设计亮点</h2>
+
+<h3>4.1 降噪优先设计</h3>
+<p>系统在盘中明确内置"降噪模块"，以硬规则限制推送频次：合并窗口 15 分钟、单日上限 N 条、只输出触发项。<strong>保护注意力是核心约束之一</strong>，而非事后优化。</p>
+
+<h3>4.2 数据质量门控</h3>
+<p>Review 场景明确引入质量门控节点：数据缺失/延迟 → 报告自动降级并标注；盘中误报 → 触发参数更新（而非静默接受）。<strong>"把系统变好"写进流程</strong>，质量改进是每日必须项。</p>
+
+<h3>4.3 双视角策略设计</h3>
+<p>Joyce（趋势/基本面/中长线）vs. Brooks（价格行为/结构/短线）不做合并，各自输出独立结论，最终由主调度 Agent 合并。避免了单一策略的盲点，同时保留两种视角的完整性。</p>
+
+<h3>4.4 推送即落盘</h3>
+<p>每次飞书推送同步写入本地（watchlist / signals / run_logs），保证可回溯、可迭代、可审计。Discovery 场景的候选池可与上周对比，支持持续迭代。</p>
+
+<h2>五、与 StockPulse 的对比</h2>
+<table>
+<tr><th>维度</th><th>参考系统</th><th>StockPulse</th></tr>
+<tr><td>定位</td><td>纯个人 A 股，极度精简</td><td>多市场全功能平台</td></tr>
+<tr><td>推送机制</td><td>飞书机器人（移动端友好）</td><td>Web 前端（桌面为主）</td></tr>
+<tr><td>降噪设计</td><td>显式硬规则（15分钟合并/单日上限）</td><td>❌ 无显式降噪规则</td></tr>
+<tr><td>数据质量门控</td><td>内置质量降级机制</td><td>❌ 无</td></tr>
+<tr><td>Agent 编排</td><td>显式主调度 + 双策略结构</td><td>3 个人设并行，无主调度</td></tr>
+<tr><td>Discovery 场景</td><td>三层过滤 + 研究任务生成</td><td>iwencai 自然语言选股</td></tr>
+<tr><td>场景化编排</td><td>Plan/Observe/Review/Discovery</td><td>❌ 无场景区分</td></tr>
+</table>
+
+<h2>六、可借鉴项与优先级</h2>
+<table>
+<tr><th>优先级</th><th>借鉴项</th><th>具体实施</th></tr>
+<tr><td><span class="badge badge-p0">P0</span></td><td>场景化编排（Plan/Observe/Review）</td><td>在现有 AI 分析流程增加"场景上下文"，让 3 个人设分析器知道当前是盘前/盘中/盘后</td></tr>
+<tr><td><span class="badge badge-p0">P0</span></td><td>降噪硬规则</td><td>为未来推送功能预设合并窗口 + 单日上限参数，写进 config</td></tr>
+<tr><td><span class="badge badge-p0">P0</span></td><td>推送即落盘（run_logs/data_quality）</td><td>现有分析结果已落 DB，但缺少 run_logs / data_quality_report 两类结构化记录</td></tr>
+<tr><td><span class="badge badge-p1">P1</span></td><td>数据质量门控</td><td>在 stock_utils.py 缓存体系增加质量检查：缺失率/异常值/更新时间窗口</td></tr>
+<tr><td><span class="badge badge-p1">P1</span></td><td>主调度 Agent</td><td>在 analyzer.py 上层增加编排层，合并 3 个人设输出，生成"一页纸"结论</td></tr>
+<tr><td><span class="badge badge-p1">P1</span></td><td>Discovery 三层过滤</td><td>在 iwencai_service.py 基础上，增加 VCP 形态评分 + 基本面确定性信号层</td></tr>
+<tr><td><span class="badge badge-p2">P2</span></td><td>飞书机器人推送</td><td>新增 notification/feishu.py，接入飞书 Webhook</td></tr>
+<tr><td><span class="badge badge-p2">P2</span></td><td>盘中实时巡检</td><td>利用现有腾讯 API 实时行情，增加定时任务 + 阈值规则引擎</td></tr>
+</table>
+
+<h2>七、结论</h2>
+<p>这套参考架构最大的价值不在于技术复杂度（技术栈相对简单），而在于<strong>流程设计的完整性与纪律性</strong>：</p>
+<ul>
+<li><strong>完整闭环</strong>：选股 → 计划 → 盯盘 → 复盘 → 迭代，每个场景都有明确的输入/输出/落盘</li>
+<li><strong>纪律内化</strong>：降噪、质量门控、执行纪律不依赖人的自律，而是写进系统规则</li>
+<li><strong>轻量可执行</strong>：没有过度工程化，以飞书推送为交互界面，极低操作成本</li>
+</ul>
+<p>StockPulse 已具备数据采集、AI 分析、模拟交易的能力，但缺少<strong>场景编排层</strong>。引入 Plan/Observe/Review/Discovery 四场景框架，是当前阶段最值得借鉴的单点改进。</p>
+</div>
+`
+  }
+];
+
+let current = 0;
+
+function show(idx) {
+  current = idx;
+  const r = REPORTS[idx];
+
+  // Update sidebar
+  document.querySelectorAll('.report-card').forEach((c, i) => {
+    c.classList.toggle('active', i === idx);
+  });
+
+  // Update dots
+  document.querySelectorAll('.dot').forEach((d, i) => {
+    d.classList.toggle('active', i === idx);
+    d.classList.toggle('done', i < idx);
+  });
+  document.getElementById('progress-label').textContent = (idx + 1) + ' / ' + REPORTS.length;
+
+  // Update topbar
+  document.getElementById('tb-num').textContent = r.num;
+  document.getElementById('tb-title').textContent = r.title;
+  document.getElementById('tb-date').textContent = r.date;
+
+  // Update content
+  const content = document.getElementById('content');
+  content.innerHTML = r.content;
+  content.scrollTop = 0;
+}
+
+// Keyboard navigation
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+    if (current < REPORTS.length - 1) show(current + 1);
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+    if (current > 0) show(current - 1);
+  }
+});
+
+// Init
+show(0);
+</script>
+</body>
+</html>

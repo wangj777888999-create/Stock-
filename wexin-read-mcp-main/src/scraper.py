@@ -26,33 +26,35 @@ class WeixinScraper:
         self.playwright = None
         self.browser: Browser | None = None
         self.context: BrowserContext | None = None
+        self._init_lock = asyncio.Lock()
 
     async def initialize(self):
-        """初始化浏览器（若已初始化则跳过）"""
-        if self.browser:
-            return
-        self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(
-            headless=True,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--disable-features=IsolateOrigins,site-per-process",
-            ],
-        )
-        self.context = await self.browser.new_context(
-            viewport={"width": 1920, "height": 1080},
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/125.0.0.0 Safari/537.36"
-            ),
-            proxy={"server": "direct"},  # 绕过系统代理，避免 VPN 干扰国内站点访问
-            java_script_enabled=True,
-        )
-        # 隐藏自动化标志
-        await self.context.add_init_script(
-            "Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
-        )
+        """初始化浏览器（若已初始化则跳过，加锁防止并发重复初始化）"""
+        async with self._init_lock:
+            if self.browser:
+                return
+            self.playwright = await async_playwright().start()
+            self.browser = await self.playwright.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                ],
+            )
+            self.context = await self.browser.new_context(
+                viewport={"width": 1920, "height": 1080},
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/125.0.0.0 Safari/537.36"
+                ),
+                proxy={"server": "direct"},  # 绕过系统代理，避免 VPN 干扰国内站点访问
+                java_script_enabled=True,
+            )
+            # 隐藏自动化标志
+            await self.context.add_init_script(
+                "Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
+            )
 
     async def fetch_article(self, url: str) -> dict:
         """

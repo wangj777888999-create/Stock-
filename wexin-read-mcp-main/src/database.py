@@ -12,6 +12,8 @@ logger = logging.getLogger("database")
 
 _db: sqlite3.Connection | None = None
 _lock = threading.Lock()
+# 序列化所有写操作，防止调度线程与请求线程并发写入同一连接
+write_lock = threading.Lock()
 
 
 def get_db() -> sqlite3.Connection:
@@ -278,11 +280,11 @@ def _migrate():
     # 角色数据迁移：创建默认角色并挂入旧交易
     existing = _db.execute("SELECT id FROM roles LIMIT 1").fetchone()
     if not existing:
-        _db.execute(
+        cur = _db.execute(
             "INSERT INTO roles (name, initial_capital, notes) VALUES (?, ?, ?)",
             ("默认账户", 100000.0, "从旧版单账户模拟交易迁移"),
         )
-        default_id = _db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        default_id = cur.lastrowid
         _db.execute(
             "UPDATE sim_trades SET role_id = ? WHERE role_id IS NULL",
             (default_id,),

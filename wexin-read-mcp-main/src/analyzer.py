@@ -264,6 +264,7 @@ confidence 含义：
 
         system = "你是股票文本扫描助手，任务是从文章中提取所有被提及的股票名称。只做扫描，不做荐股判断。输出严格 JSON。"
 
+        raw = ""
         try:
             client = get_async_proxy_client()
             response = await client.post(
@@ -304,7 +305,6 @@ confidence 含义：
             mentions = parsed.get("mentions", [])
 
             # 补充 article_url（AI 可能遗漏）
-            url_map = {a.get("title", ""): a.get("url", "") for a in articles}
             for m in mentions:
                 if not m.get("article_url"):
                     m["article_url"] = ""

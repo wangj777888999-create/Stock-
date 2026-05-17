@@ -249,7 +249,7 @@ class FundProvider(MarketProvider):
             try:
                 full_code = None
                 if not row.empty:
-                    full_code = _clean(row.iloc[0] if hasattr(row, 'iloc') else row.get("代码"))
+                    full_code = _clean(row.get("代码"))
                 if not full_code:
                     full_code = f"sz{code}" if code.startswith(("0", "3", "15")) else f"sh{code}"
 
