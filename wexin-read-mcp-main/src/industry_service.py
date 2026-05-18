@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import date
 from typing import AsyncGenerator
 
 import httpx
@@ -116,7 +117,10 @@ async def stream_analysis(industry: str, purpose: str) -> AsyncGenerator[str, No
 
     purpose_label = _PURPOSE_LABELS.get(purpose, "投资选股")
     focus = _PURPOSE_FOCUS.get(purpose, _PURPOSE_FOCUS["investment"])
-    user_prompt = f"""请对「{industry}」进行行业分析。
+    today = date.today().isoformat()
+    user_prompt = f"""当前日期：{today}。请以该日期为分析基准，所有数据、事件、时间节点均需对齐到 {today} 附近，禁止引用过时数据。
+
+请对「{industry}」进行行业分析。
 
 分析目的：{purpose_label}
 {focus}

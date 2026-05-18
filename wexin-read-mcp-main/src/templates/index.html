@@ -2050,7 +2050,7 @@ textarea.form-input {
           <!-- 前十大持仓 -->
           <div class="card">
             <div class="card-header">
-              <div class="card-title">前十大持仓</div>
+              <div class="card-title">前十大持仓 <span id="holdingsQuarter" style="font-size:11px;color:var(--ink-3);font-weight:400;"></span></div>
             </div>
             <div class="card-body" style="overflow-x:auto;padding:0;">
               <div id="fundHoldingsBody" style="max-height:400px;overflow-y:auto;"></div>
@@ -5303,7 +5303,7 @@ async function selectFund(code, name) {
       document.getElementById('fundInfoBody').innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '加载失败') + '</div>';
       return;
     }
-    const { info, kline, holdings } = json.data;
+    const { info, kline, holdings, holdings_quarter } = json.data;
 
     // 渲染基本信息
     const infoEl = document.getElementById('fundInfoBody');
@@ -5347,7 +5347,9 @@ async function selectFund(code, name) {
       chartEl.innerHTML = '<div class="empty-state" style="padding:40px;">暂无K线数据</div>';
     }
 
-    // 渲染持仓
+    // 渲染持仓（标注季度来源，非实时数据）
+    const qEl = document.getElementById('holdingsQuarter');
+    if (holdings_quarter) { qEl.textContent = '· ' + holdings_quarter + '（季度披露，非实时）'; } else { qEl.textContent = ''; }
     const holdEl = document.getElementById('fundHoldingsBody');
     if (holdings && holdings.length) {
       let h = '<table class="data-table"><thead><tr><th>排名</th><th>代码</th><th>股票名称</th><th>持仓占比</th><th>持股数量</th><th>持仓市值</th></tr></thead><tbody>';

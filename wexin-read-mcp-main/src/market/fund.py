@@ -277,8 +277,9 @@ class FundProvider(MarketProvider):
             except Exception as e:
                 logger.warning(f"K线获取失败({code}): {e}")
 
-            # 3. 前十大持仓 — 尝试 AKShare
+            # 3. 前十大持仓 — 尝试 AKShare（仅季度披露数据，非实时）
             holdings = []
+            holdings_quarter = None
             try:
                 import akshare as ak
                 saved = _no_proxy_env()
@@ -292,6 +293,7 @@ class FundProvider(MarketProvider):
                     # 接口返回多季度数据，只取最新一个季度的前十
                     if "季度" in hold_df.columns:
                         latest_q = hold_df["季度"].iloc[0]
+                        holdings_quarter = str(latest_q)
                         hold_df = hold_df[hold_df["季度"] == latest_q]
                     for _, r in hold_df.head(10).iterrows():
                         holdings.append({
@@ -304,7 +306,7 @@ class FundProvider(MarketProvider):
             except Exception as e:
                 logger.warning(f"基金持仓获取失败({code}): {e}")
 
-            resp = {"success": True, "data": {"info": info, "kline": kline, "holdings": holdings}}
+            resp = {"success": True, "data": {"info": info, "kline": kline, "holdings": holdings, "holdings_quarter": holdings_quarter}}
             cache.set(ck, resp, _DF_TTL)
             return resp
         except Exception as e:
