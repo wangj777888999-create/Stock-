@@ -1,7 +1,6 @@
 """自定义分类资金流向 — 分类 CRUD + 股票管理 + 流向聚合。"""
 import asyncio
 import logging
-import re
 from fastapi import APIRouter
 from pydantic import BaseModel
 from database import get_db
@@ -10,17 +9,6 @@ from stock_service import StockService
 router = APIRouter(prefix="/api/flow-category", tags=["flow-category"])
 logger = logging.getLogger(__name__)
 _svc = StockService()
-
-# 股票代码合法字符：字母、数字、点（港股如 00700.HK）
-_SYMBOL_RE = re.compile(r'^[A-Za-z0-9\.]{1,20}$')
-
-
-def _validate_symbol(symbol: str) -> str | None:
-    """校验并标准化股票代码，不合法返回 None。"""
-    s = symbol.strip().upper()
-    if not s or not _SYMBOL_RE.match(s):
-        return None
-    return s
 
 
 def _parse_yi(s) -> float:
@@ -111,7 +99,9 @@ async def rename_category(cat_id: int, req: CategoryRename):
     if not name:
         return {"success": False, "error": "分类名称不能为空"}
     db = get_db()
-    db.execute("UPDATE flow_categories SET name=? WHERE id=?", (name, cat_id))
+    cur = db.execute("UPDATE flow_categories SET name=? WHERE id=?", (name, cat_id))
+    if cur.rowcount == 0:
+        return {"success": False, "error": "分类不存在"}
     db.commit()
     return {"success": True}
 
