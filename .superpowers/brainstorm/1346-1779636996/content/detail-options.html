@@ -1,0 +1,175 @@
+<h2>点击分类卡片后 — 明细页布局</h2>
+<p class="subtitle">以"机器人"分类为例，进入后你想看到什么？</p>
+
+<div class="cards">
+
+  <!-- Option A: Table with all 4 order types -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-size:11px;padding:8px;background:#0f0f0f;border-radius:6px;color:#ccc">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="color:#e8b84b;font-weight:bold">机器人 · 今日资金流向</span>
+          <span style="background:#4ade8022;color:#4ade80;padding:2px 6px;border-radius:4px;font-size:10px">主力净流入 +3.2亿</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:10px">
+          <thead>
+            <tr style="color:#666;border-bottom:1px solid #333">
+              <td style="padding:3px 4px">股票</td>
+              <td style="padding:3px 4px;text-align:right;color:#a78bfa">超大单</td>
+              <td style="padding:3px 4px;text-align:right;color:#60a5fa">大单</td>
+              <td style="padding:3px 4px;text-align:right;color:#34d399">中单</td>
+              <td style="padding:3px 4px;text-align:right;color:#fb923c">小单</td>
+              <td style="padding:3px 4px;text-align:right">主力净额</td>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #1f1f1f">
+              <td style="padding:3px 4px">机器人</td>
+              <td style="padding:3px 4px;text-align:right;color:#4ade80">+1.1亿</td>
+              <td style="padding:3px 4px;text-align:right;color:#4ade80">+0.3亿</td>
+              <td style="padding:3px 4px;text-align:right;color:#f87171">-0.1亿</td>
+              <td style="padding:3px 4px;text-align:right;color:#f87171">-0.2亿</td>
+              <td style="padding:3px 4px;text-align:right;color:#4ade80">+1.1亿</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1f1f1f">
+              <td style="padding:3px 4px">华中数控</td>
+              <td style="padding:3px 4px;text-align:right;color:#4ade80">+0.8亿</td>
+              <td style="padding:3px 4px;text-align:right;color:#f87171">-0.1亿</td>
+              <td style="padding:3px 4px;text-align:right;color:#888">0</td>
+              <td style="padding:3px 4px;text-align:right;color:#f87171">-0.1亿</td>
+              <td style="padding:3px 4px;text-align:right;color:#4ade80">+0.7亿</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1f1f1f">
+              <td style="padding:3px 4px">三丰智能</td>
+              <td style="padding:3px 4px;text-align:right;color:#f87171">-0.3亿</td>
+              <td style="padding:3px 4px;text-align:right;color:#f87171">-0.2亿</td>
+              <td style="padding:3px 4px;text-align:right;color:#4ade80">+0.1亿</td>
+              <td style="padding:3px 4px;text-align:right;color:#4ade80">+0.2亿</td>
+              <td style="padding:3px 4px;text-align:right;color:#f87171">-0.2亿</td>
+            </tr>
+            <tr style="color:#e8b84b;font-weight:bold;border-top:1px solid #444;margin-top:4px">
+              <td style="padding:3px 4px">合计</td>
+              <td style="padding:3px 4px;text-align:right;color:#4ade80">+1.6亿</td>
+              <td style="padding:3px 4px;text-align:right;color:#888">0</td>
+              <td style="padding:3px 4px;text-align:right;color:#f87171">-0.1亿</td>
+              <td style="padding:3px 4px;text-align:right;color:#f87171">-0.1亿</td>
+              <td style="padding:3px 4px;text-align:right;color:#4ade80">+3.2亿</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — 汇总表格（含合计行）</h3>
+      <p>所有股票逐行排列，最下方有各列合计。超大/大/中/小单分列显示，一目了然哪类资金在进出。</p>
+    </div>
+  </div>
+
+  <!-- Option B: Bar chart per stock -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-size:11px;padding:8px;background:#0f0f0f;border-radius:6px;color:#ccc">
+        <div style="color:#e8b84b;font-weight:bold;margin-bottom:6px">机器人 · 各股资金流向</div>
+        <div style="display:flex;flex-direction:column;gap:5px">
+          <!-- Stock row with bar -->
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px">
+              <span>机器人 300024</span><span style="color:#4ade80">净流入 +1.1亿</span>
+            </div>
+            <div style="display:flex;height:12px;border-radius:2px;overflow:hidden;gap:1px">
+              <div style="flex:3;background:#a78bfa99" title="超大单流入"></div>
+              <div style="flex:2;background:#60a5fa99" title="大单流入"></div>
+              <div style="flex:1;background:#f8717166" title="中单流出"></div>
+              <div style="flex:1;background:#fb923c66" title="小单流出"></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px">
+              <span>华中数控 000066</span><span style="color:#4ade80">净流入 +0.7亿</span>
+            </div>
+            <div style="display:flex;height:12px;border-radius:2px;overflow:hidden;gap:1px">
+              <div style="flex:4;background:#a78bfa99"></div>
+              <div style="flex:1;background:#f8717166"></div>
+              <div style="flex:1;background:#fb923c66"></div>
+            </div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px">
+              <span>三丰智能 300228</span><span style="color:#f87171">净流出 -0.2亿</span>
+            </div>
+            <div style="display:flex;height:12px;border-radius:2px;overflow:hidden;gap:1px">
+              <div style="flex:1;background:#f8717199"></div>
+              <div style="flex:2;background:#f8717188"></div>
+              <div style="flex:1;background:#4ade8066"></div>
+            </div>
+          </div>
+          <div style="font-size:9px;color:#666;display:flex;gap:8px;margin-top:2px">
+            <span style="color:#a78bfa">■ 超大单</span>
+            <span style="color:#60a5fa">■ 大单</span>
+            <span style="color:#34d399">■ 中单</span>
+            <span style="color:#fb923c">■ 小单</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — 逐股横向色条图</h3>
+      <p>每只股票一行横条，颜色区分超大/大/中/小单比例。适合快速判断哪只股票的大资金行为最强。</p>
+    </div>
+  </div>
+
+  <!-- Option C: Table + mini trend -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-size:11px;padding:8px;background:#0f0f0f;border-radius:6px;color:#ccc">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="color:#e8b84b;font-weight:bold">机器人</span>
+          <div style="display:flex;gap:4px">
+            <span style="background:#333;padding:1px 5px;border-radius:3px;font-size:9px;cursor:pointer;color:#e8b84b">今日</span>
+            <span style="background:#222;padding:1px 5px;border-radius:3px;font-size:9px;cursor:pointer">3日</span>
+            <span style="background:#222;padding:1px 5px;border-radius:3px;font-size:9px;cursor:pointer">5日</span>
+          </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:10px">
+          <thead>
+            <tr style="color:#666;border-bottom:1px solid #333">
+              <td style="padding:2px 3px">股票</td>
+              <td style="padding:2px 3px;text-align:right">超大单</td>
+              <td style="padding:2px 3px;text-align:right">大单</td>
+              <td style="padding:2px 3px;text-align:right">净流入</td>
+              <td style="padding:2px 3px;text-align:center">趋势</td>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #1f1f1f">
+              <td style="padding:2px 3px">机器人</td>
+              <td style="padding:2px 3px;text-align:right;color:#4ade80">+1.1亿</td>
+              <td style="padding:2px 3px;text-align:right;color:#4ade80">+0.3亿</td>
+              <td style="padding:2px 3px;text-align:right;color:#4ade80">+1.1亿</td>
+              <td style="padding:2px 3px;text-align:center;font-size:9px">↗↗↗↗↗</td>
+            </tr>
+            <tr style="border-bottom:1px solid #1f1f1f">
+              <td style="padding:2px 3px">华中数控</td>
+              <td style="padding:2px 3px;text-align:right;color:#4ade80">+0.8亿</td>
+              <td style="padding:2px 3px;text-align:right;color:#f87171">-0.1亿</td>
+              <td style="padding:2px 3px;text-align:right;color:#4ade80">+0.7亿</td>
+              <td style="padding:2px 3px;text-align:center;font-size:9px">↗↘↗↗↗</td>
+            </tr>
+            <tr>
+              <td style="padding:2px 3px">三丰智能</td>
+              <td style="padding:2px 3px;text-align:right;color:#f87171">-0.3亿</td>
+              <td style="padding:2px 3px;text-align:right;color:#f87171">-0.2亿</td>
+              <td style="padding:2px 3px;text-align:right;color:#f87171">-0.2亿</td>
+              <td style="padding:2px 3px;text-align:center;font-size:9px">↘↘↗↘↘</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — 表格 + 时间切换 + 趋势列</h3>
+      <p>今日/3日/5日切换，表格精简为超大单、大单、净流入三列，再加一列显示近几日净流入方向趋势。</p>
+    </div>
+  </div>
+
+</div>

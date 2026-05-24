@@ -1,0 +1,178 @@
+<h2>涨跌热力图 — 3 种设计方案</h2>
+<p class="subtitle">选择你喜欢的风格（点击卡片选中）</p>
+
+<style>
+/* ── 方案通用 ── */
+.demo-wrap { border-radius:8px; overflow:hidden; background:#f8fafc; padding:12px; min-height:180px; }
+
+/* ── 方案 A：Treemap 树状图 ── */
+.treemap { display:flex; flex-wrap:wrap; gap:3px; width:100%; }
+.tm-cell { display:flex; flex-direction:column; justify-content:center; align-items:center;
+  border-radius:4px; cursor:pointer; overflow:hidden; transition:filter .15s; }
+.tm-cell:hover { filter:brightness(1.08); }
+.tm-cell .tm-name { font-size:11px; font-weight:700; color:#fff; line-height:1.2; text-align:center; padding:0 4px; text-shadow:0 1px 2px rgba(0,0,0,.3); }
+.tm-cell .tm-pct  { font-size:12px; font-weight:800; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.3); }
+
+/* ── 方案 B：均匀网格 ── */
+.heatgrid { display:grid; gap:4px;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); }
+.hg-cell { padding:8px 4px; border-radius:6px; text-align:center; cursor:pointer;
+  transition:transform .15s; }
+.hg-cell:hover { transform:scale(1.04); }
+.hg-cell .hg-name { font-size:11px; font-weight:600; color:#1e293b; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; }
+.hg-cell .hg-pct  { font-size:13px; font-weight:800; margin-top:3px; }
+
+/* ── 方案 C：行情面板（条形带） ── */
+.panel-list { display:flex; flex-direction:column; gap:3px; }
+.panel-row { display:grid; grid-template-columns:120px 70px 1fr 60px;
+  align-items:center; gap:8px; padding:5px 8px; border-radius:5px; cursor:pointer;
+  background:#fff; border:1px solid #f1f5f9; transition:box-shadow .15s; }
+.panel-row:hover { box-shadow:0 2px 8px rgba(0,0,0,.08); }
+.panel-row .pr-name { font-size:12px; font-weight:600; color:#1e293b; }
+.panel-row .pr-pct  { font-size:13px; font-weight:800; text-align:right; }
+.panel-row .pr-bar-wrap { background:#f1f5f9; border-radius:3px; height:6px; overflow:hidden; }
+.panel-row .pr-bar      { height:100%; border-radius:3px; }
+.panel-row .pr-turn     { font-size:10px; color:#94a3b8; text-align:right; }
+
+.up   { color:#ef4444; }
+.down { color:#22c55e; }
+</style>
+
+<script>
+const sectors = [
+  { name:'半导体',    pct:5.00, turn:488 },
+  { name:'电子化学品',pct:4.78, turn:210 },
+  { name:'通信设备',  pct:2.73, turn:320 },
+  { name:'元件',      pct:2.97, turn:180 },
+  { name:'生物制品',  pct:3.08, turn:155 },
+  { name:'黑色家电',  pct:2.67, turn:130 },
+  { name:'光伏设备',  pct:2.64, turn:142 },
+  { name:'医疗服务',  pct:1.99, turn:88 },
+  { name:'化学制药',  pct:1.70, turn:175 },
+  { name:'计算机设备',pct:1.35, turn:95 },
+  { name:'证券',      pct:1.55, turn:260 },
+  { name:'白色家电',  pct:1.48, turn:115 },
+  { name:'电力',      pct:1.15, turn:72 },
+  { name:'保险',      pct:1.05, turn:190 },
+  { name:'白酒',      pct:0.66, turn:280 },
+  { name:'银行',      pct:-0.11,turn:310 },
+  { name:'汽车整车',  pct:-0.10,turn:145 },
+  { name:'游戏',      pct:-1.20,turn:78 },
+  { name:'港口航运',  pct:-1.62,turn:55 },
+  { name:'黄金',      pct:-2.27,turn:95 },
+];
+
+function pctColor(pct, opacity) {
+  if (pct == null) return `rgba(148,163,184,${opacity})`;
+  const abs = Math.min(Math.abs(pct), 6);
+  const t = abs / 6;
+  if (pct > 0) return `rgba(239,68,68,${0.2 + t * 0.75})`;
+  if (pct < 0) return `rgba(34,197,94,${0.2 + t * 0.75})`;
+  return `rgba(148,163,184,${opacity})`;
+}
+function pctStr(pct) { return (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%'; }
+function pctCls(pct) { return pct >= 0 ? 'up' : 'down'; }
+
+// ── A: Treemap ──
+const maxT = Math.max(...sectors.map(s=>s.turn));
+let tmHtml = '';
+sectors.forEach(s => {
+  const ratio = s.turn / maxT;
+  const size = Math.round(60 + ratio * 100);   // 60~160
+  const h    = Math.round(size * 0.65);
+  const bg   = pctColor(s.pct, 1);
+  const fs   = size > 110 ? 13 : size > 80 ? 11 : 10;
+  tmHtml += `<div class="tm-cell" style="width:${size}px;height:${h}px;background:${bg};flex-grow:${ratio}">
+    <div class="tm-name" style="font-size:${fs}px">${s.name}</div>
+    <div class="tm-pct"  style="font-size:${fs+1}px">${pctStr(s.pct)}</div>
+  </div>`;
+});
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('tmBody').innerHTML = tmHtml;
+
+  // ── B: Grid ──
+  let gHtml = '';
+  [...sectors].sort((a,b)=>b.pct-a.pct).forEach(s => {
+    const bg = pctColor(s.pct, 0.85);
+    gHtml += `<div class="hg-cell" style="background:${bg}">
+      <div class="hg-name">${s.name}</div>
+      <div class="hg-pct ${pctCls(s.pct)}">${pctStr(s.pct)}</div>
+    </div>`;
+  });
+  document.getElementById('gridBody').innerHTML = gHtml;
+
+  // ── C: Panel ──
+  let pHtml = '';
+  const maxPct = Math.max(...sectors.map(s=>Math.abs(s.pct)));
+  [...sectors].sort((a,b)=>b.pct-a.pct).slice(0,12).forEach(s => {
+    const barW = Math.round(Math.abs(s.pct) / maxPct * 100);
+    const barColor = s.pct >= 0 ? '#ef4444' : '#22c55e';
+    const turnStr = s.turn >= 100 ? (s.turn/100).toFixed(1)+'亿' : s.turn+'千万';
+    pHtml += `<div class="panel-row">
+      <div class="pr-name">${s.name}</div>
+      <div class="pr-pct ${pctCls(s.pct)}">${pctStr(s.pct)}</div>
+      <div class="pr-bar-wrap"><div class="pr-bar" style="width:${barW}%;background:${barColor}"></div></div>
+      <div class="pr-turn">${turnStr}</div>
+    </div>`;
+  });
+  document.getElementById('panelBody').innerHTML = pHtml;
+});
+</script>
+
+<div class="cards">
+
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="demo-wrap">
+        <div class="treemap" id="tmBody"></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Treemap（树状热力图）</h3>
+      <p>方块大小按成交额比例，颜色深浅按涨跌幅。主力板块视觉占比最大，符合股票软件常见风格（同花顺 / 东方财富）。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>信息密度高</li><li>主力板块突出</li><li>专业感强</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>小板块名称可能被截断</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="demo-wrap">
+        <div class="heatgrid" id="gridBody"></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — 均匀网格（等大方格）</h3>
+      <p>所有板块格子相同大小，按涨跌幅从高到低排列。颜色深浅表示涨跌幅，布局整齐易扫描。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>排列整齐</li><li>所有名称完整显示</li><li>一眼看涨跌排序</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>看不出成交额大小</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Option C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="demo-wrap">
+        <div class="panel-list" id="panelBody"></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — 行情面板（条形列表）</h3>
+      <p>类似行情软件的排行榜风格，每行显示板块名、涨跌幅、进度条和成交额。信息最完整、可读性最强。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优点</h4><ul><li>信息最完整</li><li>可读性强</li><li>数据对齐清晰</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>需要滚动才能看全</li><li>热力感弱</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px;">点击卡片选中后，在终端告诉我你的选择和偏好 🎯</p>

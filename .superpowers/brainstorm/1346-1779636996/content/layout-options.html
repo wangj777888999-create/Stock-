@@ -1,0 +1,126 @@
+<h2>资金流向分类模块 — 选择主界面布局</h2>
+<p class="subtitle">你想怎么看各个分类的资金流向汇总？</p>
+
+<div class="cards">
+
+  <!-- Option A -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-size:12px;padding:8px;background:#0f0f0f;border-radius:6px;color:#ccc;line-height:1.6">
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #333;padding-bottom:4px;margin-bottom:4px">
+          <span style="color:#e8b84b;font-weight:bold">📂 机器人</span>
+          <span style="color:#4ade80;font-size:11px">主力净流入 +3.2亿</span>
+          <span style="color:#888;font-size:10px">▼ 展开</span>
+        </div>
+        <div style="background:#1a1a2e;padding:4px 8px;border-radius:4px;margin-bottom:3px;display:flex;justify-content:space-between">
+          <span>000066 华中数控</span>
+          <span style="color:#4ade80">+0.8亿</span>
+          <span style="color:#f87171">-0.2亿</span>
+        </div>
+        <div style="background:#1a1a2e;padding:4px 8px;border-radius:4px;margin-bottom:3px;display:flex;justify-content:space-between">
+          <span>300024 机器人</span>
+          <span style="color:#4ade80">+1.1亿</span>
+          <span style="color:#f87171">-0.3亿</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;border-top:1px solid #333;margin-top:4px;padding-top:4px">
+          <span style="color:#e8b84b;font-weight:bold">📂 半导体</span>
+          <span style="color:#f87171;font-size:11px">主力净流出 -1.5亿</span>
+          <span style="color:#888;font-size:10px">▶ 收起</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — 折叠式列表</h3>
+      <p>分类行显示汇总净流入，点击展开查看每只股票的明细。简洁，适合分类多的场景。</p>
+    </div>
+  </div>
+
+  <!-- Option B -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-size:12px;padding:8px;background:#0f0f0f;border-radius:6px;color:#ccc;line-height:1.6;display:flex;gap:8px">
+        <div style="width:90px;flex-shrink:0">
+          <div style="background:#e8b84b22;border-left:3px solid #e8b84b;padding:4px 6px;margin-bottom:3px;cursor:pointer;border-radius:2px">
+            <div style="color:#e8b84b;font-size:11px">机器人</div>
+            <div style="color:#4ade80;font-size:10px">+3.2亿</div>
+          </div>
+          <div style="background:#333;padding:4px 6px;margin-bottom:3px;cursor:pointer;border-radius:2px">
+            <div style="font-size:11px">半导体</div>
+            <div style="color:#f87171;font-size:10px">-1.5亿</div>
+          </div>
+          <div style="background:#333;padding:4px 6px;margin-bottom:3px;cursor:pointer;border-radius:2px">
+            <div style="font-size:11px">MLCC PCB</div>
+            <div style="color:#4ade80;font-size:10px">+0.8亿</div>
+          </div>
+        </div>
+        <div style="flex:1;background:#111;border-radius:4px;padding:6px">
+          <div style="color:#e8b84b;font-size:11px;margin-bottom:4px;border-bottom:1px solid #333;padding-bottom:3px">机器人 · 5只股票</div>
+          <table style="width:100%;font-size:10px;border-collapse:collapse">
+            <tr style="color:#666"><td>股票</td><td>超大单</td><td>大单</td><td>小单</td></tr>
+            <tr><td>华中数控</td><td style="color:#4ade80">+0.8</td><td style="color:#f87171">-0.1</td><td style="color:#888">+0.05</td></tr>
+            <tr><td>机器人</td><td style="color:#4ade80">+1.1</td><td style="color:#4ade80">+0.2</td><td style="color:#f87171">-0.1</td></tr>
+            <tr><td>三丰智能</td><td style="color:#888">0</td><td style="color:#f87171">-0.3</td><td style="color:#4ade80">+0.2</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — 左侧分类 + 右侧明细表格</h3>
+      <p>左边点击分类，右侧立即更新显示该分类所有股票的小/中/大/超大单对比表。适合深入分析单个分类。</p>
+    </div>
+  </div>
+
+  <!-- Option C -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="font-size:12px;padding:8px;background:#0f0f0f;border-radius:6px;color:#ccc">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="background:#1a1a2e;border-radius:6px;padding:6px;border:1px solid #e8b84b44">
+            <div style="color:#e8b84b;font-size:11px;margin-bottom:4px">机器人 <span style="float:right;color:#4ade80">+3.2亿</span></div>
+            <div style="display:flex;gap:2px;height:20px;align-items:flex-end">
+              <div style="flex:1;background:#4ade8088;height:85%"></div>
+              <div style="flex:1;background:#4ade8066;height:60%"></div>
+              <div style="flex:1;background:#f8717166;height:30%"></div>
+              <div style="flex:1;background:#f8717188;height:45%"></div>
+            </div>
+            <div style="display:flex;gap:2px;font-size:9px;color:#666;margin-top:2px">
+              <span style="flex:1">超大</span><span style="flex:1">大单</span><span style="flex:1">中单</span><span style="flex:1">小单</span>
+            </div>
+          </div>
+          <div style="background:#1a1a2e;border-radius:6px;padding:6px;border:1px solid #33333388">
+            <div style="color:#ccc;font-size:11px;margin-bottom:4px">半导体 <span style="float:right;color:#f87171">-1.5亿</span></div>
+            <div style="display:flex;gap:2px;height:20px;align-items:flex-end">
+              <div style="flex:1;background:#f8717188;height:70%"></div>
+              <div style="flex:1;background:#f8717166;height:50%"></div>
+              <div style="flex:1;background:#4ade8066;height:25%"></div>
+              <div style="flex:1;background:#4ade8044;height:15%"></div>
+            </div>
+            <div style="display:flex;gap:2px;font-size:9px;color:#666;margin-top:2px">
+              <span style="flex:1">超大</span><span style="flex:1">大单</span><span style="flex:1">中单</span><span style="flex:1">小单</span>
+            </div>
+          </div>
+          <div style="background:#1a1a2e;border-radius:6px;padding:6px;border:1px solid #33333388">
+            <div style="color:#ccc;font-size:11px;margin-bottom:4px">MLCC PCB <span style="float:right;color:#4ade80">+0.8亿</span></div>
+            <div style="display:flex;gap:2px;height:20px;align-items:flex-end">
+              <div style="flex:1;background:#4ade8077;height:40%"></div>
+              <div style="flex:1;background:#4ade8055;height:55%"></div>
+              <div style="flex:1;background:#f8717144;height:20%"></div>
+              <div style="flex:1;background:#f8717155;height:30%"></div>
+            </div>
+            <div style="display:flex;gap:2px;font-size:9px;color:#666;margin-top:2px">
+              <span style="flex:1">超大</span><span style="flex:1">大单</span><span style="flex:1">中单</span><span style="flex:1">小单</span>
+            </div>
+          </div>
+          <div style="background:#1a1a2e;border-radius:6px;padding:6px;border:1px solid #33333388;display:flex;align-items:center;justify-content:center">
+            <span style="color:#666;font-size:11px">+ 新建分类</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — 卡片总览</h3>
+      <p>所有分类以卡片形式排列，每张卡片显示该分类的总净流入和超大/大/中/小单柱状图。一眼看清所有分类态势，点击卡片进入明细。</p>
+    </div>
+  </div>
+
+</div>
