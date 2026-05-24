@@ -7785,6 +7785,12 @@ let _fcCurrentPeriod = 1;
 let _fcCategories = [];
 let _fcSearchTimer = null;
 
+// Escape untrusted strings before inserting into innerHTML
+function fcEsc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 function fcFmtAmt(v) {
   if (v === null || v === undefined) return '--';
   const n = parseFloat(v);
@@ -7811,22 +7817,22 @@ async function loadFlowCategories() {
   try {
     const res = await fetch('/api/flow-category/list');
     const data = await res.json();
-    if (!data.success) { grid.innerHTML = `<div style="color:var(--red,#f87171)">${data.error}</div>`; return; }
+    if (!data.success) { grid.innerHTML = `<div style="color:var(--red,#f87171)">${fcEsc(data.error)}</div>`; return; }
     _fcCategories = data.data;
     fcRenderCards(_fcCategories);
     _fcCategories.forEach(cat => fcLoadCardFlow(cat.id));
   } catch (e) {
-    grid.innerHTML = `<div style="color:var(--red,#f87171)">加载失败: ${e}</div>`;
+    grid.innerHTML = `<div style="color:var(--red,#f87171)">加载失败: ${fcEsc(String(e))}</div>`;
   }
 }
 
 function fcRenderCards(cats) {
   const grid = document.getElementById('fc-cards-grid');
   let html = cats.map(cat => `
-    <div class="card" style="cursor:pointer;" onclick="fcOpenDetail(${cat.id})">
+    <div class="card fc-cat-card" style="cursor:pointer;" data-catid="${cat.id}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
         <div>
-          <div style="font-weight:600;font-size:15px;">${cat.name}</div>
+          <div style="font-weight:600;font-size:15px;">${fcEsc(cat.name)}</div>
           <div style="color:var(--text-muted,#888);font-size:12px;margin-top:2px;">${cat.stocks.length} 只股票</div>
         </div>
         <div id="fc-card-main-${cat.id}" style="font-size:13px;font-weight:600;text-align:right;">--</div>
@@ -7841,6 +7847,10 @@ function fcRenderCards(cats) {
     <span style="font-size:24px;">+</span><span style="margin-left:8px;">新建分类</span>
   </div>`;
   grid.innerHTML = html;
+  // Attach click handlers via event delegation (avoids inline onclick injection)
+  grid.querySelectorAll('.fc-cat-card').forEach(el => {
+    el.addEventListener('click', () => fcOpenDetail(parseInt(el.dataset.catid, 10)));
+  });
 }
 
 async function fcLoadCardFlow(catId) {
@@ -7912,7 +7922,7 @@ async function fcLoadDetail(catId, period) {
     const res = await fetch(`/api/flow-category/${catId}/flow?period=${period}`);
     const data = await res.json();
     if (!data.success) {
-      tbody.innerHTML = `<tr><td colspan="9" style="color:var(--red,#f87171);text-align:center;">${data.error}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" style="color:var(--red,#f87171);text-align:center;">${fcEsc(data.error)}</td></tr>`;
       return;
     }
     const d = data.data;
@@ -7925,19 +7935,23 @@ async function fcLoadDetail(catId, period) {
     const sorted = [...d.stocks].sort((a, b) => b.main_net - a.main_net);
     tbody.innerHTML = sorted.map(s => `
       <tr>
-        <td>${s.name || '--'}</td>
-        <td style="font-family:monospace;font-size:12px;">${s.symbol}</td>
+        <td>${fcEsc(s.name) || '--'}</td>
+        <td style="font-family:monospace;font-size:12px;">${fcEsc(s.symbol)}</td>
         <td style="text-align:right;">${fcFmtAmt(s.super_large_net)}</td>
         <td style="text-align:right;">${fcFmtAmt(s.large_net)}</td>
         <td style="text-align:right;">${fcFmtAmt(s.medium_net)}</td>
         <td style="text-align:right;">${fcFmtAmt(s.small_net)}</td>
         <td style="text-align:right;font-weight:600;">${fcFmtAmt(s.main_net)}</td>
         <td style="text-align:center;">${fcTrend(s.trend)}</td>
-        <td><button class="btn btn-sm btn-danger" onclick="fcRemoveStock(${catId},'${s.symbol}')">×</button></td>
+        <td><button class="btn btn-sm btn-danger fc-remove-btn" data-catid="${catId}" data-symbol="${fcEsc(s.symbol)}">×</button></td>
       </tr>`).join('') ||
       '<tr><td colspan="9" style="text-align:center;color:var(--text-muted,#888);">暂无股票</td></tr>';
+    // Attach remove handlers via dataset (avoids onclick attribute injection)
+    tbody.querySelectorAll('.fc-remove-btn').forEach(btn => {
+      btn.addEventListener('click', () => fcRemoveStock(parseInt(btn.dataset.catid, 10), btn.dataset.symbol));
+    });
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="9" style="color:var(--red,#f87171);text-align:center;">加载失败: ${e}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="color:var(--red,#f87171);text-align:center;">加载失败: ${fcEsc(String(e))}</td></tr>`;
   }
 }
 
@@ -8019,10 +8033,13 @@ function fcRefreshAddedList() {
   }
   list.innerHTML = cat.stocks.map(s =>
     `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--hover-bg,#1f1f3a);border-radius:4px;font-size:13px;">
-      <span>${s.name || s.symbol} <span style="color:var(--text-muted,#888);font-size:11px;">${s.symbol}</span></span>
-      <button class="btn btn-sm btn-danger" onclick="fcRemoveStockFromModal(${_fcCurrentCatId},'${s.symbol}')">×</button>
+      <span>${fcEsc(s.name || s.symbol)} <span style="color:var(--text-muted,#888);font-size:11px;">${fcEsc(s.symbol)}</span></span>
+      <button class="btn btn-sm btn-danger fc-modal-remove-btn" data-catid="${_fcCurrentCatId}" data-symbol="${fcEsc(s.symbol)}">×</button>
     </div>`
   ).join('');
+  list.querySelectorAll('.fc-modal-remove-btn').forEach(btn => {
+    btn.addEventListener('click', () => fcRemoveStockFromModal(parseInt(btn.dataset.catid, 10), btn.dataset.symbol));
+  });
 }
 
 function fcSearchStock(query) {
@@ -8038,15 +8055,17 @@ function fcSearchStock(query) {
       if (!items.length) { results.style.display = 'none'; return; }
       results.innerHTML = items.map(it => {
         const code = it.code || it.symbol || '';
-        const name = (it.name || '').replace(/'/g, '&#39;');
-        return `<div style="padding:8px 12px;cursor:pointer;display:flex;gap:8px;font-size:13px;"
+        return `<div class="fc-search-item" style="padding:8px 12px;cursor:pointer;display:flex;gap:8px;font-size:13px;"
           onmouseenter="this.style.background='var(--hover-bg,#1f1f3a)'"
           onmouseleave="this.style.background=''"
-          onclick="fcAddStockFromSearch('${code}','${name}')">
-          <span style="font-family:monospace;color:var(--text-muted,#888);font-size:12px;">${code}</span>
-          <span>${it.name || ''}</span>
+          data-code="${fcEsc(code)}" data-name="${fcEsc(it.name || '')}">
+          <span style="font-family:monospace;color:var(--text-muted,#888);font-size:12px;">${fcEsc(code)}</span>
+          <span>${fcEsc(it.name || '')}</span>
         </div>`;
       }).join('');
+      results.querySelectorAll('.fc-search-item').forEach(el => {
+        el.addEventListener('click', () => fcAddStockFromSearch(el.dataset.code, el.dataset.name));
+      });
       results.style.display = 'block';
     } catch (e) { results.style.display = 'none'; }
   }, 250);
@@ -8065,11 +8084,12 @@ async function fcAddStockFromSearch(symbol, name) {
     });
     const data = await res.json();
     if (data.success) {
-      const cat = _fcCategories.find(c => c.id === _fcCurrentCatId);
-      if (cat && !cat.stocks.find(s => s.symbol === symbol)) {
-        cat.stocks.push({symbol, name});
-      }
+      // Reload from server to keep client state in sync
+      const listRes = await fetch('/api/flow-category/list');
+      const listData = await listRes.json();
+      if (listData.success) _fcCategories = listData.data;
       fcRefreshAddedList();
+      const cat = _fcCategories.find(c => c.id === _fcCurrentCatId);
       const countEl = document.getElementById('fc-detail-count');
       if (countEl && cat) countEl.textContent = `${cat.stocks.length} 只股票`;
     } else {
