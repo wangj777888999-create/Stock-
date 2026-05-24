@@ -41,6 +41,7 @@ def init_db(db_path: str | None = None) -> None:
         _db.row_factory = sqlite3.Row
         _db.execute("PRAGMA journal_mode=WAL")
         _db.execute("PRAGMA busy_timeout=5000")
+        _db.execute("PRAGMA foreign_keys=ON")
 
         _db.executescript("""
             CREATE TABLE IF NOT EXISTS cache (
@@ -243,6 +244,22 @@ def init_db(db_path: str | None = None) -> None:
                 report_text TEXT NOT NULL DEFAULT '',
                 created_at  TEXT DEFAULT (datetime('now'))
             );
+
+            CREATE TABLE IF NOT EXISTS flow_categories (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                name        TEXT NOT NULL,
+                sort_order  INTEGER DEFAULT 0,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS flow_category_stocks (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                category_id INTEGER NOT NULL REFERENCES flow_categories(id) ON DELETE CASCADE,
+                symbol      TEXT NOT NULL,
+                name        TEXT,
+                added_at    TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(category_id, symbol)
+            );
         """)
 
         # 清理过期缓存
@@ -259,6 +276,30 @@ def init_db(db_path: str | None = None) -> None:
 
 def _migrate():
     """增量迁移：添加新列。忽略 'duplicate column name' 错误。"""
+    # 新表迁移：CREATE TABLE IF NOT EXISTS 对已有表无副作用，适合存量数据库升级
+    new_tables = [
+        """CREATE TABLE IF NOT EXISTS flow_categories (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT NOT NULL,
+            sort_order  INTEGER DEFAULT 0,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS flow_category_stocks (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            category_id INTEGER NOT NULL REFERENCES flow_categories(id) ON DELETE CASCADE,
+            symbol      TEXT NOT NULL,
+            name        TEXT,
+            added_at    TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(category_id, symbol)
+        )""",
+    ]
+    for sql in new_tables:
+        try:
+            _db.execute(sql)
+        except sqlite3.OperationalError as e:
+            logger.error(f"数据库迁移失败(新表): {e}")
+            raise
+
     migrations = [
         "ALTER TABLE watchlist ADD COLUMN tags TEXT DEFAULT ''",
         "ALTER TABLE watchlist ADD COLUMN alert_price REAL",
