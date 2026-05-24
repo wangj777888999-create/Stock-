@@ -41,7 +41,6 @@ def init_db(db_path: str | None = None) -> None:
         _db.row_factory = sqlite3.Row
         _db.execute("PRAGMA journal_mode=WAL")
         _db.execute("PRAGMA busy_timeout=5000")
-        _db.execute("PRAGMA foreign_keys=ON")
 
         _db.executescript("""
             CREATE TABLE IF NOT EXISTS cache (
@@ -245,22 +244,11 @@ def init_db(db_path: str | None = None) -> None:
                 created_at  TEXT DEFAULT (datetime('now'))
             );
 
-            CREATE TABLE IF NOT EXISTS flow_categories (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                name        TEXT NOT NULL,
-                sort_order  INTEGER DEFAULT 0,
-                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-            );
-
-            CREATE TABLE IF NOT EXISTS flow_category_stocks (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                category_id INTEGER NOT NULL REFERENCES flow_categories(id) ON DELETE CASCADE,
-                symbol      TEXT NOT NULL,
-                name        TEXT,
-                added_at    TEXT NOT NULL DEFAULT (datetime('now')),
-                UNIQUE(category_id, symbol)
-            );
         """)
+
+        # executescript() 会提交事务并可能重置 session-level PRAGMA，
+        # 因此在它完成后再启用外键约束，确保约束对后续所有操作生效。
+        _db.execute("PRAGMA foreign_keys=ON")
 
         # 清理过期缓存
         deleted = _db.execute(
