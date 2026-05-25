@@ -2137,83 +2137,122 @@ textarea.form-input {
 
         <!-- 卡片总览 -->
         <div id="fc-overview">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-            <h2 style="margin:0;font-size:16px;font-weight:600;">资金追踪分类</h2>
-            <button class="btn btn-sm" onclick="fcOpenCreateModal()">+ 新建分类</button>
-            <button class="btn btn-sm btn-ghost" onclick="loadFlowCategories()" title="刷新">↻ 刷新</button>
+          <div class="card" style="margin-bottom:20px;">
+            <div class="card-header">
+              <div class="card-title">
+                <svg width="15" height="15" viewBox="0 0 20 20" fill="none">
+                  <path d="M3 5h14M3 10h14M3 15h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  <circle cx="16" cy="15" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+                </svg>
+                资金追踪
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button class="btn btn-ghost btn-sm" onclick="loadFlowCategories()">
+                  <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M4 10a6 6 0 1 0 1.1-3.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M4 6v4h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  刷新
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="fcOpenCreateModal()">
+                  <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                  新建分类
+                </button>
+              </div>
+            </div>
           </div>
-          <div id="fc-cards-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;"></div>
+          <div id="fc-cards-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;"></div>
         </div>
 
         <!-- 明细视图 -->
         <div id="fc-detail" style="display:none;">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
-            <button class="btn btn-sm btn-ghost" onclick="fcBackToOverview()">← 返回</button>
-            <h2 id="fc-detail-title" style="margin:0;font-size:16px;font-weight:600;"></h2>
-            <span id="fc-detail-count" style="color:var(--text-muted);font-size:13px;"></span>
-            <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
-              <button class="btn btn-sm" onclick="fcOpenAddStockModal()">+ 添加股票</button>
-              <button class="btn btn-sm btn-ghost" onclick="fcRenameCategory()">重命名</button>
-              <button class="btn btn-sm btn-danger" onclick="fcDeleteCategory()">删除分类</button>
+          <div class="card">
+            <!-- 标题行 -->
+            <div class="card-header">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <button class="btn-icon" onclick="fcBackToOverview()" title="返回" style="color:var(--ink-2);">
+                  <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M12 4l-6 6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <div class="card-title" id="fc-detail-title"></div>
+                <span id="fc-detail-count" style="color:var(--ink-3);font-size:12px;font-weight:400;background:var(--surface-2);padding:2px 8px;border-radius:20px;border:1px solid var(--border);"></span>
+              </div>
+              <div style="display:flex;gap:8px;">
+                <button class="btn btn-ghost btn-sm" onclick="fcOpenAddStockModal()">+ 添加股票</button>
+                <button class="btn btn-ghost btn-sm" onclick="fcRenameCategory()">重命名</button>
+                <button class="btn btn-red btn-sm" onclick="fcDeleteCategory()">删除</button>
+              </div>
             </div>
-          </div>
-          <div style="display:flex;gap:4px;margin-bottom:12px;">
-            <button class="btn btn-sm fc-period-btn active" data-period="1" onclick="fcSwitchPeriod(1)">今日</button>
-            <button class="btn btn-sm fc-period-btn btn-ghost" data-period="3" onclick="fcSwitchPeriod(3)">近3日</button>
-            <button class="btn btn-sm fc-period-btn btn-ghost" data-period="5" onclick="fcSwitchPeriod(5)">近5日</button>
-          </div>
-          <div id="fc-summary-bar" style="background:var(--card-bg,#1a1a2e);border:1px solid var(--border,#333);border-radius:8px;padding:12px 16px;margin-bottom:12px;display:flex;gap:24px;flex-wrap:wrap;font-size:13px;">
-            <span style="color:var(--text-muted,#888);">合计</span>
-            <span>超大单：<b id="fc-sum-sl">--</b></span>
-            <span>大单：<b id="fc-sum-la">--</b></span>
-            <span>中单：<b id="fc-sum-me">--</b></span>
-            <span>小单：<b id="fc-sum-sm">--</b></span>
-            <span>主力净：<b id="fc-sum-mn" style="font-size:15px;">--</b></span>
-          </div>
-          <div class="table-wrap">
-            <table class="data-table" id="fc-detail-table">
-              <thead>
-                <tr>
-                  <th>股票</th>
-                  <th>代码</th>
-                  <th style="text-align:right;">超大单(亿)</th>
-                  <th style="text-align:right;">大单(亿)</th>
-                  <th style="text-align:right;">中单(亿)</th>
-                  <th style="text-align:right;">小单(亿)</th>
-                  <th style="text-align:right;">主力净(亿)</th>
-                  <th style="text-align:center;">近5日</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="fc-detail-tbody"></tbody>
-            </table>
+            <!-- 时间 Tab + 合计栏 -->
+            <div style="padding:12px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:var(--surface-2);">
+              <div style="display:flex;gap:4px;">
+                <button class="btn btn-ghost btn-sm fc-period-btn active" data-period="1" onclick="fcSwitchPeriod(1)">今日</button>
+                <button class="btn btn-ghost btn-sm fc-period-btn" data-period="3" onclick="fcSwitchPeriod(3)">近3日</button>
+                <button class="btn btn-ghost btn-sm fc-period-btn" data-period="5" onclick="fcSwitchPeriod(5)">近5日</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-2);">
+                <span>超大单&nbsp;<b id="fc-sum-sl" style="font-size:13px;">--</b></span>
+                <span>大单&nbsp;<b id="fc-sum-la" style="font-size:13px;">--</b></span>
+                <span>中单&nbsp;<b id="fc-sum-me" style="font-size:13px;">--</b></span>
+                <span>小单&nbsp;<b id="fc-sum-sm" style="font-size:13px;">--</b></span>
+                <span style="padding-left:12px;border-left:1px solid var(--border);">主力净流入&nbsp;<b id="fc-sum-mn" style="font-size:15px;letter-spacing:-0.5px;">--</b></span>
+              </div>
+            </div>
+            <!-- 明细表格 -->
+            <div style="overflow-x:auto;padding:0;">
+              <table class="data-table" id="fc-detail-table">
+                <thead>
+                  <tr>
+                    <th>股票</th>
+                    <th>代码</th>
+                    <th style="text-align:right;">超大单(亿)</th>
+                    <th style="text-align:right;">大单(亿)</th>
+                    <th style="text-align:right;">中单(亿)</th>
+                    <th style="text-align:right;">小单(亿)</th>
+                    <th style="text-align:right;">主力净(亿)</th>
+                    <th style="text-align:center;">近5日</th>
+                    <th style="width:36px;"></th>
+                  </tr>
+                </thead>
+                <tbody id="fc-detail-tbody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
 
         <!-- Modal: 新建分类 -->
-        <div id="fc-create-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
-          <div class="modal-box" style="max-width:380px;">
-            <h3 style="margin:0 0 16px;">新建分类</h3>
-            <input id="fc-create-name" class="input" placeholder="分类名称，如：机器人" style="width:100%;box-sizing:border-box;margin-bottom:12px;" />
-            <div style="display:flex;gap:8px;justify-content:flex-end;">
-              <button class="btn btn-ghost" onclick="document.getElementById('fc-create-modal').style.display='none'">取消</button>
-              <button class="btn" onclick="fcCreateCategory()">创建</button>
+        <div id="fc-create-modal" class="modal-overlay" onclick="if(event.target===this)fcCloseModal('fc-create-modal')">
+          <div class="modal-box">
+            <div class="modal-header">
+              <h3>新建分类</h3>
+              <button class="modal-close" onclick="fcCloseModal('fc-create-modal')">&#215;</button>
+            </div>
+            <div style="padding:20px 24px;">
+              <div class="form-group">
+                <input id="fc-create-name" class="form-input" placeholder="分类名称，如：机器人、半导体" autocomplete="off" />
+              </div>
+              <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button class="btn btn-ghost" onclick="fcCloseModal('fc-create-modal')">取消</button>
+                <button class="btn btn-primary" onclick="fcCreateCategory()">创建</button>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- Modal: 添加股票 -->
-        <div id="fc-stock-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)this.style.display='none'">
-          <div class="modal-box" style="max-width:420px;">
-            <h3 style="margin:0 0 16px;">向分类添加股票</h3>
-            <div style="position:relative;margin-bottom:8px;">
-              <input id="fc-stock-search" class="input" placeholder="搜索 A 股代码或名称..." style="width:100%;box-sizing:border-box;"
-                oninput="fcSearchStock(this.value)" autocomplete="off" />
-              <div id="fc-stock-results" style="position:absolute;top:100%;left:0;right:0;background:var(--card-bg,#1a1a2e);border:1px solid var(--border,#333);border-radius:6px;max-height:200px;overflow-y:auto;z-index:100;display:none;"></div>
+        <div id="fc-stock-modal" class="modal-overlay" onclick="if(event.target===this)fcCloseModal('fc-stock-modal')">
+          <div class="modal-box" style="width:440px;">
+            <div class="modal-header">
+              <h3>添加股票</h3>
+              <button class="modal-close" onclick="fcCloseModal('fc-stock-modal')">&#215;</button>
             </div>
-            <div id="fc-stock-added-list" style="margin-top:8px;display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;"></div>
-            <div style="display:flex;justify-content:flex-end;margin-top:12px;">
-              <button class="btn btn-ghost" onclick="document.getElementById('fc-stock-modal').style.display='none'">关闭</button>
+            <div style="padding:20px 24px;">
+              <div class="form-group" style="position:relative;">
+                <input id="fc-stock-search" class="form-input" placeholder="搜索 A 股代码或名称..."
+                  oninput="fcSearchStock(this.value)" autocomplete="off" />
+                <div id="fc-stock-results" style="position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--surface);border:1px solid var(--border-2);border-radius:var(--r-sm);box-shadow:var(--shadow-md);max-height:200px;overflow-y:auto;z-index:200;display:none;"></div>
+              </div>
+              <div style="font-size:12px;color:var(--ink-3);font-weight:600;letter-spacing:0.3px;margin-bottom:8px;">已添加</div>
+              <div id="fc-stock-added-list" style="display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto;"></div>
+              <div style="display:flex;justify-content:flex-end;margin-top:16px;">
+                <button class="btn btn-ghost" onclick="fcCloseModal('fc-stock-modal')">完成</button>
+              </div>
             </div>
           </div>
         </div>
@@ -7797,7 +7836,7 @@ function fcFmtAmt(v) {
   if (isNaN(n)) return '--';
   const abs = Math.abs(n);
   const sign = n >= 0 ? '+' : '-';
-  const color = n >= 0 ? 'var(--green,#4ade80)' : 'var(--red,#f87171)';
+  const color = n >= 0 ? 'var(--green)' : 'var(--red)';
   let text;
   if (abs >= 1) text = sign + abs.toFixed(2) + '亿';
   else if (abs >= 0.0001) text = sign + (abs * 10000).toFixed(0) + '万';
@@ -7806,51 +7845,57 @@ function fcFmtAmt(v) {
 }
 
 function fcTrend(arr) {
-  if (!arr || !arr.length) return '<span style="color:var(--text-muted,#888)">--</span>';
-  return arr.map(v => `<span style="color:${v >= 0 ? 'var(--green,#4ade80)' : 'var(--red,#f87171)'}">${v >= 0 ? '↑' : '↓'}</span>`).join('');
+  if (!arr || !arr.length) return '<span style="color:var(--ink-3)">--</span>';
+  return arr.map(v => `<span style="color:${v >= 0 ? 'var(--green)' : 'var(--red)'}">${v >= 0 ? '↑' : '↓'}</span>`).join('');
 }
 
 async function loadFlowCategories() {
   const grid = document.getElementById('fc-cards-grid');
   if (!grid) return;
-  grid.innerHTML = '<div style="color:var(--text-muted,#888);padding:20px;">加载中...</div>';
+  grid.innerHTML = '<div style="color:var(--ink-3);padding:20px;">加载中...</div>';
   try {
     const res = await fetch('/api/flow-category/list');
     const data = await res.json();
-    if (!data.success) { grid.innerHTML = `<div style="color:var(--red,#f87171)">${fcEsc(data.error)}</div>`; return; }
+    if (!data.success) { grid.innerHTML = `<div style="color:var(--red)">${fcEsc(data.error)}</div>`; return; }
     _fcCategories = data.data;
     fcRenderCards(_fcCategories);
     _fcCategories.forEach(cat => fcLoadCardFlow(cat.id));
   } catch (e) {
-    grid.innerHTML = `<div style="color:var(--red,#f87171)">加载失败: ${fcEsc(String(e))}</div>`;
+    grid.innerHTML = `<div style="color:var(--red)">加载失败: ${fcEsc(String(e))}</div>`;
   }
 }
 
 function fcRenderCards(cats) {
   const grid = document.getElementById('fc-cards-grid');
   let html = cats.map(cat => `
-    <div class="card fc-cat-card" style="cursor:pointer;" data-catid="${cat.id}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
+    <div class="card fc-cat-card" style="cursor:pointer;transition:box-shadow .15s,transform .15s;" data-catid="${cat.id}"
+      onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-1px)'"
+      onmouseleave="this.style.boxShadow='';this.style.transform=''">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
         <div>
-          <div style="font-weight:600;font-size:15px;">${fcEsc(cat.name)}</div>
-          <div style="color:var(--text-muted,#888);font-size:12px;margin-top:2px;">${cat.stocks.length} 只股票</div>
+          <div style="font-weight:600;font-size:15px;color:var(--ink);">${fcEsc(cat.name)}</div>
+          <div style="color:var(--ink-3);font-size:12px;margin-top:3px;">${cat.stocks.length} 只股票</div>
         </div>
-        <div id="fc-card-main-${cat.id}" style="font-size:13px;font-weight:600;text-align:right;">--</div>
+        <div id="fc-card-main-${cat.id}" style="font-size:13px;font-weight:600;text-align:right;color:var(--ink-2);">--</div>
       </div>
-      <div style="display:flex;gap:12px;font-size:12px;color:var(--text-muted,#888);">
-        <span>超大单: <span id="fc-card-sl-${cat.id}">--</span></span>
-        <span>大单: <span id="fc-card-la-${cat.id}">--</span></span>
+      <div style="display:flex;gap:16px;font-size:12px;color:var(--ink-3);margin-bottom:10px;">
+        <span>超大单: <span id="fc-card-sl-${cat.id}" style="color:var(--ink-2);">--</span></span>
+        <span>大单: <span id="fc-card-la-${cat.id}" style="color:var(--ink-2);">--</span></span>
       </div>
-      <div id="fc-card-bar-${cat.id}" style="display:flex;gap:2px;height:6px;border-radius:3px;overflow:hidden;margin-top:8px;background:var(--border,#333);"></div>
+      <div id="fc-card-bar-${cat.id}" style="display:flex;gap:2px;height:5px;border-radius:3px;overflow:hidden;background:var(--border);"></div>
     </div>`).join('');
-  html += `<div class="card" style="display:flex;align-items:center;justify-content:center;min-height:100px;cursor:pointer;border:2px dashed var(--border,#333);color:var(--text-muted,#888);" onclick="fcOpenCreateModal()">
-    <span style="font-size:24px;">+</span><span style="margin-left:8px;">新建分类</span>
+  html += `<div class="card fc-add-card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:110px;cursor:pointer;border:2px dashed var(--border);color:var(--ink-3);gap:6px;transition:border-color .15s,color .15s;"
+    onmouseenter="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'"
+    onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--ink-3)'">
+    <svg width="22" height="22" viewBox="0 0 20 20" fill="none"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <span style="font-size:13px;font-weight:500;">新建分类</span>
   </div>`;
   grid.innerHTML = html;
-  // Attach click handlers via event delegation (avoids inline onclick injection)
+  // Attach click handlers (avoids inline onclick injection)
   grid.querySelectorAll('.fc-cat-card').forEach(el => {
     el.addEventListener('click', () => fcOpenDetail(parseInt(el.dataset.catid, 10)));
   });
+  grid.querySelector('.fc-add-card')?.addEventListener('click', fcOpenCreateModal);
 }
 
 async function fcLoadCardFlow(catId) {
@@ -7863,7 +7908,7 @@ async function fcLoadCardFlow(catId) {
     const slEl = document.getElementById(`fc-card-sl-${catId}`);
     const laEl = document.getElementById(`fc-card-la-${catId}`);
     const barEl = document.getElementById(`fc-card-bar-${catId}`);
-    if (mainEl) mainEl.innerHTML = fcFmtAmt(t.main_net) + '<span style="font-size:11px;color:var(--text-muted,#888);font-weight:400;"> 主力</span>';
+    if (mainEl) mainEl.innerHTML = fcFmtAmt(t.main_net) + '<span style="font-size:11px;color:var(--ink-3);font-weight:400;"> 主力</span>';
     if (slEl) slEl.innerHTML = fcFmtAmt(t.super_large_net);
     if (laEl) laEl.innerHTML = fcFmtAmt(t.large_net);
     if (barEl) {
@@ -7913,7 +7958,7 @@ function fcSwitchPeriod(period) {
 
 async function fcLoadDetail(catId, period) {
   const tbody = document.getElementById('fc-detail-tbody');
-  tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--text-muted,#888);padding:20px;">加载中...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--ink-3);padding:20px;">加载中...</td></tr>';
   ['fc-sum-sl','fc-sum-la','fc-sum-me','fc-sum-sm','fc-sum-mn'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = '--';
@@ -7922,7 +7967,7 @@ async function fcLoadDetail(catId, period) {
     const res = await fetch(`/api/flow-category/${catId}/flow?period=${period}`);
     const data = await res.json();
     if (!data.success) {
-      tbody.innerHTML = `<tr><td colspan="9" style="color:var(--red,#f87171);text-align:center;">${fcEsc(data.error)}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="9" style="color:var(--red);text-align:center;">${fcEsc(data.error)}</td></tr>`;
       return;
     }
     const d = data.data;
@@ -7943,22 +7988,27 @@ async function fcLoadDetail(catId, period) {
         <td style="text-align:right;">${fcFmtAmt(s.small_net)}</td>
         <td style="text-align:right;font-weight:600;">${fcFmtAmt(s.main_net)}</td>
         <td style="text-align:center;">${fcTrend(s.trend)}</td>
-        <td><button class="btn btn-sm btn-danger fc-remove-btn" data-catid="${catId}" data-symbol="${fcEsc(s.symbol)}">×</button></td>
+        <td><button class="btn btn-sm btn-red fc-remove-btn" data-catid="${catId}" data-symbol="${fcEsc(s.symbol)}">×</button></td>
       </tr>`).join('') ||
-      '<tr><td colspan="9" style="text-align:center;color:var(--text-muted,#888);">暂无股票</td></tr>';
+      '<tr><td colspan="9" style="text-align:center;color:var(--ink-3);">暂无股票</td></tr>';
     // Attach remove handlers via dataset (avoids onclick attribute injection)
     tbody.querySelectorAll('.fc-remove-btn').forEach(btn => {
       btn.addEventListener('click', () => fcRemoveStock(parseInt(btn.dataset.catid, 10), btn.dataset.symbol));
     });
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="9" style="color:var(--red,#f87171);text-align:center;">加载失败: ${fcEsc(String(e))}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" style="color:var(--red);text-align:center;">加载失败: ${fcEsc(String(e))}</td></tr>`;
   }
+}
+
+function fcCloseModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('active');
 }
 
 function fcOpenCreateModal() {
   const inp = document.getElementById('fc-create-name');
   if (inp) inp.value = '';
-  document.getElementById('fc-create-modal').style.display = 'flex';
+  document.getElementById('fc-create-modal').classList.add('active');
   setTimeout(() => inp && inp.focus(), 50);
 }
 
@@ -7973,7 +8023,7 @@ async function fcCreateCategory() {
     });
     const data = await res.json();
     if (data.success) {
-      document.getElementById('fc-create-modal').style.display = 'none';
+      fcCloseModal('fc-create-modal');
       loadFlowCategories();
     } else {
       showToast('创建失败: ' + data.error, 'error');
@@ -8019,7 +8069,7 @@ function fcOpenAddStockModal() {
   if (search) search.value = '';
   if (results) results.style.display = 'none';
   fcRefreshAddedList();
-  document.getElementById('fc-stock-modal').style.display = 'flex';
+  document.getElementById('fc-stock-modal').classList.add('active');
   setTimeout(() => search && search.focus(), 50);
 }
 
@@ -8028,13 +8078,13 @@ function fcRefreshAddedList() {
   if (!list || !_fcCurrentCatId) return;
   const cat = _fcCategories.find(c => c.id === _fcCurrentCatId);
   if (!cat || !cat.stocks.length) {
-    list.innerHTML = '<div style="color:var(--text-muted,#888);font-size:13px;">暂无股票，请搜索添加</div>';
+    list.innerHTML = '<div style="color:var(--ink-3);font-size:13px;">暂无股票，请搜索添加</div>';
     return;
   }
   list.innerHTML = cat.stocks.map(s =>
-    `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--hover-bg,#1f1f3a);border-radius:4px;font-size:13px;">
-      <span>${fcEsc(s.name || s.symbol)} <span style="color:var(--text-muted,#888);font-size:11px;">${fcEsc(s.symbol)}</span></span>
-      <button class="btn btn-sm btn-danger fc-modal-remove-btn" data-catid="${_fcCurrentCatId}" data-symbol="${fcEsc(s.symbol)}">×</button>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:6px;font-size:13px;">
+      <span style="color:var(--ink);">${fcEsc(s.name || s.symbol)} <span style="color:var(--ink-3);font-size:11px;margin-left:4px;">${fcEsc(s.symbol)}</span></span>
+      <button class="btn btn-sm btn-red fc-modal-remove-btn" data-catid="${_fcCurrentCatId}" data-symbol="${fcEsc(s.symbol)}">×</button>
     </div>`
   ).join('');
   list.querySelectorAll('.fc-modal-remove-btn').forEach(btn => {
@@ -8055,12 +8105,12 @@ function fcSearchStock(query) {
       if (!items.length) { results.style.display = 'none'; return; }
       results.innerHTML = items.map(it => {
         const code = it.code || it.symbol || '';
-        return `<div class="fc-search-item" style="padding:8px 12px;cursor:pointer;display:flex;gap:8px;font-size:13px;"
-          onmouseenter="this.style.background='var(--hover-bg,#1f1f3a)'"
+        return `<div class="fc-search-item" style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:13px;"
+          onmouseenter="this.style.background='var(--surface-2)'"
           onmouseleave="this.style.background=''"
           data-code="${fcEsc(code)}" data-name="${fcEsc(it.name || '')}">
-          <span style="font-family:monospace;color:var(--text-muted,#888);font-size:12px;">${fcEsc(code)}</span>
-          <span>${fcEsc(it.name || '')}</span>
+          <span style="font-family:monospace;color:var(--ink-3);font-size:12px;min-width:56px;">${fcEsc(code)}</span>
+          <span style="color:var(--ink);">${fcEsc(it.name || '')}</span>
         </div>`;
       }).join('');
       results.querySelectorAll('.fc-search-item').forEach(el => {
