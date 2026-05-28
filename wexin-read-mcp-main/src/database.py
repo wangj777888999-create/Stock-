@@ -287,6 +287,15 @@ def _migrate():
             note       TEXT NOT NULL,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )""",
+        """CREATE TABLE IF NOT EXISTS review_drawings (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol     TEXT NOT NULL,
+            period     TEXT NOT NULL,
+            type       TEXT NOT NULL,
+            data       TEXT NOT NULL,
+            color      TEXT NOT NULL DEFAULT '#ef4444',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""",
     ]
     for sql in new_tables:
         try:

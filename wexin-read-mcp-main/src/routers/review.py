@@ -1,4 +1,4 @@
-"""复盘模块 — 股票列表 + 备注 CRUD。"""
+"""复盘模块 — 股票列表 + 备注 + 画线 CRUD。"""
 import json
 import logging
 from pathlib import Path
@@ -22,6 +22,8 @@ async def list_stocks():
         logger.error(f"读取股票列表失败: {e}")
         return {"success": False, "error": str(e), "data": []}
 
+
+# ─── 备注 ───
 
 class NoteCreate(BaseModel):
     symbol: str
@@ -70,5 +72,74 @@ async def add_note(req: NoteCreate):
 async def delete_note(note_id: int):
     db = get_db()
     db.execute("DELETE FROM review_notes WHERE id=?", (note_id,))
+    db.commit()
+    return {"success": True}
+
+
+# ─── 画线 ───
+
+class DrawingCreate(BaseModel):
+    symbol: str
+    period: str
+    type: str   # 'hline' | 'trendline'
+    data: str   # JSON 字符串
+    color: str = "#ef4444"
+
+
+@router.get("/drawings")
+async def list_drawings(symbol: str, period: str = ""):
+    db = get_db()
+    if period:
+        rows = db.execute(
+            "SELECT id, symbol, period, type, data, color, created_at FROM review_drawings"
+            " WHERE symbol=? AND period=? ORDER BY created_at",
+            (symbol.upper(), period),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT id, symbol, period, type, data, color, created_at FROM review_drawings"
+            " WHERE symbol=? ORDER BY created_at",
+            (symbol.upper(),),
+        ).fetchall()
+    return {"success": True, "data": [
+        {"id": r[0], "symbol": r[1], "period": r[2], "type": r[3],
+         "data": r[4], "color": r[5], "created_at": r[6]}
+        for r in rows
+    ]}
+
+
+@router.post("/drawings")
+async def add_drawing(req: DrawingCreate):
+    symbol = req.symbol.strip().upper()
+    if not symbol or not req.type or not req.data:
+        return {"success": False, "error": "参数不完整"}
+    db = get_db()
+    try:
+        cur = db.execute(
+            "INSERT INTO review_drawings (symbol, period, type, data, color) VALUES (?,?,?,?,?)",
+            (symbol, req.period.strip(), req.type.strip(), req.data, req.color),
+        )
+        db.commit()
+        return {"success": True, "id": cur.lastrowid}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+@router.delete("/drawings")
+async def clear_drawings(symbol: str, period: str):
+    """删除指定股票+周期的全部画线。"""
+    db = get_db()
+    db.execute(
+        "DELETE FROM review_drawings WHERE symbol=? AND period=?",
+        (symbol.upper(), period),
+    )
+    db.commit()
+    return {"success": True}
+
+
+@router.delete("/drawings/{drawing_id}")
+async def delete_drawing(drawing_id: int):
+    db = get_db()
+    db.execute("DELETE FROM review_drawings WHERE id=?", (drawing_id,))
     db.commit()
     return {"success": True}

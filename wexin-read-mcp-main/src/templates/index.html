@@ -2706,6 +2706,22 @@ textarea.form-input {
               <button id="rv-ma-20" onclick="rvToggleMa(20)" class="btn btn-ghost btn-sm" style="color:#a855f7;font-size:11px;padding:2px 8px;font-weight:600;">MA20</button>
               <button id="rv-ma-60" onclick="rvToggleMa(60)" class="btn btn-ghost btn-sm" style="color:#6b7280;font-size:11px;padding:2px 8px;font-weight:600;">MA60</button>
             </div>
+            <!-- 画线工具 -->
+            <div id="rv-drawing-tools" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <span style="font-size:11px;color:var(--ink-3);">画线</span>
+              <button id="rv-draw-hline"     onclick="rvStartDrawing('hline')"     class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;">水平线</button>
+              <button id="rv-draw-trendline" onclick="rvStartDrawing('trendline')" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;">趋势线</button>
+              <span style="color:var(--ink-4);padding:0 2px;user-select:none;">|</span>
+              <button onclick="rvSetDrawingColor('#ef4444')" id="rv-color-ef4444" title="红" style="width:14px;height:14px;background:#ef4444;border-radius:50%;border:none;cursor:pointer;padding:0;box-shadow:0 0 0 2px white,0 0 0 4px #ef4444;flex-shrink:0;"></button>
+              <button onclick="rvSetDrawingColor('#2563EB')" id="rv-color-2563EB" title="蓝" style="width:14px;height:14px;background:#2563EB;border-radius:50%;border:none;cursor:pointer;padding:0;flex-shrink:0;"></button>
+              <button onclick="rvSetDrawingColor('#f59e0b')" id="rv-color-f59e0b" title="橙" style="width:14px;height:14px;background:#f59e0b;border-radius:50%;border:none;cursor:pointer;padding:0;flex-shrink:0;"></button>
+              <button onclick="rvSetDrawingColor('#22c55e')" id="rv-color-22c55e" title="绿" style="width:14px;height:14px;background:#22c55e;border-radius:50%;border:none;cursor:pointer;padding:0;flex-shrink:0;"></button>
+              <button onclick="rvSetDrawingColor('#a855f7')" id="rv-color-a855f7" title="紫" style="width:14px;height:14px;background:#a855f7;border-radius:50%;border:none;cursor:pointer;padding:0;flex-shrink:0;"></button>
+              <span style="color:var(--ink-4);padding:0 2px;user-select:none;">|</span>
+              <button onclick="rvUndoDrawing()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;" title="撤销最后一条画线">撤销</button>
+              <button onclick="rvClearDrawings()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:2px 8px;" title="清除当前股票此周期全部画线">清除</button>
+              <span id="rv-drawing-hint" style="font-size:11px;color:var(--accent);margin-left:2px;"></span>
+            </div>
           </div>
         </div>
 
@@ -3040,6 +3056,9 @@ function _rvUpdateNav() {
 async function rvLoadStock(stock) {
   _rvSymbol = stock.code;
   _rvName = stock.name;
+  _rvPendingPoint = null;
+  const hint = document.getElementById('rv-drawing-hint');
+  if (hint && _rvDrawingMode === 'trendline') hint.textContent = '点击图表选择起始点';
   _rvUpdateNav();
   await rvRenderChart();
   rvLoadNotes();
@@ -3051,6 +3070,7 @@ async function rvRenderChart() {
 
   if (_rvResizeObserver) { _rvResizeObserver.disconnect(); _rvResizeObserver = null; }
   if (_rvChart) { try { _rvChart.remove(); } catch(e){} _rvChart = null; _rvSeries = null; _rvVolSeries = null; _rvMaSeries = {}; }
+  _rvActiveDrawings = [];
 
   const container = document.getElementById('rv-chart');
   container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:460px;color:var(--ink-3);"><span>加载中...</span></div>';
@@ -3145,6 +3165,9 @@ async function rvRenderChart() {
     if (_rvChart) _rvChart.applyOptions({ width: container.clientWidth });
   });
   _rvResizeObserver.observe(container);
+
+  _rvChart.subscribeClick(rvHandleChartClick);
+  await rvLoadDrawings();
 }
 
 async function rvSwitchPeriod(period, btn) {
@@ -3163,6 +3186,154 @@ function rvToggleMa(period) {
   if (btn) btn.style.opacity = _rvMaVisible[period] ? '1' : '0.3';
   const s = _rvMaSeries[period];
   if (s) s.applyOptions({ visible: _rvMaVisible[period] });
+}
+
+// ─── 画线工具 ───
+
+function rvStartDrawing(mode) {
+  const hint = document.getElementById('rv-drawing-hint');
+  if (_rvDrawingMode === mode) {
+    // 再次点击同一按钮取消
+    _rvDrawingMode = null;
+    _rvPendingPoint = null;
+    if (hint) hint.textContent = '';
+    ['rv-draw-hline','rv-draw-trendline'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('active');
+    });
+    return;
+  }
+  _rvDrawingMode = mode;
+  _rvPendingPoint = null;
+  document.getElementById('rv-draw-hline').classList.toggle('active', mode === 'hline');
+  document.getElementById('rv-draw-trendline').classList.toggle('active', mode === 'trendline');
+  if (hint) hint.textContent = mode === 'hline' ? '点击图表添加水平线' : '点击图表选择起始点';
+}
+
+function rvSetDrawingColor(color) {
+  _rvDrawingColor = color;
+  document.querySelectorAll('[id^="rv-color-"]').forEach(b => { b.style.boxShadow = ''; });
+  const btn = document.getElementById('rv-color-' + color.replace('#',''));
+  if (btn) btn.style.boxShadow = '0 0 0 2px white,0 0 0 4px ' + color;
+}
+
+async function rvHandleChartClick(param) {
+  if (!_rvDrawingMode || !param.time || !param.point || !_rvSeries) return;
+  const price = parseFloat(_rvSeries.coordinateToPrice(param.point.y).toFixed(4));
+  if (!price || isNaN(price)) return;
+  const time = param.time;
+
+  if (_rvDrawingMode === 'hline') {
+    const saved = await rvSaveDrawingToServer('hline', { price });
+    if (saved) rvAddDrawingToChart(saved);
+
+  } else if (_rvDrawingMode === 'trendline') {
+    const hint = document.getElementById('rv-drawing-hint');
+    if (!_rvPendingPoint) {
+      _rvPendingPoint = { time, price };
+      if (hint) hint.textContent = '已选起始点，再点击终点';
+    } else {
+      const p1 = _rvPendingPoint;
+      const p2 = { time, price };
+      _rvPendingPoint = null;
+      if (JSON.stringify(p1.time) === JSON.stringify(p2.time)) {
+        if (hint) hint.textContent = '起终点不能相同，重新选择';
+        return;
+      }
+      if (hint) hint.textContent = '点击图表选择起始点';
+      const saved = await rvSaveDrawingToServer('trendline', { p1, p2 });
+      if (saved) rvAddDrawingToChart(saved);
+    }
+  }
+}
+
+async function rvSaveDrawingToServer(type, data) {
+  try {
+    const res = await fetch('/api/review/drawings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        symbol: _rvSymbol,
+        period: _rvPeriod,
+        type,
+        data: JSON.stringify(data),
+        color: _rvDrawingColor,
+      }),
+    });
+    const j = await res.json();
+    if (j.success) return { id: j.id, type, data, color: _rvDrawingColor };
+  } catch(e) { console.error('保存画线失败:', e); }
+  return null;
+}
+
+function rvAddDrawingToChart(drawing) {
+  if (!_rvChart || !_rvSeries) return;
+  const { id, type, data, color } = drawing;
+  try {
+    let lineObj = null;
+    if (type === 'hline') {
+      lineObj = _rvSeries.createPriceLine({
+        price: data.price, color, lineWidth: 1, lineStyle: 0,
+        axisLabelVisible: true, title: '',
+      });
+    } else if (type === 'trendline') {
+      lineObj = _rvChart.addLineSeries({
+        color, lineWidth: 1, lastValueVisible: false,
+        priceLineVisible: false, crosshairMarkerVisible: false,
+      });
+      // 确保时间升序
+      const pts = [
+        { time: data.p1.time, value: data.p1.price },
+        { time: data.p2.time, value: data.p2.price },
+      ];
+      if (JSON.stringify(pts[0].time) > JSON.stringify(pts[1].time)) pts.reverse();
+      lineObj.setData(pts);
+    }
+    if (lineObj) _rvActiveDrawings.push({ id, type, data, color, lineObj });
+  } catch(e) { console.error('渲染画线失败:', e); }
+}
+
+async function rvLoadDrawings() {
+  if (!_rvSymbol || !_rvChart || !_rvSeries) return;
+  const gen = _rvRenderGen;
+  try {
+    const res = await fetch(
+      `/api/review/drawings?symbol=${encodeURIComponent(_rvSymbol)}&period=${encodeURIComponent(_rvPeriod)}`
+    );
+    const json = await res.json();
+    if (gen !== _rvRenderGen) return; // 期间图表已重建，丢弃
+    if (!json.success || !json.data?.length) return;
+    for (const d of json.data) {
+      rvAddDrawingToChart({ id: d.id, type: d.type, data: JSON.parse(d.data), color: d.color });
+    }
+  } catch(e) { console.error('加载画线失败:', e); }
+}
+
+async function rvUndoDrawing() {
+  if (!_rvActiveDrawings.length) return;
+  const last = _rvActiveDrawings.pop();
+  try {
+    if (last.type === 'hline' && _rvSeries) _rvSeries.removePriceLine(last.lineObj);
+    else if (last.type === 'trendline' && _rvChart) _rvChart.removeSeries(last.lineObj);
+  } catch(e) {}
+  if (last.id) {
+    fetch(`/api/review/drawings/${last.id}`, { method: 'DELETE' }).catch(() => {});
+  }
+}
+
+async function rvClearDrawings() {
+  if (!_rvSymbol) return;
+  for (const d of _rvActiveDrawings) {
+    try {
+      if (d.type === 'hline' && _rvSeries) _rvSeries.removePriceLine(d.lineObj);
+      else if (d.type === 'trendline' && _rvChart) _rvChart.removeSeries(d.lineObj);
+    } catch(e) {}
+  }
+  _rvActiveDrawings = [];
+  fetch(
+    `/api/review/drawings?symbol=${encodeURIComponent(_rvSymbol)}&period=${encodeURIComponent(_rvPeriod)}`,
+    { method: 'DELETE' }
+  ).catch(() => {});
 }
 
 async function rvNext() {
@@ -3248,6 +3419,7 @@ document.addEventListener('keydown', function(e) {
   if ((tag === 'INPUT' || tag === 'TEXTAREA') && e.key !== 'Escape') return;
   const activeView = document.querySelector('.view.active');
   if (activeView && activeView.id === 'view-review') {
+    if (e.key === 'Escape' && _rvDrawingMode) { rvStartDrawing(_rvDrawingMode); return; }
     if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); rvNext(); return; }
     if (e.key === 'ArrowLeft') { e.preventDefault(); rvPrev(); return; }
     if (e.key === '1') { rvSwitchPeriod('1min',  document.getElementById('rv-tab-1min'));  return; }
@@ -3720,6 +3892,10 @@ function switchView(view, el) {
   _rvRenderGen++;
   if (_rvResizeObserver) { _rvResizeObserver.disconnect(); _rvResizeObserver = null; }
   if (_rvChart) { try { _rvChart.remove(); } catch(e){} _rvChart = null; _rvSeries = null; _rvVolSeries = null; _rvMaSeries = {}; }
+  _rvActiveDrawings = []; _rvDrawingMode = null; _rvPendingPoint = null;
+  ['rv-draw-hline','rv-draw-trendline'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('active'); });
+  const _rvHintEl = document.getElementById('rv-drawing-hint');
+  if (_rvHintEl) _rvHintEl.textContent = '';
   // 离开自选股视图时清理定时器
   if (_watchlistInterval && view !== 'watchlist') {
     clearInterval(_watchlistInterval);
@@ -4783,6 +4959,10 @@ let _rvMaVisible = { 5: true, 10: true, 20: true, 60: true };
 let _rvResizeObserver = null;
 let _rvInited = false;
 let _rvRenderGen = 0;
+let _rvActiveDrawings = [];   // { id, type, data, color, lineObj }
+let _rvDrawingMode = null;    // null | 'hline' | 'trendline'
+let _rvDrawingColor = '#ef4444';
+let _rvPendingPoint = null;   // 趋势线第一个点
 let _taNotes = [];        // 笔记列表
 let _taNoteEditId = null; // 编辑中的笔记 id（null=新建）
 let _taMouseDown = false; // canvas 鼠标按下状态
