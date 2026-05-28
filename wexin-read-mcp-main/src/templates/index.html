@@ -3043,6 +3043,7 @@ async function rvRenderChart() {
   const container = document.getElementById('rv-chart');
   container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:460px;color:var(--ink-3);"><span>加载中...</span></div>';
 
+  const gen = ++_rvRenderGen;
   const isIntraday = _rvPeriod === '1min';
   const url = isIntraday
     ? `/api/stock/kline/${_rvSymbol}?period=1min&count=240`
@@ -3059,6 +3060,7 @@ async function rvRenderChart() {
     container.innerHTML = '<div class="empty-state" style="padding:40px;">暂无K线数据</div>';
     return;
   }
+  if (gen !== _rvRenderGen) return;
   container.innerHTML = '';
 
   _rvChart = LightweightCharts.createChart(container, {
@@ -3174,15 +3176,18 @@ async function rvLoadNotes() {
     list.innerHTML = '';
     return;
   }
-  list.innerHTML = json.data.map(n => `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:6px 8px;background:var(--surface-2,#f8fafc);border-radius:6px;font-size:13px;">
+  list.innerHTML = json.data.map(n => {
+    const safeDate = String(n.created_at || '').slice(0,10).replace(/[^0-9-]/g,'');
+    const safeNote = String(n.note || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const safeId = Number(n.id);
+    return `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:6px 8px;background:var(--surface-2,#f8fafc);border-radius:6px;font-size:13px;">
       <div>
-        <span style="color:var(--ink-3);font-size:11px;">${n.created_at.slice(0,10)}</span>
-        <span style="margin-left:8px;color:var(--ink);">${n.note.replace(/</g,'&lt;')}</span>
+        <span style="color:var(--ink-3);font-size:11px;">${safeDate}</span>
+        <span style="margin-left:8px;color:var(--ink);">${safeNote}</span>
       </div>
-      <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:11px;flex-shrink:0;" onclick="rvDeleteNote(${n.id})">删除</button>
-    </div>
-  `).join('');
+      <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:11px;flex-shrink:0;" onclick="rvDeleteNote(${safeId})">删除</button>
+    </div>`;
+  }).join('');
 }
 
 async function rvDeleteNote(id) {
@@ -3663,6 +3668,7 @@ function switchView(view, el) {
   if (_taRsiChart)  { try { _taRsiChart.remove();  } catch(e){} _taRsiChart = null; }
   _taCanvas = null; _taCtx = null; _taDrawing = null;
   // 复盘视图清理
+  _rvRenderGen++;
   if (_rvResizeObserver) { _rvResizeObserver.disconnect(); _rvResizeObserver = null; }
   if (_rvChart) { try { _rvChart.remove(); } catch(e){} _rvChart = null; _rvSeries = null; _rvVolSeries = null; }
   // 离开自选股视图时清理定时器
@@ -4726,6 +4732,7 @@ let _rvSymbol = '', _rvName = '', _rvPeriod = 'day';
 let _rvChart = null, _rvSeries = null, _rvVolSeries = null;
 let _rvResizeObserver = null;
 let _rvInited = false;
+let _rvRenderGen = 0;
 let _taNotes = [];        // 笔记列表
 let _taNoteEditId = null; // 编辑中的笔记 id（null=新建）
 let _taMouseDown = false; // canvas 鼠标按下状态
