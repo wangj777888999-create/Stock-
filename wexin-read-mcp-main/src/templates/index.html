@@ -983,6 +983,13 @@ textarea.form-input {
   .blogger-grid { grid-template-columns: 1fr 1fr; }
   .topbar { padding: 0 16px; }
 }
+.sidebar.rv-collapsed { width: 60px; }
+.sidebar.rv-collapsed .brand span,
+.sidebar.rv-collapsed .tagline,
+.sidebar.rv-collapsed .nav-item span,
+.sidebar.rv-collapsed .nav-section-label,
+.sidebar.rv-collapsed .sidebar-footer { display: none; }
+.sidebar.rv-collapsed .nav-item { justify-content: center; padding: 12px; }
 
 .scrape-mode-opt { transition: all var(--t) var(--ease); }
 .scrape-mode-opt.active-mode { border-color: var(--blue) !important; background: var(--blue-s); }
@@ -1269,6 +1276,10 @@ textarea.form-input {
       <button class="nav-item" data-view="analysis" onclick="switchView('analysis', this)">
         <svg viewBox="0 0 20 20" fill="none"><path d="M3 17V8l4-4 3 5 4-6 3 5v9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 14h16" stroke="currentColor" stroke-width="1.1" stroke-dasharray="2 2.5" stroke-linecap="round"/></svg>
         <span>技术分析</span>
+      </button>
+      <button class="nav-item" data-view="review" onclick="switchView('review', this)">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M4 4h12v12H4z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M7 8h6M7 11h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14 15l2 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <span>复盘</span>
       </button>
       <div class="nav-section-label" style="margin-top:8px;">系统</div>
       <button class="nav-item" data-view="config" onclick="switchView('config', this)">
@@ -2158,7 +2169,7 @@ textarea.form-input {
               </div>
             </div>
           </div>
-          <div id="fc-cards-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;"></div>
+          <div id="fc-cards-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px;"></div>
         </div>
 
         <!-- 明细视图 -->
@@ -2657,6 +2668,62 @@ textarea.form-input {
         </div><!-- /taMainArea -->
       </div><!-- /view-analysis -->
 
+      <!-- ==================== VIEW: REVIEW ==================== -->
+      <div id="view-review" class="view">
+
+        <!-- 顶部导航栏 -->
+        <div class="card" style="margin-bottom:12px;">
+          <div class="card-body" style="padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+            <button class="btn btn-ghost btn-sm" onclick="rvPrev()">← 上一只</button>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+              <span id="rv-stock-name" style="font-weight:600;font-size:15px;color:var(--ink);">加载中...</span>
+              <span id="rv-progress" style="font-size:12px;color:var(--ink-3);">— / —</span>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="rvNext()">下一只 →</button>
+          </div>
+        </div>
+
+        <!-- 周期 Tab + 放大按钮 -->
+        <div class="card" style="margin-bottom:8px;">
+          <div class="card-body" style="padding:8px 16px;display:flex;align-items:center;gap:6px;">
+            <button class="btn btn-ghost btn-sm" id="rv-tab-timeshare" onclick="rvSwitchPeriod('1min',this)">分时</button>
+            <button class="btn btn-ghost btn-sm active" id="rv-tab-day" onclick="rvSwitchPeriod('day',this)">日线</button>
+            <button class="btn btn-ghost btn-sm" id="rv-tab-week" onclick="rvSwitchPeriod('week',this)">周线</button>
+            <button class="btn btn-ghost btn-sm" id="rv-tab-month" onclick="rvSwitchPeriod('month',this)">月线</button>
+            <div style="flex:1;"></div>
+            <button class="btn btn-ghost btn-sm" onclick="rvToggleSidebar()" title="收起/展开侧边栏，放大图表">
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none"><path d="M3 3h5M3 3v5M17 17h-5M17 17v-5M3 17h5M3 17v-5M17 3h-5M17 3v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 主图（K线 + 量能） -->
+        <div class="card" style="margin-bottom:8px;">
+          <div class="card-body" style="padding:0;">
+            <div id="rv-chart" style="width:100%;height:460px;"></div>
+          </div>
+        </div>
+
+        <!-- 操作栏 + 备注 -->
+        <div class="card">
+          <div class="card-body" style="padding:12px 16px;display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <button class="btn btn-ghost btn-sm" onclick="rvAddWatchlist()">
+                <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M10 2l2.4 5.1 5.6.5-4.1 3.8 1.2 5.6L10 14.3l-5.1 2.7 1.2-5.6L2 7.6l5.6-.5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+                加入自选股
+              </button>
+              <div style="flex:1;display:flex;gap:6px;align-items:center;min-width:200px;">
+                <input id="rv-note-input" class="input" placeholder="写备注… (Enter 保存)" style="flex:1;"
+                       onkeydown="if(event.key==='Enter'){event.preventDefault();rvSaveNote();}">
+                <button class="btn btn-primary btn-sm" onclick="rvSaveNote()">保存</button>
+              </div>
+            </div>
+            <div id="rv-notes-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+          </div>
+        </div>
+
+      </div><!-- /view-review -->
+
       <!-- ==================== VIEW: INDUSTRY ==================== -->
       <div id="view-industry" class="view">
         <div class="industry-layout">
@@ -2914,9 +2981,231 @@ const topbarMeta = {
   roles: { title: '角色验证', sub: '多角色模拟交易 · 交割单导入 · 反向指标验证' },
   sector:   { title: '板块', sub: '行业板块 · 概念板块 · 涨跌幅热力图 · 成分股 · K线' },
   analysis: { title: '技术分析', sub: '画图工具 · 形态识别 · 分析笔记' },
+  review:   { title: '复盘', sub: '随机翻阅全市场 A 股 · K线 + 均线 + 量能 · 备注' },
   cockpit: { title: '驾驶舱', sub: '市场情绪 · 核心指数 · 分时行情总览' },
   industry: { title: '行业调研', sub: 'AI 六步框架 · 流式分析 · 报告存档' },
 };
+
+/* ============================================================
+   REVIEW — 复盘视图
+   ============================================================ */
+
+async function initReview() {
+  if (_rvInited && _rvQueue.length > 0) {
+    _rvUpdateNav();
+    return;
+  }
+  document.getElementById('rv-stock-name').textContent = '加载中...';
+  document.getElementById('rv-progress').textContent = '— / —';
+  try {
+    const json = await (await fetch('/api/review/stocks')).json();
+    if (!json.success || !json.data?.length) {
+      document.getElementById('rv-stock-name').textContent = '股票列表加载失败';
+      return;
+    }
+    // Fisher-Yates 洗牌
+    const arr = json.data.slice();
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    _rvQueue = arr;
+    _rvIndex = 0;
+    _rvInited = true;
+    await rvLoadStock(_rvQueue[0]);
+  } catch(e) {
+    document.getElementById('rv-stock-name').textContent = '加载失败: ' + e.message;
+  }
+}
+
+function _rvUpdateNav() {
+  const s = _rvQueue[_rvIndex];
+  if (!s) return;
+  document.getElementById('rv-stock-name').textContent = s.name + '（' + s.code + '）';
+  document.getElementById('rv-progress').textContent = (_rvIndex + 1) + ' / ' + _rvQueue.length;
+}
+
+async function rvLoadStock(stock) {
+  _rvSymbol = stock.code;
+  _rvName = stock.name;
+  _rvUpdateNav();
+  await rvRenderChart();
+  rvLoadNotes();
+  document.getElementById('rv-note-input').value = '';
+}
+
+async function rvRenderChart() {
+  if (!_rvSymbol) return;
+
+  if (_rvResizeObserver) { _rvResizeObserver.disconnect(); _rvResizeObserver = null; }
+  if (_rvChart) { try { _rvChart.remove(); } catch(e){} _rvChart = null; _rvSeries = null; _rvVolSeries = null; }
+
+  const container = document.getElementById('rv-chart');
+  container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:460px;color:var(--ink-3);"><span>加载中...</span></div>';
+
+  const isIntraday = _rvPeriod === '1min';
+  const url = isIntraday
+    ? `/api/stock/kline/${_rvSymbol}?period=1min&count=240`
+    : `/api/stock/kline/${_rvSymbol}?period=${_rvPeriod}&all_history=true`;
+
+  let json;
+  try {
+    json = await (await fetch(url)).json();
+  } catch(e) {
+    container.innerHTML = '<div class="empty-state" style="padding:40px;">K线加载失败</div>';
+    return;
+  }
+  if (!json.success || !json.data?.length) {
+    container.innerHTML = '<div class="empty-state" style="padding:40px;">暂无K线数据</div>';
+    return;
+  }
+  container.innerHTML = '';
+
+  _rvChart = LightweightCharts.createChart(container, {
+    width: container.clientWidth, height: 460,
+    layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
+    grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: { borderVisible: false },
+    timeScale: { borderVisible: false, timeVisible: isIntraday },
+  });
+
+  if (isIntraday) {
+    _rvSeries = _rvChart.addAreaSeries({
+      lineColor: '#2563EB', topColor: 'rgba(37,99,235,0.2)', bottomColor: 'rgba(37,99,235,0)',
+      lineWidth: 1.5,
+    });
+    _rvSeries.setData(json.data.map(k => ({ time: Math.floor(new Date(k.date).getTime()/1000), value: k.close })));
+  } else {
+    _rvSeries = _rvChart.addCandlestickSeries({
+      upColor: '#ef4444', downColor: '#22c55e',
+      borderUpColor: '#ef4444', borderDownColor: '#22c55e',
+      wickUpColor: '#ef4444', wickDownColor: '#22c55e',
+    });
+    _rvSeries.setData(json.data.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
+    const candleData = json.data.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close }));
+    [[5,'#f59e0b'],[10,'#3b82f6'],[20,'#a855f7'],[60,'#6b7280']].forEach(([p, c]) => {
+      const s = _rvChart.addLineSeries({ color: c, lineWidth: 1, lastValueVisible: false, priceLineVisible: false });
+      s.setData(computeMA(candleData, p));
+    });
+  }
+
+  _rvVolSeries = _rvChart.addHistogramSeries({ priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
+  _rvChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+  _rvVolSeries.setData(json.data.map(k => ({
+    time: isIntraday ? Math.floor(new Date(k.date).getTime()/1000) : k.date,
+    value: k.volume,
+    color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)',
+  })));
+
+  _rvChart.timeScale().fitContent();
+  _rvChart.timeScale().applyOptions({ rightOffset: 5, fixRightEdge: true });
+
+  _rvResizeObserver = new ResizeObserver(() => {
+    if (_rvChart) _rvChart.applyOptions({ width: container.clientWidth });
+  });
+  _rvResizeObserver.observe(container);
+}
+
+async function rvSwitchPeriod(period, btn) {
+  document.querySelectorAll('#view-review .btn.active').forEach(b => {
+    if (['rv-tab-timeshare','rv-tab-day','rv-tab-week','rv-tab-month'].includes(b.id)) b.classList.remove('active');
+  });
+  btn.classList.add('active');
+  _rvPeriod = period;
+  await rvRenderChart();
+}
+
+async function rvNext() {
+  if (!_rvQueue.length) return;
+  _rvIndex = (_rvIndex + 1) % _rvQueue.length;
+  await rvLoadStock(_rvQueue[_rvIndex]);
+}
+
+async function rvPrev() {
+  if (!_rvQueue.length) return;
+  _rvIndex = (_rvIndex - 1 + _rvQueue.length) % _rvQueue.length;
+  await rvLoadStock(_rvQueue[_rvIndex]);
+}
+
+function rvToggleSidebar() {
+  document.querySelector('.sidebar').classList.toggle('rv-collapsed');
+  setTimeout(() => { if (_rvChart) _rvChart.applyOptions({ width: document.getElementById('rv-chart').clientWidth }); }, 50);
+}
+
+async function rvAddWatchlist() {
+  if (!_rvSymbol) return;
+  const res = await fetch('/api/watchlist/add', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ symbol: _rvSymbol }),
+  });
+  const j = await res.json();
+  if (j.success) {
+    alert(_rvName + '（' + _rvSymbol + '）已加入自选股');
+  } else {
+    alert('加入失败: ' + (j.error || '未知错误'));
+  }
+}
+
+async function rvSaveNote() {
+  const inp = document.getElementById('rv-note-input');
+  const note = inp.value.trim();
+  if (!note || !_rvSymbol) return;
+  const res = await fetch('/api/review/notes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ symbol: _rvSymbol, name: _rvName, note }),
+  });
+  const j = await res.json();
+  if (j.success) {
+    inp.value = '';
+    rvLoadNotes();
+  } else {
+    alert('保存失败: ' + (j.error || '未知错误'));
+  }
+}
+
+async function rvLoadNotes() {
+  if (!_rvSymbol) return;
+  const json = await (await fetch('/api/review/notes?symbol=' + encodeURIComponent(_rvSymbol))).json();
+  const list = document.getElementById('rv-notes-list');
+  if (!json.success || !json.data?.length) {
+    list.innerHTML = '';
+    return;
+  }
+  list.innerHTML = json.data.map(n => `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:6px 8px;background:var(--surface-2,#f8fafc);border-radius:6px;font-size:13px;">
+      <div>
+        <span style="color:var(--ink-3);font-size:11px;">${n.created_at.slice(0,10)}</span>
+        <span style="margin-left:8px;color:var(--ink);">${n.note.replace(/</g,'&lt;')}</span>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:11px;flex-shrink:0;" onclick="rvDeleteNote(${n.id})">删除</button>
+    </div>
+  `).join('');
+}
+
+async function rvDeleteNote(id) {
+  await fetch('/api/review/notes/' + id, { method: 'DELETE' });
+  rvLoadNotes();
+}
+
+// 键盘快捷键（复盘视图专用）
+document.addEventListener('keydown', function(e) {
+  const tag = document.activeElement?.tagName;
+  if ((tag === 'INPUT' || tag === 'TEXTAREA') && e.key !== 'Escape') return;
+  const activeView = document.querySelector('.view.active');
+  if (activeView && activeView.id === 'view-review') {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); rvNext(); return; }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); rvPrev(); return; }
+    if (e.key === '1') { rvSwitchPeriod('1min', document.getElementById('rv-tab-timeshare')); return; }
+    if (e.key === '2') { rvSwitchPeriod('day',  document.getElementById('rv-tab-day'));       return; }
+    if (e.key === '3') { rvSwitchPeriod('week', document.getElementById('rv-tab-week'));      return; }
+    if (e.key === '4') { rvSwitchPeriod('month',document.getElementById('rv-tab-month'));     return; }
+    if (e.key === 'w' || e.key === 'W') { rvAddWatchlist(); return; }
+    if (e.key === 'n' || e.key === 'N') { e.preventDefault(); document.getElementById('rv-note-input').focus(); return; }
+  }
+});
 
 /* ===== 驾驶舱 ===== */
 let _ckActiveMarket = 'a';
@@ -3373,6 +3662,9 @@ function switchView(view, el) {
   if (_taMacdChart) { try { _taMacdChart.remove(); } catch(e){} _taMacdChart = null; }
   if (_taRsiChart)  { try { _taRsiChart.remove();  } catch(e){} _taRsiChart = null; }
   _taCanvas = null; _taCtx = null; _taDrawing = null;
+  // 复盘视图清理
+  if (_rvResizeObserver) { _rvResizeObserver.disconnect(); _rvResizeObserver = null; }
+  if (_rvChart) { try { _rvChart.remove(); } catch(e){} _rvChart = null; _rvSeries = null; _rvVolSeries = null; }
   // 离开自选股视图时清理定时器
   if (_watchlistInterval && view !== 'watchlist') {
     clearInterval(_watchlistInterval);
@@ -3413,6 +3705,7 @@ function switchView(view, el) {
   if (view === 'cockpit') { initCockpit(); }
   if (view === 'industry') { indLoadHistory(); }
   if (view === 'flowCategory') { loadFlowCategories(); }
+  if (view === 'review') { initReview(); }
 }
 
 /* ============================================================
@@ -4424,6 +4717,15 @@ let _taCustomPatterns = [];    // 用户手动添加的自定义标注
 let _taCustomRules = [];       // 自定义规则列表（从 DB 加载）
 let _taCustomRulePatterns = []; // 规则计算出的匹配结果
 let _taPatternFilters = new Set(['doji','harami','hammer','shooting_star','bullish_engulf','bearish_engulf','macd_golden','macd_death','macd_bullish_div','macd_bearish_div','custom','custom_rule']);
+
+/* ============================================================
+   REVIEW — 复盘视图全局状态
+   ============================================================ */
+let _rvQueue = [], _rvIndex = 0;
+let _rvSymbol = '', _rvName = '', _rvPeriod = 'day';
+let _rvChart = null, _rvSeries = null, _rvVolSeries = null;
+let _rvResizeObserver = null;
+let _rvInited = false;
 let _taNotes = [];        // 笔记列表
 let _taNoteEditId = null; // 编辑中的笔记 id（null=新建）
 let _taMouseDown = false; // canvas 鼠标按下状态
@@ -7868,23 +8170,29 @@ async function loadFlowCategories() {
 function fcRenderCards(cats) {
   const grid = document.getElementById('fc-cards-grid');
   let html = cats.map(cat => `
-    <div class="card fc-cat-card" style="cursor:pointer;transition:box-shadow .15s,transform .15s;" data-catid="${cat.id}"
-      onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-1px)'"
+    <div class="card fc-cat-card" style="cursor:pointer;transition:box-shadow .15s,transform .15s;padding:20px;" data-catid="${cat.id}"
+      onmouseenter="this.style.boxShadow='var(--shadow-md)';this.style.transform='translateY(-2px)'"
       onmouseleave="this.style.boxShadow='';this.style.transform=''">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
         <div>
-          <div style="font-weight:600;font-size:15px;color:var(--ink);">${fcEsc(cat.name)}</div>
-          <div style="color:var(--ink-3);font-size:12px;margin-top:3px;">${cat.stocks.length} 只股票</div>
+          <div style="font-weight:600;font-size:16px;color:var(--ink);line-height:1.3;">${fcEsc(cat.name)}</div>
+          <div style="color:var(--ink-3);font-size:12px;margin-top:5px;">${cat.stocks.length} 只股票</div>
         </div>
-        <div id="fc-card-main-${cat.id}" style="font-size:13px;font-weight:600;text-align:right;color:var(--ink-2);">--</div>
+        <div id="fc-card-main-${cat.id}" style="font-size:14px;font-weight:700;text-align:right;color:var(--ink-2);line-height:1.4;">--</div>
       </div>
-      <div style="display:flex;gap:16px;font-size:12px;color:var(--ink-3);margin-bottom:10px;">
-        <span>超大单: <span id="fc-card-sl-${cat.id}" style="color:var(--ink-2);">--</span></span>
-        <span>大单: <span id="fc-card-la-${cat.id}" style="color:var(--ink-2);">--</span></span>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+        <div style="background:var(--surface-2);border-radius:7px;padding:10px 12px;">
+          <div style="font-size:11px;color:var(--ink-3);margin-bottom:4px;">超大单</div>
+          <div id="fc-card-sl-${cat.id}" style="font-size:13px;font-weight:600;color:var(--ink-2);">--</div>
+        </div>
+        <div style="background:var(--surface-2);border-radius:7px;padding:10px 12px;">
+          <div style="font-size:11px;color:var(--ink-3);margin-bottom:4px;">大单</div>
+          <div id="fc-card-la-${cat.id}" style="font-size:13px;font-weight:600;color:var(--ink-2);">--</div>
+        </div>
       </div>
-      <div id="fc-card-bar-${cat.id}" style="display:flex;gap:2px;height:5px;border-radius:3px;overflow:hidden;background:var(--border);"></div>
+      <div id="fc-card-bar-${cat.id}" style="display:flex;gap:2px;height:7px;border-radius:4px;overflow:hidden;background:var(--border);"></div>
     </div>`).join('');
-  html += `<div class="card fc-add-card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:110px;cursor:pointer;border:2px dashed var(--border);color:var(--ink-3);gap:6px;transition:border-color .15s,color .15s;"
+  html += `<div class="card fc-add-card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:140px;cursor:pointer;border:2px dashed var(--border);color:var(--ink-3);gap:6px;transition:border-color .15s,color .15s;"
     onmouseenter="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'"
     onmouseleave="this.style.borderColor='var(--border)';this.style.color='var(--ink-3)'">
     <svg width="22" height="22" viewBox="0 0 20 20" fill="none"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
