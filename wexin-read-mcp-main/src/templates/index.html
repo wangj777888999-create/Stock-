@@ -3071,6 +3071,8 @@ async function rvRenderChart() {
   if (_rvResizeObserver) { _rvResizeObserver.disconnect(); _rvResizeObserver = null; }
   if (_rvChart) { try { _rvChart.remove(); } catch(e){} _rvChart = null; _rvSeries = null; _rvVolSeries = null; _rvMaSeries = {}; }
   _rvActiveDrawings = [];
+  const _rvEl = document.getElementById('rv-chart');
+  if (_rvEl && _rvChartClickHandler) { _rvEl.removeEventListener('click', _rvChartClickHandler); _rvChartClickHandler = null; }
 
   const container = document.getElementById('rv-chart');
   container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:460px;color:var(--ink-3);"><span>加载中...</span></div>';
@@ -3163,7 +3165,8 @@ async function rvRenderChart() {
   });
   _rvResizeObserver.observe(container);
 
-  _rvChart.subscribeClick(rvHandleChartClick);
+  _rvChartClickHandler = (e) => rvHandleChartClick(e, container);
+  container.addEventListener('click', _rvChartClickHandler);
   await rvLoadDrawings();
 }
 
@@ -3214,24 +3217,25 @@ function rvSetDrawingColor(color) {
   if (btn) btn.style.boxShadow = '0 0 0 2px white,0 0 0 4px ' + color;
 }
 
-async function rvHandleChartClick(param) {
-  if (!_rvDrawingMode || !param.point || !_rvSeries) return;
+async function rvHandleChartClick(e, container) {
+  if (!_rvDrawingMode || !_rvChart || !_rvSeries) return;
 
-  // coordinateToPrice 在量能区等非价格区域返回 null，必须先判断
-  const rawPrice = _rvSeries.coordinateToPrice(param.point.y);
+  const rect = container.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const y = e.clientY - rect.top;
+
+  const rawPrice = _rvSeries.coordinateToPrice(y);
   if (rawPrice === null || rawPrice === undefined) return;
   const price = parseFloat(rawPrice.toFixed(4));
   if (isNaN(price)) return;
 
   if (_rvDrawingMode === 'hline') {
-    // 水平线只需要价格，不需要时间
     const saved = await rvSaveDrawingToServer('hline', { price });
     if (saved) rvAddDrawingToChart(saved);
 
   } else if (_rvDrawingMode === 'trendline') {
-    // 趋势线需要时间坐标
-    const time = param.time;
-    if (time === undefined || time === null) return;
+    const time = _rvChart.timeScale().coordinateToTime(x);
+    if (time === null || time === undefined) return;
     const hint = document.getElementById('rv-drawing-hint');
     if (!_rvPendingPoint) {
       _rvPendingPoint = { time, price };
@@ -3240,7 +3244,6 @@ async function rvHandleChartClick(param) {
       const p1 = _rvPendingPoint;
       const p2 = { time, price };
       _rvPendingPoint = null;
-      // 用字符串比较时间（日期字符串 or 数字均适用）
       if (String(p1.time) === String(p2.time)) {
         if (hint) hint.textContent = '起终点不能相同，重新选择';
         return;
@@ -3898,6 +3901,8 @@ function switchView(view, el) {
   if (_rvResizeObserver) { _rvResizeObserver.disconnect(); _rvResizeObserver = null; }
   if (_rvChart) { try { _rvChart.remove(); } catch(e){} _rvChart = null; _rvSeries = null; _rvVolSeries = null; _rvMaSeries = {}; }
   _rvActiveDrawings = []; _rvDrawingMode = null; _rvPendingPoint = null;
+  const _rvSvEl = document.getElementById('rv-chart');
+  if (_rvSvEl && _rvChartClickHandler) { _rvSvEl.removeEventListener('click', _rvChartClickHandler); _rvChartClickHandler = null; }
   ['rv-draw-hline','rv-draw-trendline'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.remove('active'); });
   const _rvHintEl = document.getElementById('rv-drawing-hint');
   if (_rvHintEl) _rvHintEl.textContent = '';
@@ -4968,6 +4973,7 @@ let _rvActiveDrawings = [];   // { id, type, data, color, lineObj }
 let _rvDrawingMode = null;    // null | 'hline' | 'trendline'
 let _rvDrawingColor = '#ef4444';
 let _rvPendingPoint = null;   // 趋势线第一个点
+let _rvChartClickHandler = null;
 let _taNotes = [];        // 笔记列表
 let _taNoteEditId = null; // 编辑中的笔记 id（null=新建）
 let _taMouseDown = false; // canvas 鼠标按下状态
