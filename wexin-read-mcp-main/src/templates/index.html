@@ -3077,10 +3077,7 @@ async function rvRenderChart() {
 
   const gen = ++_rvRenderGen;
   const isIntraday = _rvPeriod.endsWith('min');
-  const _rvIntradayCount = { '1min': 240, '5min': 240, '15min': 160 };
-  const url = isIntraday
-    ? `/api/stock/kline/${_rvSymbol}?period=${_rvPeriod}&count=${_rvIntradayCount[_rvPeriod] || 240}`
-    : `/api/stock/kline/${_rvSymbol}?period=${_rvPeriod}&all_history=true`;
+  const url = `/api/stock/kline/${_rvSymbol}?period=${_rvPeriod}&all_history=true`;
 
   let json;
   try {
