@@ -280,6 +280,13 @@ def _migrate():
             added_at    TEXT NOT NULL DEFAULT (datetime('now')),
             UNIQUE(category_id, symbol)
         )""",
+        """CREATE TABLE IF NOT EXISTS review_notes (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol     TEXT NOT NULL,
+            name       TEXT,
+            note       TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )""",
     ]
     for sql in new_tables:
         try:

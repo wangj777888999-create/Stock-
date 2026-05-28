@@ -102,6 +102,8 @@ from routers.industry import router as industry_router
 app.include_router(industry_router)
 from routers.flow_category import router as flow_category_router
 app.include_router(flow_category_router)
+from routers.review import router as review_router
+app.include_router(review_router)
 
 
 @app.get("/", response_class=HTMLResponse)
