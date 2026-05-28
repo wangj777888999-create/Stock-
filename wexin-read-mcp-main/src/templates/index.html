@@ -3215,16 +3215,23 @@ function rvSetDrawingColor(color) {
 }
 
 async function rvHandleChartClick(param) {
-  if (!_rvDrawingMode || !param.time || !param.point || !_rvSeries) return;
-  const price = parseFloat(_rvSeries.coordinateToPrice(param.point.y).toFixed(4));
-  if (!price || isNaN(price)) return;
-  const time = param.time;
+  if (!_rvDrawingMode || !param.point || !_rvSeries) return;
+
+  // coordinateToPrice 在量能区等非价格区域返回 null，必须先判断
+  const rawPrice = _rvSeries.coordinateToPrice(param.point.y);
+  if (rawPrice === null || rawPrice === undefined) return;
+  const price = parseFloat(rawPrice.toFixed(4));
+  if (isNaN(price)) return;
 
   if (_rvDrawingMode === 'hline') {
+    // 水平线只需要价格，不需要时间
     const saved = await rvSaveDrawingToServer('hline', { price });
     if (saved) rvAddDrawingToChart(saved);
 
   } else if (_rvDrawingMode === 'trendline') {
+    // 趋势线需要时间坐标
+    const time = param.time;
+    if (time === undefined || time === null) return;
     const hint = document.getElementById('rv-drawing-hint');
     if (!_rvPendingPoint) {
       _rvPendingPoint = { time, price };
@@ -3233,7 +3240,8 @@ async function rvHandleChartClick(param) {
       const p1 = _rvPendingPoint;
       const p2 = { time, price };
       _rvPendingPoint = null;
-      if (JSON.stringify(p1.time) === JSON.stringify(p2.time)) {
+      // 用字符串比较时间（日期字符串 or 数字均适用）
+      if (String(p1.time) === String(p2.time)) {
         if (hint) hint.textContent = '起终点不能相同，重新选择';
         return;
       }
@@ -3283,7 +3291,7 @@ function rvAddDrawingToChart(drawing) {
         { time: data.p1.time, value: data.p1.price },
         { time: data.p2.time, value: data.p2.price },
       ];
-      if (JSON.stringify(pts[0].time) > JSON.stringify(pts[1].time)) pts.reverse();
+      if (pts[0].time > pts[1].time) pts.reverse();
       lineObj.setData(pts);
     }
     if (lineObj) _rvActiveDrawings.push({ id, type, data, color, lineObj });
