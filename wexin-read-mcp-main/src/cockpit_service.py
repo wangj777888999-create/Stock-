@@ -40,6 +40,63 @@ _AUX_INDICES = [
 _AKSHARE_TIMEOUT = 10
 
 
+def _fetch_breadth_via_sina_spot() -> dict | None:
+    """新浪全市场快照降级:东财不可达时,拉新浪 stock_zh_a_spot 算涨跌家数 + 涨停数。
+
+    数据特点:
+      - ~5500 只 A 股的实时涨跌幅
+      - 全量拉取约 6-20 秒(波动大,新浪并发限制),因此结果自带 60s 缓存
+      - 涨停/跌停按 |涨跌幅| >= 9.5% 估算,会漏掉创业板/科创板 20% 涨跌停
+        和 ST 5% 涨跌停;比东财官方数稍粗。
+    """
+    # 自带 60s 缓存:防止前端高频触发全市场拉取
+    cached = cache.get("cockpit:sina_breadth")
+    if cached is not None:
+        return cached
+    try:
+        import pandas as pd
+        df = patch_requests(ak.stock_zh_a_spot)
+        if df is None or df.empty:
+            return None
+        col = "涨跌幅" if "涨跌幅" in df.columns else None
+        if not col:
+            return None
+        s = pd.to_numeric(df[col], errors="coerce").dropna()
+        up = int((s > 0).sum())
+        down = int((s < 0).sum())
+        flat = int(s.eq(0).sum())
+        # 涨停/跌停估算 (≥9.5% / ≤-9.5%)
+        zt = int((s >= 9.5).sum())
+        dt = int((s <= -9.5).sum())
+        total = up + down + flat
+        result = {
+            "rise_fall": {
+                "up": up, "down": down, "flat": flat,
+                "ratio": round(up / total, 4) if total > 0 else 0,
+                "source": "sina_spot",
+            },
+            "limit": {
+                "up_limit": zt, "down_limit": dt,
+                "source": "sina_spot",
+                "approx": True,  # 标记数值是估算,不含特殊涨跌停板规则
+            },
+        }
+        cache.set("cockpit:sina_breadth", result, 60)
+        return result
+    except Exception as e:
+        logger.warning(f"新浪全市场快照降级失败: {e}")
+        return None
+
+
+async def preload_breadth_fallback():
+    """启动预热:后台拉一次新浪全市场快照,让首次访问无等待。失败静默。"""
+    try:
+        await asyncio.to_thread(_fetch_breadth_via_sina_spot)
+        logger.info("涨跌家数(新浪)预热完成")
+    except Exception as e:
+        logger.warning(f"涨跌家数预热失败: {e}")
+
+
 # ─── 情绪聚合 ───
 
 async def get_sentiment() -> dict:
@@ -110,6 +167,32 @@ async def get_sentiment() -> dict:
         else:
             logger.warning(f"市场活跃度获取失败: {results[0] if isinstance(results[0], Exception) else '空数据'}")
 
+        # 1b. 东财失败时,经统一 DataRouter 降级(新浪全市场快照等)
+        if rise_fall_data is None:
+            try:
+                from services.data_router import get_router
+                fb_resp = await get_router().fetch(
+                    "market_breadth",
+                    cache_key="cockpit:breadth_via_router",
+                    ttl=60,
+                    timeout=30.0,
+                    validate=lambda x: bool(x and x.get("rise_fall")),
+                )
+                fb = fb_resp.get("data") if fb_resp.get("success") else None
+                if fb:
+                    rise_fall_data = fb["rise_fall"]
+                    if limit_data is None:
+                        limit_data = fb["limit"]
+                    else:
+                        if not limit_data.get("up_limit"):
+                            limit_data["up_limit"] = fb["limit"]["up_limit"]
+                        if not limit_data.get("down_limit"):
+                            limit_data["down_limit"] = fb["limit"]["down_limit"]
+                        limit_data["approx"] = fb["limit"].get("approx", False)
+                    logger.info(f"涨跌家数已降级,使用源: {fb_resp.get('source')}")
+            except Exception as e:
+                logger.warning(f"DataRouter 降级也失败: {e}")
+
         # 2. 解析涨停池（补充真实涨停数）
         df_zt = results[1]
         if not isinstance(df_zt, Exception) and df_zt is not None and hasattr(df_zt, "empty"):
@@ -147,14 +230,31 @@ async def get_sentiment() -> dict:
             indices = await get_indices_quotes()
             if indices.get("success"):
                 total_yuan = 0
+                # 实时:上证 amount + 深证 amount
+                today_vol = 0  # 上证 volume(手),用于和日K对比放缩量
                 for idx in indices["data"]:
-                    if idx["code"] in ("000001",) and idx.get("amount"):
-                        total_yuan += idx["amount"] * 10000
+                    if idx["code"] == "000001":
+                        if idx.get("amount"):
+                            total_yuan += idx["amount"] * 10000
+                        if idx.get("volume"):
+                            today_vol += idx["volume"]
                 sz_amt = (indices.get("aux") or {}).get("399001")
                 if sz_amt:
                     total_yuan += sz_amt * 10000
+                sz_vol = (indices.get("aux") or {}).get("399001_volume")
+                if sz_vol:
+                    today_vol += sz_vol
                 if total_yuan > 0:
                     volume_data = {"total_yuan": total_yuan}
+                    # 取近 6 日两市成交量,算今日 vs 昨日 + 今日 vs 近5日均量
+                    try:
+                        prev_vol, avg5_vol = await _fetch_prev_index_volume()
+                        if today_vol and prev_vol and prev_vol > 0:
+                            volume_data["vs_prev_pct"] = round((today_vol - prev_vol) / prev_vol * 100, 1)
+                        if today_vol and avg5_vol and avg5_vol > 0:
+                            volume_data["vs_avg5_pct"] = round((today_vol - avg5_vol) / avg5_vol * 100, 1)
+                    except Exception as e:
+                        logger.debug(f"取昨日成交量失败: {e}")
         except Exception as e:
             logger.warning(f"获取两市成交额失败: {e}")
 
@@ -167,7 +267,8 @@ async def get_sentiment() -> dict:
                 "flow": flow_data,
             },
         }
-        cache.set(cache_key, resp, 15)
+        # 60s 缓存:新浪降级源全市场快照较慢(~8s),不能高频触发
+        cache.set(cache_key, resp, 60)
         return resp
 
     except asyncio.TimeoutError:
@@ -179,6 +280,45 @@ async def get_sentiment() -> dict:
 
 
 # ─── 指数实时报价 ───
+
+async def _fetch_prev_index_volume() -> tuple[float | None, float | None]:
+    """从腾讯日 K 取沪深两市近 6 个交易日成交量,返回 (昨日总量, 近5日均量)。
+
+    腾讯日 K 字段: [日期, 开, 收, 高, 低, 成交量(手)]
+    """
+    try:
+        url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000001,day,,,8,qfq"
+        r1 = await get_async_client().get(url, timeout=6)
+        sh = (r1.json().get("data") or {}).get("sh000001") or {}
+        sh_days = sh.get("day") or sh.get("qfqday") or []
+
+        url2 = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sz399001,day,,,8,qfq"
+        r2 = await get_async_client().get(url2, timeout=6)
+        sz = (r2.json().get("data") or {}).get("sz399001") or {}
+        sz_days = sz.get("day") or sz.get("qfqday") or []
+
+        if not sh_days or not sz_days:
+            return None, None
+
+        # 两市同日成交量加和(取最近6日)
+        sh_map = {d[0]: float(d[5]) for d in sh_days[-7:] if len(d) > 5}
+        sz_map = {d[0]: float(d[5]) for d in sz_days[-7:] if len(d) > 5}
+        common = sorted(set(sh_map) & set(sz_map))[-6:]
+        if not common:
+            return None, None
+        totals = [sh_map[d] + sz_map[d] for d in common]
+        # 昨日:最近一根
+        prev_total = totals[-1]
+        # 近5日均量:倒数第 2-6 根的均值,排除"最新"
+        if len(totals) >= 6:
+            avg5 = sum(totals[-6:-1]) / 5
+        else:
+            avg5 = sum(totals[:-1]) / max(1, len(totals) - 1) if len(totals) > 1 else prev_total
+        return prev_total, avg5
+    except Exception as e:
+        logger.debug(f"取指数日K成交量失败: {e}")
+        return None, None
+
 
 async def get_indices_quotes() -> dict:
     """批量获取 6 个主要指数的实时行情。"""
@@ -228,7 +368,9 @@ async def get_indices_quotes() -> dict:
             else:
                 aux_idx = i - len(INDICES)
                 if aux_idx < len(_AUX_INDICES):
-                    aux_data[_AUX_INDICES[aux_idx]["code"]] = _tf(fields, 37)
+                    code = _AUX_INDICES[aux_idx]["code"]
+                    aux_data[code] = _tf(fields, 37)            # amount
+                    aux_data[f"{code}_volume"] = _tf(fields, 36)  # volume
             i += 1
 
         resp = {"success": True, "data": data, "aux": aux_data}

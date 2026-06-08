@@ -48,7 +48,8 @@ class WeixinScraper:
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
                     "Chrome/125.0.0.0 Safari/537.36"
                 ),
-                proxy={"server": "direct"},  # 绕过系统代理，避免 VPN 干扰国内站点访问
+                # 注:Playwright 不支持 server="direct";不传 proxy 即跟随浏览器默认。
+                # 浏览器是 launch 时无 --proxy-server 参数,所以默认就是直连。
                 java_script_enabled=True,
             )
             # 隐藏自动化标志

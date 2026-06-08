@@ -430,8 +430,14 @@ async def websocket_mp_login(ws: WebSocket):
         logger.info("扫码登录：客户端断开连接")
     except Exception as e:
         logger.error(f"扫码登录异常: {e}", exc_info=True)
+        # 把异常类型 + 消息一起回传,避免出现"登录异常: "后面空白看不出根因
+        err_type = type(e).__name__
+        err_msg = str(e).strip() or "(无详细信息,请查看 app.py 终端日志)"
         try:
-            await ws.send_json({"type": "error", "message": f"登录异常: {str(e)}"})
+            await ws.send_json({
+                "type": "error",
+                "message": f"登录异常 [{err_type}]: {err_msg[:300]}",
+            })
         except Exception:
             pass
     finally:
@@ -603,24 +609,15 @@ async def websocket_task(ws: WebSocket):
                     "message": f"已存储 {total_saved} 篇文章到数据库",
                 })
 
-        # --- 等待用户选择: 仅汇总 or AI分析（可指定多个投资视角）---
+        # --- 等待用户选择: 仅汇总 or AI分析 ---
         choice = await ws.receive_json()
         do_analyze = choice.get("analyze", False)
-        # personas: 用户勾选的视角 ID 列表；若 AI 分析但未指定，则使用全部视角
-        personas = choice.get("personas") or []
 
         # --- 阶段2: 生成报告 ---
         analyzer = ArticleAnalyzer(config)
         if do_analyze:
-            if personas:
-                msg = f"正在以 {len(personas)} 个视角并行分析..."
-            else:
-                msg = "正在进行AI智能分析..."
-            await ws.send_json({"type": "phase", "phase": "analyze", "message": msg})
-            if personas:
-                analysis = await analyzer.analyze_with_personas(articles, personas)
-            else:
-                analysis = await analyzer.analyze(articles)
+            await ws.send_json({"type": "phase", "phase": "analyze", "message": "正在进行AI智能分析..."})
+            analysis = await analyzer.analyze(articles)
         else:
             await ws.send_json({"type": "phase", "phase": "analyze", "message": "正在生成文章汇总..."})
             from datetime import datetime

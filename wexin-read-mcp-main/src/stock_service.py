@@ -150,6 +150,16 @@ def _fmt_pct(v) -> str | None:
         return str(v)
 
 
+def _to_float(v):
+    """容错转 float,失败/空返回 None。供直连东财 API 的字段解析使用。"""
+    if v is None or v == "" or v == "-":
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def _fmt_amount(v) -> str | None:
     """将金额统一格式化为 X.XX亿 / X.XX万，保持正负号。"""
     v = _clean(v)
@@ -455,43 +465,25 @@ class StockService:
     # ─── 2. 实时行情 ───
 
     async def get_realtime_quote(self, symbol: str, bypass_cache: bool = False) -> dict:
-        """通过腾讯 API 获取实时行情，支持 A 股/美股/港股。"""
+        """通过统一 DataRouter 获取实时行情(腾讯主 + 新浪兜底)。"""
         market = detect_market(symbol)
         original = str(symbol).strip()
         symbol = normalize_symbol(symbol)
         cache_key = f"quote:{symbol}"
-        if not bypass_cache:
-            cached = cache.get(cache_key)
-            if cached is not None:
-                return cached
+        ttl = TTL_REALTIME_REFRESH if bypass_cache else TTL_REALTIME
 
-        try:
-            if market == "a":
-                exchange = get_exchange(symbol)
-                url_code = symbol
-            elif market == "hk":
-                exchange = "hk"
-                url_code = original  # 港股用原始 5 位代码
-            else:
-                exchange = "us"
-                url_code = symbol
-
-            url = _QT_URL.format(exchange=exchange, code=url_code)
-            r = await get_async_client().get(url, timeout=10)
-            text = r.content.decode("gbk", errors="replace")
-            record = _parse_tencent_quote(text, symbol)
-            if record is None:
-                return {"success": False, "error": f"未找到股票 {symbol}"}
-
-            # 补充市场标识
-            record["市场"] = {"a": "A股", "hk": "港股", "us": "美股"}[market]
-            resp = {"success": True, "data": record}
-            ttl = TTL_REALTIME_REFRESH if bypass_cache else TTL_REALTIME
-            cache.set(cache_key, resp, ttl)
-            return resp
-        except Exception as e:
-            logger.error(f"获取行情失败 {symbol}: {e}")
-            return {"success": False, "error": f"获取行情失败: {e}"}
+        # bypass_cache 时跳过缓存直接 race
+        from services.data_router import get_router
+        r = await get_router().fetch(
+            "stock_quote",
+            cache_key=None if bypass_cache else cache_key,
+            ttl=ttl,
+            validate=lambda x: x is not None and x.get("最新价") is not None,
+            symbol=symbol, market=market, original=original,
+        )
+        if not r["success"]:
+            return {"success": False, "error": r["error"]}
+        return {"success": True, "data": r["data"], "source": r["source"]}
 
     # ─── 3. K线历史数据 ───
 
@@ -538,81 +530,18 @@ class StockService:
                             "volume": int(float(item["volume"])),
                         })
                 else:
-                    # A 股日/周/月：三源竞速 (AKShare / 腾讯 / mootdx)
-                    from services.mootdx_provider import fetch_mootdx_kline
-                    from services.source_racer import race_sources
-
-                    period_map = {"day": "daily", "week": "weekly", "month": "monthly"}
-                    ak_period = period_map.get(period, "daily")
-
-                    async def _ak():
-                        try:
-                            df = await asyncio.wait_for(
-                                asyncio.to_thread(
-                                    _patch_requests, ak.stock_zh_a_hist,
-                                    symbol=norm, period=ak_period,
-                                    start_date="20050101", end_date="20300101", adjust="qfq",
-                                ),
-                                timeout=5.0,
-                            )
-                            if df is not None and not df.empty:
-                                col_map = {f: _resolve_col(df.columns, a) for f, a in KLINE_COL_ALIASES.items()}
-                                missing = [f for f, c in col_map.items() if c is None]
-                                if missing:
-                                    return None
-                                if count < 99999:
-                                    df = df.tail(count)
-                                recs = []
-                                for _, row in df.iterrows():
-                                    rec = _extract_kline_row(row, col_map)
-                                    if rec:
-                                        recs.append(rec)
-                                return recs if recs else None
-                        except Exception:
-                            return None
-
-                    async def _tx():
-                        try:
-                            exchange_prefix = get_exchange(norm)
-                            tencent_period = {"day": "day", "week": "week", "month": "month"}[period]
-                            url = (
-                                f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
-                                f"?param={exchange_prefix}{norm},{tencent_period},,,{min(count, 640)},qfq"
-                            )
-                            r = await get_async_client().get(url, timeout=10)
-                            data = r.json()
-                            kdata_node = data.get("data", {}).get(f"{exchange_prefix}{norm}", {})
-                            kdata = kdata_node.get(tencent_period, []) or \
-                                    kdata_node.get(f"qfq{tencent_period}", []) or \
-                                    kdata_node.get("qfqday", []) or \
-                                    kdata_node.get("day", [])
-                            if kdata:
-                                recs = []
-                                for item in kdata:
-                                    recs.append({
-                                        "date": item[0],
-                                        "open": float(item[1]) if item[1] else None,
-                                        "close": float(item[2]) if item[2] else None,
-                                        "high": float(item[3]) if item[3] else None,
-                                        "low": float(item[4]) if item[4] else None,
-                                        "volume": float(item[5]) if len(item) > 5 and item[5] else None,
-                                    })
-                                return recs if recs else None
-                        except Exception:
-                            return None
-
-                    async def _mootdx():
-                        return await fetch_mootdx_kline(norm, period, count)
-
-                    winner_sid, records = await race_sources(
-                        [("akshare", _ak), ("tencent", _tx), ("mootdx", _mootdx)],
+                    # A 股日/周/月:经统一 DataRouter(腾讯 + AKShare)
+                    from services.data_router import get_router
+                    exchange_prefix = get_exchange(norm)
+                    rr = await get_router().fetch(
+                        "stock_kline_a",
+                        cache_key=None,  # 外层 cache.set 处理
                         timeout=8.0,
-                        validate=lambda r: bool(r) and len(r) > 0,
+                        validate=lambda x: bool(x) and len(x) > 0,
+                        symbol=norm, period=period, count=count,
+                        exchange_prefix=exchange_prefix,
                     )
-
-                    if winner_sid:
-                        logger.debug(f"K线竞速胜出: {winner_sid} ({symbol})")
-
+                    records = rr.get("data") if rr.get("success") else None
                     if not records:
                         return {"success": False, "error": "暂无K线数据"}
 
@@ -934,90 +863,218 @@ class StockService:
     # ─── 6. 资金流向 ───
 
     async def get_money_flow(self, symbol: str) -> dict:
-        """获取近期资金流向（主力/超大单/大单/中单/小单）。仅 A 股支持。"""
+        """获取近期资金流向(A股),走统一 DataRouter:
+        东财 push2his(20天) > AKShare(20天) > 新浪当日(1行兜底),
+        失败时回退 7 天内陈旧缓存。
+        """
+        market = detect_market(symbol)
+        if market != "a":
+            return {"success": False, "error": "该市场暂不支持资金流向数据"}
+        symbol = normalize_symbol(symbol)
+        exchange = get_exchange(symbol)
+        cache_key = f"flow:{symbol}"
+
+        from services.data_router import get_router
+        r = await get_router().fetch(
+            "money_flow_individual",
+            cache_key=cache_key,
+            ttl=TTL_REALTIME,
+            timeout=7.0,
+            validate=lambda x: bool(x),
+            symbol=symbol,
+            exchange=exchange,
+        )
+        if r["success"]:
+            return {"success": True, "data": r["data"], "source": r["source"],
+                    "stale": r["stale"]}
+        return {
+            "success": False,
+            "error": "资金流数据源(东方财富)在当前网络环境暂不可达,可尝试切换网络/代理后重试",
+        }
+
+    async def _get_money_flow_legacy_DEPRECATED(self, symbol: str) -> dict:
+        """旧版资金流实现(保留以备 router 回滚)。
+        本函数不再被调用,留作回滚备份。下次清理时可删。
+        """
         market = detect_market(symbol)
         if market != "a":
             return {"success": False, "error": "该市场暂不支持资金流向数据"}
         symbol = normalize_symbol(symbol)
         cache_key = f"flow:{symbol}"
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return cached
+        from stock_utils import cache_get_stale  # 局部 import 避免循环依赖
+        fresh_val, is_fresh = cache_get_stale(cache_key, max_stale_seconds=7 * 86400)
+        if is_fresh and fresh_val is not None:
+            return fresh_val
+        from services.source_racer import race_sources
+        exchange = get_exchange(symbol)
+        secid = ("1." if exchange == "sh" else "0.") + symbol
 
-        try:
-            exchange = get_exchange(symbol)
-            df = await asyncio.wait_for(
-                asyncio.to_thread(
-                    _patch_requests, ak.stock_individual_fund_flow,
-                    stock=symbol, market=exchange,
-                ),
-                timeout=20,
-            )
-            if df is None or df.empty:
-                return {"success": False, "error": "未找到资金流向数据"}
+        async def _em_direct():
+            """东财 push2his 资金流日线接口(直连 httpx)。注:某些网络环境下不可达,
+            但保留它,网络环境变化(切代理/换地区)时能立刻恢复 20 天历史数据。"""
+            try:
+                url = (
+                    "https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get"
+                    f"?secid={secid}&fields1=f1,f2,f3,f7"
+                    "&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65"
+                )
+                r = await get_async_client().get(url, timeout=4.0)
+                if r.status_code != 200:
+                    return None
+                data = r.json().get("data") or {}
+                klines = data.get("klines") or []
+                if not klines:
+                    return None
+                recs = []
+                for line in klines[-20:]:
+                    parts = line.split(",")
+                    if len(parts) < 13:
+                        continue
+                    recs.append({
+                        "日期": parts[0],
+                        "主力净流入-净额": _fmt_amount(_to_float(parts[1])),
+                        "小单净流入-净额": _fmt_amount(_to_float(parts[2])),
+                        "中单净流入-净额": _fmt_amount(_to_float(parts[3])),
+                        "大单净流入-净额": _fmt_amount(_to_float(parts[4])),
+                        "超大单净流入-净额": _fmt_amount(_to_float(parts[5])),
+                        "主力净流入-净占比": _to_float(parts[6]),
+                        "小单净流入-净占比": _to_float(parts[7]),
+                        "中单净流入-净占比": _to_float(parts[8]),
+                        "大单净流入-净占比": _to_float(parts[9]),
+                        "超大单净流入-净占比": _to_float(parts[10]),
+                        "收盘价": _to_float(parts[11]),
+                        "涨跌幅": _to_float(parts[12]),
+                    })
+                recs.reverse()  # 最近在前
+                return recs if recs else None
+            except Exception as e:
+                logger.debug(f"东财资金流失败 {symbol}: {e}")
+                return None
 
-            # 取最近 20 天
-            df = df.tail(20).iloc[::-1]
-            pick_cols = [
-                "日期", "收盘价", "涨跌幅",
-                "主力净流入-净额", "主力净流入-净占比",
-                "超大单净流入-净额", "超大单净流入-净占比",
-                "大单净流入-净额", "大单净流入-净占比",
-                "中单净流入-净额", "小单净流入-净额",
-            ]
-            existing = [c for c in pick_cols if c in df.columns]
-            amount_cols = {c for c in existing if "净额" in c}
-            records = df[existing].to_dict(orient="records")
-            for r in records:
-                for k, v in r.items():
-                    if hasattr(v, "strftime"):
-                        r[k] = v.strftime("%Y-%m-%d")
-                    elif k in amount_cols:
-                        r[k] = _fmt_amount(v)
-                    else:
-                        r[k] = _clean(v)
-            resp = {"success": True, "data": records}
+        async def _sina_today():
+            """新浪当日资金流(只有 1 行,作为东财不可达时的最低保底)。"""
+            try:
+                url = (
+                    "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+                    f"MoneyFlow.ssi_ssfx_flzjtj?daima={exchange}{symbol}"
+                )
+                r = await get_async_client().get(
+                    url, timeout=4.0,
+                    headers={"Referer": "https://finance.sina.com.cn/"},
+                )
+                if r.status_code != 200 or not r.text:
+                    return None
+                # 新浪返回是 JSON-like(可能带 var=)
+                txt = r.text.strip()
+                if txt.startswith("var "):
+                    txt = txt.split("=", 1)[1].strip().rstrip(";")
+                import json as _json
+                data = _json.loads(txt)
+                if not data or "r0_in" not in data:
+                    return None
+                # 字段:r0=超大单 r1=大单 r2=中单 r3=小单;netamount=主力净额
+                def _n(k): return _to_float(data.get(k))
+                main_net = _n("netamount")  # 主力(超大+大)净额
+                r0_net = (_n("r0_in") or 0) - (_n("r0_out") or 0)
+                r1_net = (_n("r1_in") or 0) - (_n("r1_out") or 0)
+                r2_net = (_n("r2_in") or 0) - (_n("r2_out") or 0)
+                r3_net = (_n("r3_in") or 0) - (_n("r3_out") or 0)
+                # 占比:r0x_ratio 是主力占比
+                main_ratio = _n("r0x_ratio")
+                from datetime import datetime
+                # 新浪 changeratio 是小数(0.0040 = 0.40%);乘以 100 转 % 后保留 2 位
+                chg_pct = round((_n("changeratio") or 0) * 100, 2)
+                return [{
+                    "日期": datetime.now().strftime("%Y-%m-%d") + "(新浪当日)",
+                    "收盘价": _n("trade"),
+                    "涨跌幅": chg_pct,
+                    "主力净流入-净额": _fmt_amount(main_net),
+                    "主力净流入-净占比": main_ratio,
+                    "超大单净流入-净额": _fmt_amount(r0_net),
+                    "大单净流入-净额": _fmt_amount(r1_net),
+                    "中单净流入-净额": _fmt_amount(r2_net),
+                    "小单净流入-净额": _fmt_amount(r3_net),
+                }]
+            except Exception as e:
+                logger.debug(f"新浪当日资金流失败 {symbol}: {e}")
+                return None
+
+        async def _akshare():
+            """AKShare stock_individual_fund_flow 兜底(底层也走东财)。"""
+            try:
+                df = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        _patch_requests, ak.stock_individual_fund_flow,
+                        stock=symbol, market=exchange,
+                    ),
+                    timeout=5,
+                )
+                if df is None or df.empty:
+                    return None
+                df = df.tail(20).iloc[::-1]
+                pick = [
+                    "日期", "收盘价", "涨跌幅",
+                    "主力净流入-净额", "主力净流入-净占比",
+                    "超大单净流入-净额", "超大单净流入-净占比",
+                    "大单净流入-净额", "大单净流入-净占比",
+                    "中单净流入-净额", "小单净流入-净额",
+                ]
+                cols = [c for c in pick if c in df.columns]
+                amount_cols = {c for c in cols if "净额" in c}
+                recs = df[cols].to_dict(orient="records")
+                for r in recs:
+                    for k, v in r.items():
+                        if hasattr(v, "strftime"):
+                            r[k] = v.strftime("%Y-%m-%d")
+                        elif k in amount_cols:
+                            r[k] = _fmt_amount(v)
+                        else:
+                            r[k] = _clean(v)
+                return recs
+            except Exception as e:
+                logger.debug(f"AKShare 资金流失败 {symbol}: {e}")
+                return None
+
+        # 三源 race:东财历史(20天) > AKShare 历史(20天) > 新浪当日(1行兜底)
+        # 整体超时收紧:东财/AKShare 各 4-5s,新浪 4s,留缓冲。
+        winner, records = await race_sources(
+            [("em_direct", _em_direct), ("akshare", _akshare), ("sina_today", _sina_today)],
+            timeout=7.0,
+            validate=lambda r: bool(r),
+        )
+
+        if records:
+            resp = {"success": True, "data": records, "source": winner}
             cache.set(cache_key, resp, TTL_REALTIME)
             return resp
-        except asyncio.TimeoutError:
-            logger.error(f"获取资金流向超时 {symbol}")
-            return {"success": False, "error": "资金流向请求超时，请稍后重试"}
-        except Exception as e:
-            logger.error(f"获取资金流向失败 {symbol}: {e}")
-            return {"success": False, "error": f"获取资金流向失败: {e}"}
+
+        # 陈旧兜底:复用前面的查询结果(stale_val 已经是过期但还在 7 天内的旧值)
+        if fresh_val and fresh_val.get("success"):
+            fresh_val["stale"] = True
+            return fresh_val
+
+        return {
+            "success": False,
+            "error": "资金流数据源(东方财富)在当前网络环境暂不可达,可尝试切换网络/代理后重试",
+        }
 
     # ─── 7. 个股新闻 ───
 
     async def get_news(self, symbol: str) -> dict:
-        """获取个股相关新闻。"""
+        """获取个股新闻,走统一 DataRouter(目前主源:东财;后续可加同花顺/新浪)。"""
         symbol = normalize_symbol(symbol)
         cache_key = f"news:{symbol}"
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        try:
-            df = await asyncio.to_thread(
-                _patch_requests, ak.stock_news_em, symbol=symbol,
-            )
-            if df is None or df.empty:
-                return {"success": True, "data": []}
-
-            records = []
-            for _, row in df.head(15).iterrows():
-                records.append({
-                    "title": _clean(row.get("新闻标题")),
-                    "time": str(row.get("发布时间", "")),
-                    "source": _clean(row.get("文章来源")),
-                    "url": _clean(row.get("新闻链接")),
-                    "summary": _clean(row.get("新闻内容", ""))[:120] if row.get("新闻内容") else None,
-                })
-            resp = {"success": True, "data": records}
-            cache.set(cache_key, resp, TTL_DAILY)
-            return resp
-        except Exception as e:
-            logger.error(f"获取新闻失败 {symbol}: {e}")
-            return {"success": False, "error": f"获取新闻失败: {e}"}
+        from services.data_router import get_router
+        r = await get_router().fetch(
+            "stock_news",
+            cache_key=cache_key,
+            ttl=TTL_DAILY,
+            validate=lambda x: x is not None,  # 空列表也算成功(没新闻)
+            symbol=symbol,
+        )
+        if r["success"]:
+            return {"success": True, "data": r["data"] or [], "source": r["source"]}
+        return {"success": True, "data": [], "source": None}
 
     # ─── 7b. 巨潮资讯公告 ───
 
@@ -1028,40 +1085,24 @@ class StockService:
             return {"success": False, "error": "该市场暂不支持公告数据"}
         symbol = normalize_symbol(symbol)
         cache_key = f"announcements:{symbol}"
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return cached
-
-        try:
-            from datetime import datetime, timedelta
-            end_date = datetime.now().strftime("%Y%m%d")
-            start_date = (datetime.now() - timedelta(days=365)).strftime("%Y%m%d")
-            df = await asyncio.wait_for(
-                asyncio.to_thread(
-                    _patch_requests, ak.stock_zh_a_disclosure_report_cninfo,
-                    symbol=symbol, start_date=start_date, end_date=end_date,
-                ),
-                timeout=30,
-            )
-            if df is None or df.empty:
-                return {"success": True, "data": []}
-
-            records = []
-            for _, row in df.head(30).iterrows():
-                title = _clean(row.iloc[2]) if len(row) > 2 else None
-                date = str(row.iloc[3])[:10] if len(row) > 3 else None
-                url = _clean(row.iloc[4]) if len(row) > 4 else None
-                if title:
-                    records.append({"title": title, "date": date, "url": url})
-            resp = {"success": True, "data": records}
-            cache.set(cache_key, resp, TTL_COMPANY)
-            return resp
-        except asyncio.TimeoutError:
-            logger.error(f"获取公告超时 {symbol}")
-            return {"success": False, "error": "公告请求超时，请稍后重试"}
-        except Exception as e:
-            logger.error(f"获取公告失败 {symbol}: {e}")
-            return {"success": False, "error": f"获取公告失败: {e}"}
+        from services.data_router import get_router
+        r = await get_router().fetch(
+            "stock_announcement",
+            cache_key=cache_key,
+            ttl=TTL_COMPANY,
+            validate=lambda x: x is not None,
+            symbol=symbol,
+        )
+        if r["success"]:
+            data = r["data"] or []
+            # 字段统一:旧前端用 date/title/url,provider 给 time
+            normalized = [{
+                "title": it.get("title"),
+                "date": (it.get("time") or "")[:10],
+                "url": it.get("url"),
+            } for it in data]
+            return {"success": True, "data": normalized, "source": r["source"]}
+        return {"success": True, "data": [], "error": r.get("error")}
 
     # ─── 8. 十大流通股东 ───
 

@@ -5,7 +5,6 @@ import json
 from stock_service import StockService
 from stock_utils import detect_market
 from global_stock_service import global_stock_service
-from agents import list_personas
 
 router = APIRouter()
 stock_service = StockService()
@@ -104,9 +103,3 @@ async def api_financial_rules():
         return json.loads(_RULES_PATH.read_text("utf-8"))
     except FileNotFoundError:
         return {"rules": []}
-
-
-@router.get("/api/agents/personas")
-async def api_list_personas():
-    """返回可用的投资人格列表（前端 AI 分析多选用）。"""
-    return {"personas": list_personas()}

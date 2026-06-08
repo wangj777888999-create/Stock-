@@ -104,6 +104,16 @@ from routers.flow_category import router as flow_category_router
 app.include_router(flow_category_router)
 from routers.review import router as review_router
 app.include_router(review_router)
+from routers.financial import router as financial_router
+app.include_router(financial_router)
+from routers.sentiment import router as sentiment_router
+app.include_router(sentiment_router)
+
+# DataRouter 初始化 + 健康面板
+from services import providers as _data_providers  # noqa: E402,F401
+_data_providers.ensure_initialized()
+from routers.health import router as health_router
+app.include_router(health_router)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -162,6 +172,15 @@ async def _startup():
     asyncio.create_task(_preload_sector_boards())
     asyncio.create_task(_preload_watchlist_quotes())
 
+    # 预热涨跌家数降级源(新浪全市场快照,首次拉 ~15s,预热避免用户首次访问等待)
+    async def _preload_breadth():
+        try:
+            from cockpit_service import preload_breadth_fallback
+            await preload_breadth_fallback()
+        except Exception as e:
+            logger.warning(f"涨跌家数预热失败: {e}")
+    asyncio.create_task(_preload_breadth())
+
     # 启动定时采集调度器
     try:
         from scheduler import start_scheduler
@@ -188,4 +207,9 @@ async def _shutdown():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app:app", host="0.0.0.0", port=8000)
+    uvicorn.run(
+        "app:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=False,
+    )

@@ -50,8 +50,10 @@ python benchmark_all_modules.py
 | `iwencai_service.py` | 自然语言选股查询（同花顺问财） |
 | `blogger.py` | 微信博主管理 + 文章获取 |
 | `scraper.py` | 基于 Playwright 的文章抓取 |
-| `analyzer.py` | AI 文章分析引擎 |
-| `agents/personas.py` | 3 个 AI 投资者人设（价值/成长/趋势） |
+| `analyzer.py` | AI 文章分析引擎（综合多篇博主文章 → 结构化投资分析报告 + 提及股票抽取） |
+| `financial_service.py` | 财报分析（A/美股关键指标 → AI 四维度解读） |
+| `sentiment_service.py` | 个股情绪雷达（价量/资金/热度/博主/舆情 五维评分） |
+| `services/data_router.py` | 数据源统一路由层（多源契约 + EWMA 排序 + 降级兜底 + 健康面板） |
 | `services/indicators.py` | 技术指标计算（RSI、MACD、KDJ、Bollinger） |
 | `market/` | Provider 模式：基金 (AKShare)、加密货币 (CoinGecko)、期货 (AKShare) |
 | `database.py` | SQLite 建表、初始化、增量迁移（`_migrate()`） |

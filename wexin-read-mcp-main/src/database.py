@@ -296,6 +296,18 @@ def _migrate():
             color      TEXT NOT NULL DEFAULT '#ef4444',
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
         )""",
+        # 财报分析报告：每只股票每个报告期一份（指标 JSON + AI 四维度解读）
+        """CREATE TABLE IF NOT EXISTS financial_reports (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol      TEXT NOT NULL,
+            market      TEXT NOT NULL,
+            name        TEXT DEFAULT '',
+            period      TEXT,
+            indicators  TEXT NOT NULL,
+            ai_summary  TEXT NOT NULL DEFAULT '',
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(symbol, market, period)
+        )""",
     ]
     for sql in new_tables:
         try:

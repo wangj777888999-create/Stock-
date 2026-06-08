@@ -1143,9 +1143,7 @@ textarea.form-input {
 .industry-output th { background: var(--surface-2); font-weight: 600; }
 .industry-output blockquote { border-left: 3px solid var(--blue); padding-left: 12px; color: var(--ink-2); margin: .6em 0; }
 .industry-output-actions { display: flex; justify-content: flex-end; padding: 8px 0 0; }
-.ind-purpose-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
-.ind-purpose-btn { padding: 4px 12px; border-radius: 20px; border: 1px solid rgba(0,0,0,.12); background: transparent; font-size: 12px; cursor: pointer; transition: background .12s, border-color .12s; }
-.ind-purpose-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+/* 行研多视角切换样式已废弃(只保留完整分析) */
 @media (max-width: 768px) { .industry-layout { grid-template-columns: 1fr; height: auto; } }
 
 /* 股票代码自动补全下拉 — 用于暗色 modal */
@@ -1369,9 +1367,9 @@ textarea.form-input {
               </div>
             </div>
             <div class="card">
-              <div class="card-header"><div class="card-title">行业涨幅榜 Top10</div></div>
+              <div class="card-header"><div class="card-title">概念涨幅榜 Top10</div></div>
               <div class="card-body" style="padding:0">
-                <table class="hot-table"><thead><tr><th>#</th><th>板块</th><th>涨跌幅</th><th>领涨股</th></tr></thead><tbody id="ck-industry-body"></tbody></table>
+                <table class="hot-table"><thead><tr><th>#</th><th>概念</th><th>涨跌幅</th><th>领涨股</th></tr></thead><tbody id="ck-industry-body"></tbody></table>
               </div>
             </div>
           </div>
@@ -1555,13 +1553,8 @@ textarea.form-input {
             <div class="choice-option highlight" onclick="continueAnalyze()">
               <div class="choice-option-icon" style="background:var(--green-s);">🤖</div>
               <div class="choice-option-label">AI 智能分析</div>
-              <div class="choice-option-desc" id="personaSummary">三视角并行 · 价值 + 成长 + 趋势</div>
+              <div class="choice-option-desc">综合分析博主文章,输出结构化报告</div>
             </div>
-          </div>
-          <!-- Persona 多选区：勾选哪些投资视角参与 AI 分析 -->
-          <div id="personaPicker" style="margin-top:14px;padding:12px 14px;background:var(--surface-2);border-radius:10px;">
-            <div style="font-size:12px;color:var(--ink-3);margin-bottom:8px;font-weight:600;">投资视角（点击 AI 智能分析时生效，可多选）</div>
-            <div id="personaList" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
           </div>
         </div>
 
@@ -1920,6 +1913,41 @@ textarea.form-input {
               <div class="card-body" id="stockFinancialBody" style="flex:1;overflow:auto;min-height:0;">
                 <div class="empty-state">加载中...</div>
               </div>
+            </div>
+          </div>
+
+          <!-- 情绪雷达(A股/美股,全宽) -->
+          <div class="card" id="panel-sentiment" style="display:none;">
+            <div class="card-header">
+              <div class="card-header-left">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.4"/><path d="M10 3 L10 10 L15 10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                <span>情绪雷达</span>
+                <span id="sentLevel" style="font-size:11px;color:var(--ink-3);font-weight:400;margin-left:6px;"></span>
+              </div>
+              <div class="card-header-right">
+                <button id="sentAiBtn" onclick="loadSentiment(true)" style="font-size:12px;padding:4px 12px;border:1px solid var(--border);border-radius:6px;background:var(--accent,#2563EB);color:#fff;cursor:pointer;">AI 一句话判读</button>
+              </div>
+            </div>
+            <div class="card-body" id="sentimentBody">
+              <div style="text-align:center;padding:14px;color:var(--ink-3);font-size:12px;"><span class="spinner dark"></span></div>
+            </div>
+          </div>
+
+          <!-- AI 财报分析（A股/美股，全宽） -->
+          <div class="card" id="panel-ai-financial" style="display:none;">
+            <div class="card-header">
+              <div class="card-header-left">
+                <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M3 3v14h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M6 12l3-3 2 2 4-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                <span>AI 财报分析</span>
+                <span id="aiFinPeriod" style="font-size:11px;color:var(--ink-3);font-weight:400;margin-left:6px;"></span>
+              </div>
+              <div class="card-header-right">
+                <button id="aiFinBtn" onclick="loadAiFinancial(true)" style="font-size:12px;padding:4px 12px;border:1px solid var(--border);border-radius:6px;background:var(--accent,#2563EB);color:#fff;cursor:pointer;">AI 四维度解读</button>
+              </div>
+            </div>
+            <div class="card-body" id="aiFinancialBody">
+              <div id="aiFinTable"></div>
+              <div id="aiFinSummary" style="margin-top:14px;"></div>
             </div>
           </div>
 
@@ -2760,12 +2788,8 @@ textarea.form-input {
               <div class="card-header"><div class="card-title">行业调研</div></div>
               <div class="card-body" style="display:flex;flex-direction:column;gap:10px;">
                 <input id="ind-input" class="input" placeholder="输入行业名称，如：新能源汽车、医疗器械…" style="font-size:13px;">
-                <div style="font-size:12px;color:var(--ink-2);font-weight:500;">分析目的</div>
-                <div class="ind-purpose-row">
-                  <button class="ind-purpose-btn active" data-purpose="investment" onclick="indSelectPurpose(this)">投资选股</button>
-                  <button class="ind-purpose-btn" data-purpose="startup" onclick="indSelectPurpose(this)">创业选赛道</button>
-                  <button class="ind-purpose-btn" data-purpose="career" onclick="indSelectPurpose(this)">择业找方向</button>
-                  <button class="ind-purpose-btn" data-purpose="full" onclick="indSelectPurpose(this)">完整行研</button>
+                <div style="font-size:11px;color:var(--ink-3);line-height:1.5;">
+                  按六步框架完整输出:行业边界 → 生命周期 → 阶段聚焦 → 估值 → PEST → 景气度跟踪
                 </div>
                 <button id="ind-run-btn" class="btn btn-primary" onclick="indStartAnalysis()" style="font-size:13px;">开始分析</button>
               </div>
@@ -3492,17 +3516,62 @@ async function fetchSentiment() {
     }
     // 成交量
     const volEl = document.getElementById('ck-volume');
+    const volSub = document.getElementById('ck-vol-sub');
     if (d.volume && d.volume.total_yuan != null) {
       volEl.textContent = _fmtYuan(d.volume.total_yuan);
+      // 放/缩量提示:今日 vs 昨日 + 今日 vs 近5日均
+      if (volSub) {
+        const bits = [];
+        const fmt = (p) => {
+          if (p == null) return '';
+          const abs = Math.abs(p);
+          const tag = p > 8 ? '放量' : p > 1 ? '微增' : p < -8 ? '缩量' : p < -1 ? '微减' : '持平';
+          const c = p > 1 ? 'var(--red)' : p < -1 ? 'var(--green)' : 'var(--ink-3)';
+          return `<span style="color:${c}">${p >= 0 ? '+' : ''}${p.toFixed(1)}% ${tag}</span>`;
+        };
+        if (d.volume.vs_prev_pct != null) bits.push('vs 昨日 ' + fmt(d.volume.vs_prev_pct));
+        if (d.volume.vs_avg5_pct != null) bits.push('vs 近5日均 ' + fmt(d.volume.vs_avg5_pct));
+        volSub.innerHTML = bits.join(' · ');
+      }
     } else {
       volEl.textContent = '--';
+      if (volSub) volSub.innerHTML = '';
+    }
+    // 涨跌家数:若数据未取到,给降级提示
+    if (!d.rise_fall || (d.rise_fall.up === 0 && d.rise_fall.down === 0 && d.rise_fall.flat === 0)) {
+      const sub = document.querySelector('#cockpit-rise-fall-sub') ||
+        document.querySelector('.cockpit-rise-fall-sub');
+      // 找不到副标签就直接加在 ck-up 父节点
+      const upEl = document.getElementById('ck-up');
+      if (upEl && upEl.parentNode) {
+        let hint = document.getElementById('ck-rf-hint');
+        if (!hint) {
+          hint = document.createElement('div');
+          hint.id = 'ck-rf-hint';
+          hint.style.cssText = 'font-size:11px;color:var(--ink-3);margin-top:6px;';
+          upEl.parentNode.appendChild(hint);
+        }
+        hint.textContent = '⚠ 涨跌家数数据源(东财)暂不可达';
+      }
+    } else {
+      const hint = document.getElementById('ck-rf-hint');
+      if (hint) hint.remove();
     }
     // 资金流向
-    if (d.flow) {
-      const mainNetEl = document.getElementById('ck-main-net');
-      const val = d.flow.main_net;
-      mainNetEl.textContent = _fmtYuan(val);
-      mainNetEl.className = 'sentiment-value ' + _flowColor(val);
+    const mainNetEl = document.getElementById('ck-main-net');
+    const flowSub = document.getElementById('ck-flow-sub');
+    if (d.flow && d.flow.main_net != null) {
+      mainNetEl.textContent = _fmtYuan(d.flow.main_net);
+      mainNetEl.className = 'sentiment-value ' + _flowColor(d.flow.main_net);
+      if (flowSub) flowSub.textContent = '';
+    } else {
+      mainNetEl.textContent = '--';
+      mainNetEl.className = 'sentiment-value';
+      if (flowSub) {
+        flowSub.style.fontSize = '11px';
+        flowSub.style.color = 'var(--ink-3)';
+        flowSub.textContent = '⚠ 大盘资金面数据源(东财)在当前网络不可达';
+      }
     }
   } catch (e) { console.error('fetchSentiment error', e); }
 }
@@ -3531,7 +3600,7 @@ async function fetchHotStocks() {
 
 async function fetchIndustryRank() {
   try {
-    const r = await fetch('/api/signal/industry_rank?limit=10');
+    const r = await fetch('/api/signal/concept_rank?limit=10');
     const j = await r.json();
     if (!j.success || !j.data) return;
     const tb = document.getElementById('ck-industry-body');
@@ -3545,7 +3614,7 @@ async function fetchIndustryRank() {
       tr.innerHTML = '<td>' + (i.rank ?? '') + '</td><td>' + i.name + '</td><td class="' + c + '">' + s + Number(p).toFixed(2) + '%</td><td>' + (i.lead_stock ?? '--') + '</td>';
       tb.appendChild(tr);
     });
-  } catch (e) { console.error('fetchIndustryRank', e); }
+  } catch (e) { console.error('fetchConceptRank', e); }
 }
 
 function _ckBuildIndexCards(data) {
@@ -4579,45 +4648,17 @@ function confirmArticleSelection() {
   ws.send(JSON.stringify({ selected_urls: selectedUrls }));
 }
 
-function continueTask(analyze, personas) {
+function continueTask(analyze) {
   if (!ws || ws.readyState !== WebSocket.OPEN) { showToast('连接已断开，请重新开始', 'error'); return; }
   document.getElementById('choicePanel').classList.remove('active');
   setFlowStep(2);
-  const payload = { analyze };
-  if (analyze && Array.isArray(personas) && personas.length) payload.personas = personas;
-  ws.send(JSON.stringify(payload));
+  ws.send(JSON.stringify({ analyze }));
 }
 
-// 点击"AI 智能分析"时收集勾选的视角再发出
+// 点击"AI 智能分析"
 function continueAnalyze() {
-  const checked = Array.from(document.querySelectorAll('#personaList input[type=checkbox]:checked'))
-    .map(el => el.value);
-  if (!checked.length) {
-    showToast('请至少勾选一个投资视角', 'error');
-    return;
-  }
-  continueTask(true, checked);
+  continueTask(true);
 }
-
-// 启动时拉取人格列表，渲染为多选 chips
-async function loadPersonas() {
-  try {
-    const res = await fetch('/api/agents/personas');
-    const data = await res.json();
-    const list = document.getElementById('personaList');
-    if (!list) return;
-    list.innerHTML = (data.personas || []).map(p => `
-      <label style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--surface-1);border-radius:18px;cursor:pointer;font-size:12px;border:1px solid rgba(0,0,0,0.06);">
-        <input type="checkbox" value="${p.id}" checked style="margin:0;">
-        <span>${p.icon} ${p.name}</span>
-        <span style="color:var(--ink-3);font-size:11px;">— ${p.tagline}</span>
-      </label>
-    `).join('');
-  } catch (e) {
-    console.warn('persona list load failed', e);
-  }
-}
-loadPersonas();
 
 function finish() {
   const btn = document.getElementById('startBtn');
@@ -5046,6 +5087,21 @@ async function selectStock(code, name, market) {
     loadVisits();
   }
 
+  // AI 财报分析：仅 A股/美股（数据源支持）
+  if (_stockMarket === 'a' || _stockMarket === 'us') {
+    show('panel-ai-financial');
+    document.getElementById('aiFinSummary').innerHTML = '';
+    document.getElementById('aiFinPeriod').textContent = '';
+    loadAiFinancialIndicators();
+    // 情绪雷达同样只支持 A/US
+    show('panel-sentiment');
+    document.getElementById('sentLevel').textContent = '';
+    loadSentiment(false);
+  } else {
+    hide('panel-ai-financial');
+    hide('panel-sentiment');
+  }
+
   // 并行加载面板
   refreshQuote();
   loadKline('day');
@@ -5369,17 +5425,158 @@ async function loadFinancial() {
   } catch (e) { el.innerHTML = '<div class="empty-state">加载失败</div>'; }
 }
 
+/* --- AI 财报分析（A股/美股） --- */
+function _aiFinFmt(v, pct) {
+  if (v === null || v === undefined) return '—';
+  const a = Math.abs(v);
+  if (pct) return v.toFixed(2) + '%';
+  if (a >= 1e8) return (v / 1e8).toFixed(2) + '亿';
+  if (a >= 1e4) return (v / 1e4).toFixed(2) + '万';
+  return v.toFixed(2);
+}
+function _aiFinYoy(v) {
+  if (v === null || v === undefined) return '—';
+  const c = v >= 0 ? 'var(--red)' : 'var(--green)';
+  return `<span style="color:${c}">${v >= 0 ? '+' : ''}${v.toFixed(2)}%</span>`;
+}
+function _renderAiFinTable(data) {
+  const ps = (data && data.periods) || [];
+  const el = document.getElementById('aiFinTable');
+  if (!ps.length) { el.innerHTML = '<div class="empty-state">暂无财报数据</div>'; return; }
+  const head = ['报告期', '营收', '营收YoY', '归母净利', '净利YoY', '毛利率', '净利率', 'ROE', '负债率', '经营现金流', 'EPS'];
+  let html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
+    + '<thead><tr style="border-bottom:1px solid var(--border);color:var(--ink-3);">'
+    + head.map(h => `<th style="padding:5px 6px;text-align:right;font-weight:500;">${h}</th>`).join('') + '</tr></thead><tbody>';
+  ps.forEach(p => {
+    const cell = (v) => `<td style="padding:5px 6px;text-align:right;">${v}</td>`;
+    html += '<tr style="border-bottom:1px solid var(--border);font-family:var(--mono);">'
+      + cell(p.period) + cell(_aiFinFmt(p.revenue)) + cell(_aiFinYoy(p.revenue_yoy))
+      + cell(_aiFinFmt(p.net_profit)) + cell(_aiFinYoy(p.net_profit_yoy))
+      + cell(_aiFinFmt(p.gross_margin, true)) + cell(_aiFinFmt(p.net_margin, true))
+      + cell(_aiFinFmt(p.roe, true)) + cell(_aiFinFmt(p.debt_ratio, true))
+      + cell(_aiFinFmt(p.ocf)) + cell(_aiFinFmt(p.eps)) + '</tr>';
+  });
+  el.innerHTML = html + '</tbody></table></div>';
+}
+function _aiFinMsg(text) {
+  return '<div style="text-align:center;padding:14px;color:var(--ink-3);font-size:12px;">' + escapeHtml(text) + '</div>';
+}
+async function loadAiFinancialIndicators() {
+  const el = document.getElementById('aiFinTable');
+  el.innerHTML = '<div style="text-align:center;padding:14px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
+  try {
+    const resp = await fetch('/api/financial/indicators?symbol=' + encodeURIComponent(_stockCode) + '&market=' + _stockMarket);
+    if (resp.status === 404) { el.innerHTML = _aiFinMsg('接口未加载，请重启 app.py 服务后重试'); return; }
+    const json = await resp.json();
+    if (!json.success || !json.data) { el.innerHTML = _aiFinMsg(json.detail || json.error || '暂无财报数据'); return; }
+    _renderAiFinTable(json.data);
+  } catch (e) { el.innerHTML = _aiFinMsg('加载失败'); }
+}
+async function loadAiFinancial(force) {
+  const btn = document.getElementById('aiFinBtn');
+  const sumEl = document.getElementById('aiFinSummary');
+  const code = _stockCode, market = _stockMarket;
+  btn.disabled = true; const old = btn.textContent; btn.textContent = 'AI 分析中…';
+  sumEl.innerHTML = '<div style="text-align:center;padding:14px;color:var(--ink-3);font-size:12px;"><span class="spinner dark"></span> AI 正在解读财报…</div>';
+  try {
+    const resp = await fetch('/api/financial/analyze', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol: code, market: market, force: !!force }),
+    });
+    if (resp.status === 404) { sumEl.innerHTML = _aiFinMsg('接口未加载，请重启 app.py 服务后重试'); return; }
+    const json = await resp.json();
+    if (!json.success || !json.data) { sumEl.innerHTML = _aiFinMsg(json.detail || json.error || 'AI 分析失败'); return; }
+    const d = json.data;
+    if (d.indicators) _renderAiFinTable(d.indicators);
+    if (d.period) document.getElementById('aiFinPeriod').textContent = '报告期 ' + d.period + (d.cached ? ' · 已存档' : '');
+    if (d.summary) {
+      sumEl.innerHTML = '<div class="report-content" style="font-size:13px;line-height:1.8;">' + renderMarkdown(d.summary) + '</div>';
+    } else {
+      sumEl.innerHTML = _aiFinMsg(d.ai_error || 'AI 未返回解读（请检查系统配置中的 AI API）');
+    }
+  } catch (e) { sumEl.innerHTML = _aiFinMsg('请求失败'); }
+  finally { btn.disabled = false; btn.textContent = old; }
+}
+
+/* --- 情绪雷达(A股/美股) --- */
+function _sentBar(score) {
+  // 0-100 → 颜色 + 进度条
+  const c = score >= 80 ? '#dc2626'    // 过热红
+          : score >= 60 ? '#f59e0b'    // 偏热橙
+          : score >= 40 ? '#2563eb'    // 正常蓝
+          :               '#94a3b8';   // 冷清灰
+  const w = Math.max(2, Math.min(100, score));
+  return `<div style="display:flex;align-items:center;gap:8px;">
+    <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden;">
+      <div style="width:${w}%;height:100%;background:${c};"></div>
+    </div>
+    <span style="font-family:var(--mono);font-size:12px;color:${c};font-weight:600;width:36px;text-align:right;">${score.toFixed(1)}</span>
+  </div>`;
+}
+function _renderSentiment(d) {
+  const el = document.getElementById('sentimentBody');
+  const compColor = d.composite >= 80 ? '#dc2626'
+                  : d.composite >= 60 ? '#f59e0b'
+                  : d.composite >= 40 ? '#2563eb' : '#94a3b8';
+  const dims = [
+    ['price_volume', '价量情绪'],
+    ['money_flow', '资金情绪'],
+    ['hot_rank', '热度情绪'],
+    ['blogger', '博主关注'],
+    ['news', '舆情情绪'],
+  ];
+  let rows = dims.map(([k, label]) => {
+    const dim = d.scores[k];
+    return `<tr><td style="padding:6px 10px;font-size:12px;color:var(--ink-2);width:80px;">${label}</td>
+      <td style="padding:6px 10px;width:240px;">${_sentBar(dim.score)}</td>
+      <td style="padding:6px 10px;font-size:12px;color:var(--ink-3);">${escapeHtml(dim.note)}</td></tr>`;
+  }).join('');
+  const aiBlock = d.ai_summary
+    ? `<div style="margin-top:14px;padding:10px 14px;background:#f8fafc;border-left:3px solid ${compColor};border-radius:4px;font-size:13px;color:var(--ink-1);">${escapeHtml(d.ai_summary)}</div>`
+    : '';
+  el.innerHTML = `
+    <div style="display:flex;align-items:baseline;gap:14px;margin-bottom:10px;">
+      <span style="font-size:11px;color:var(--ink-3);">综合情绪指数</span>
+      <span style="font-size:28px;font-weight:700;color:${compColor};font-family:var(--mono);">${d.composite.toFixed(1)}</span>
+      <span style="font-size:13px;color:${compColor};font-weight:600;">${escapeHtml(d.level)}</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--ink-3);">${escapeHtml(d.generated_at)}</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;">${rows}</table>
+    ${aiBlock}
+  `;
+  document.getElementById('sentLevel').textContent = `${d.composite.toFixed(1)} · ${d.level}`;
+}
+async function loadSentiment(withAi) {
+  const el = document.getElementById('sentimentBody');
+  const btn = document.getElementById('sentAiBtn');
+  el.innerHTML = '<div style="text-align:center;padding:14px;color:var(--ink-3);font-size:12px;"><span class="spinner dark"></span> 情绪雷达加载中…</div>';
+  if (withAi) { btn.disabled = true; btn.textContent = 'AI 判读中…'; }
+  try {
+    const url = `/api/sentiment/stock?symbol=${encodeURIComponent(_stockCode)}&market=${_stockMarket}&with_ai=${withAi ? 'true' : 'false'}`;
+    const resp = await fetch(url);
+    if (resp.status === 404) { el.innerHTML = '<div style="text-align:center;padding:14px;color:var(--ink-3);font-size:12px;">接口未加载,请重启 app.py 后重试</div>'; return; }
+    const json = await resp.json();
+    if (!json.success || !json.data) { el.innerHTML = `<div style="text-align:center;padding:14px;color:var(--ink-3);font-size:12px;">${escapeHtml(json.detail || json.error || '加载失败')}</div>`; return; }
+    _renderSentiment(json.data);
+  } catch (e) {
+    el.innerHTML = '<div style="text-align:center;padding:14px;color:var(--ink-3);font-size:12px;">请求失败</div>';
+  } finally {
+    if (withAi) { btn.disabled = false; btn.textContent = 'AI 一句话判读'; }
+  }
+}
+
 /* --- 资金流向 --- */
 async function loadMoneyFlow() {
   const el = document.getElementById('stockFlowBody');
   el.innerHTML = '<div style="text-align:center;padding:16px;color:var(--ink-3);"><span class="spinner dark"></span></div>';
   try {
     const json = await (await fetch('/api/stock/flow/' + _stockCode)).json();
-    if (!json.success || !json.data?.length) { el.innerHTML = '<div class="empty-state">' + escapeHtml(json.error||'暂无数据') + '</div>'; return; }
+    if (!json.success || !json.data?.length) { el.innerHTML = '<div style="text-align:center;padding:14px;color:var(--ink-3);font-size:12px;">' + escapeHtml(json.error||'暂无数据') + '</div>'; return; }
     const cols = ['日期','收盘价','涨跌幅','主力净流入-净额','主力净流入-净占比'];
     const label = {'主力净流入-净额':'主力净额','主力净流入-净占比':'主力占比'};
     const colorCols = new Set(['涨跌幅','主力净流入-净额','主力净流入-净占比']);
-    el.innerHTML = '<table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
+    const staleBanner = json.stale ? '<div style="padding:6px 10px;background:#fef3c7;color:#92400e;font-size:11px;border-radius:4px;margin-bottom:8px;">⚠ 显示的是缓存数据,实时数据源暂不可达</div>' : '';
+    el.innerHTML = staleBanner + '<table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">'
       + '<thead><tr style="border-bottom:1px solid var(--border);color:var(--ink-3);">'
       + cols.map(c => `<th style="padding:5px 6px;text-align:right;font-weight:500;">${label[c]||c}</th>`).join('') + '</tr></thead>'
       + '<tbody>' + json.data.slice(0,10).map(r => '<tr style="border-bottom:1px solid var(--border);">'
@@ -8237,17 +8434,9 @@ async function taDeleteNote(id, e) {
 /* ============================================================
    行业调研
    ============================================================ */
-let _indPurpose = 'investment';
 let _indCurrentText = '';
 let _indCurrentIndustry = '';
-let _indCurrentPurpose = 'investment';
 let _indStreaming = false;
-
-function indSelectPurpose(btn) {
-  _indPurpose = btn.dataset.purpose;
-  document.querySelectorAll('.ind-purpose-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-}
 
 async function indStartAnalysis() {
   const industry = document.getElementById('ind-input').value.trim();
@@ -8256,7 +8445,6 @@ async function indStartAnalysis() {
   _indStreaming = true;
   _indCurrentText = '';
   _indCurrentIndustry = industry;
-  _indCurrentPurpose = _indPurpose;
   const btn = document.getElementById('ind-run-btn');
   btn.textContent = '分析中…'; btn.disabled = true;
   document.getElementById('ind-save-row').style.display = 'none';
@@ -8266,7 +8454,7 @@ async function indStartAnalysis() {
     const resp = await fetch('/api/industry/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ industry, purpose: _indPurpose }),
+      body: JSON.stringify({ industry }),
     });
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}));
@@ -8310,7 +8498,6 @@ async function indSaveReport() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         industry: _indCurrentIndustry,
-        purpose: _indCurrentPurpose,
         report_text: _indCurrentText,
       }),
     });

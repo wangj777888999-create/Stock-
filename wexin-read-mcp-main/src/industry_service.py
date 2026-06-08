@@ -14,19 +14,9 @@ from state import config
 
 logger = logging.getLogger("industry-service")
 
-_PURPOSE_LABELS = {
-    "investment": "投资选股",
-    "startup": "创业选赛道",
-    "career": "择业找方向",
-    "full": "完整行研报告",
-}
-
-_PURPOSE_FOCUS = {
-    "investment": "重点输出：产业生命周期阶段 + 竞争格局 + 估值逻辑 + 景气度跟踪指标",
-    "startup": "重点输出：可行性分析（商业模式/Unit Economics）+ 市场规模（TAM/SAM/SOM）+ 护城河构建路径",
-    "career": "重点输出：产业生命周期阶段 + 行业前景与薪资水平 + 龙头公司格局",
-    "full": "输出完整框架，所有六个维度全覆盖",
-}
+# 行研只保留一种模式:完整全貌分析。
+# 之前的多视角(投资/创业/择业)已移除——了解一个行业就是要看全貌,
+# 局部视角靠"完整框架 + 用户自取需要的章节"足够。
 
 _SYSTEM_PROMPT = """你是一位专业行业分析师，严格运用《如何快速了解一个行业》的六步框架进行行业分析。
 
@@ -106,8 +96,8 @@ _SYSTEM_PROMPT = """你是一位专业行业分析师，严格运用《如何快
 - 动态视角：说明分析时点，结论需定期更新"""
 
 
-async def stream_analysis(industry: str, purpose: str) -> AsyncGenerator[str, None]:
-    """调用 AI API（SSE 流式），逐 token yield。"""
+async def stream_analysis(industry: str) -> AsyncGenerator[str, None]:
+    """调用 AI API(SSE 流式),按六步框架输出完整行研报告。"""
     if not config.ai.api_key:
         yield "data: [ERROR] 未配置 AI API Key，请在系统配置中填写\n\n"
         return
@@ -115,17 +105,12 @@ async def stream_analysis(industry: str, purpose: str) -> AsyncGenerator[str, No
         yield "data: [ERROR] 未配置 AI Base URL\n\n"
         return
 
-    purpose_label = _PURPOSE_LABELS.get(purpose, "投资选股")
-    focus = _PURPOSE_FOCUS.get(purpose, _PURPOSE_FOCUS["investment"])
     today = date.today().isoformat()
-    user_prompt = f"""当前日期：{today}。请以该日期为分析基准，所有数据、事件、时间节点均需对齐到 {today} 附近，禁止引用过时数据。
+    user_prompt = f"""当前日期:{today}。请以该日期为分析基准,所有数据、事件、时间节点均需对齐到 {today} 附近,禁止引用过时数据。
 
-请对「{industry}」进行行业分析。
+请对「{industry}」进行**完整**行业分析,六个维度全部覆盖,不要省略任何一步。
 
-分析目的：{purpose_label}
-{focus}
-
-请严格按照六步框架逐步分析，输出结构化的 Markdown 报告。"""
+请严格按照六步框架逐步分析,输出结构化的 Markdown 报告。"""
 
     url = f"{config.ai.base_url}/chat/completions"
     headers = {"Authorization": f"Bearer {config.ai.api_key}", "Content-Type": "application/json"}
@@ -183,11 +168,12 @@ async def stream_analysis(industry: str, purpose: str) -> AsyncGenerator[str, No
         yield f"data: [ERROR] AI 调用异常 — {msg}\n\n"
 
 
-def save_report(industry: str, purpose: str, report_text: str) -> int:
+def save_report(industry: str, report_text: str) -> int:
+    """保存行研报告。表中 purpose 列保留固定值 'full' 以兼容旧 schema/旧数据。"""
     db = get_db()
     cur = db.execute(
         "INSERT INTO industry_reports (industry, purpose, report_text) VALUES (?, ?, ?)",
-        (industry, purpose, report_text),
+        (industry, "full", report_text),
     )
     db.commit()
     return cur.lastrowid

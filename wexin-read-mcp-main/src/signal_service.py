@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time as _time
 
 import requests as _requests
 from httpx import AsyncClient
@@ -98,52 +99,19 @@ async def _batch_tencent_quotes(qt_codes: list[str]) -> dict[str, dict]:
 
 
 async def get_hot_stocks(limit: int = 20) -> dict:
-    """东方财富热门股票排名 + 腾讯行情数据，TTL=30s。"""
+    """A股热门股榜单,经统一 DataRouter。"""
     cache_key = f"signal:hot:{limit}"
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached
-
-    try:
-        # Step 1: 获取排名（东方财富，绕过代理）
-        rank_list = await asyncio.wait_for(
-            asyncio.to_thread(_fetch_hot_rank_list, limit),
-            timeout=15,
-        )
-        if not rank_list:
-            return {"success": False, "error": "热门股票排名数据为空"}
-
-        # Step 2: 批量获取行情（腾讯 API，绕过代理）
-        qt_codes = [item["qt_code"] for item in rank_list]
-        quotes = await asyncio.wait_for(
-            _batch_tencent_quotes(qt_codes),
-            timeout=15,
-        )
-
-        # Step 3: 合并数据
-        records = []
-        for item in rank_list[:limit]:
-            code = item["code"]
-            q = quotes.get(code, {})
-            records.append({
-                "rank": item["rank"],
-                "code": code,
-                "name": q.get("name") or _clean(item.get("name")),
-                "price": q.get("price"),
-                "change_pct": q.get("change_pct"),
-                "volume": q.get("volume"),          # 成交量（股）
-                "amount": q.get("amount"),           # 成交额（元）
-                "turnover_rate": q.get("turnover_rate"),  # 换手率（%）
-            })
-
-        resp = {"success": True, "data": records}
-        cache.set(cache_key, resp, TTL_REALTIME)
-        return resp
-    except asyncio.TimeoutError:
-        return {"success": False, "error": "热门股票请求超时"}
-    except Exception as e:
-        logger.error(f"获取热门股票失败: {e}")
-        return {"success": False, "error": f"热门股票获取失败: {e}"}
+    from services.data_router import get_router
+    r = await get_router().fetch(
+        "hot_stocks",
+        cache_key=cache_key,
+        ttl=TTL_REALTIME,
+        validate=lambda x: bool(x),
+        limit=limit,
+    )
+    if not r["success"]:
+        return {"success": False, "error": r["error"]}
+    return {"success": True, "data": r["data"], "source": r["source"], "stale": r["stale"]}
 
 
 def _fetch_sina_industry_rank():
@@ -185,37 +153,138 @@ def _fetch_sina_industry_rank():
         s.close()
 
 
-async def get_industry_ranking(limit: int = 30) -> dict:
-    """行业板块涨跌排行（新浪财经），TTL=30s。"""
-    cache_key = f"signal:industry_rank:{limit}"
+def _fetch_sina_concept_rank() -> list[dict]:
+    """从新浪获取 A 股市场概念板块排名(绕过代理,东财不可达时的降级源)。
+
+    数据源:money.finance.sina.com.cn 的 newFLJK.php?param=class
+    返回的是用户日常关注的"市场概念"(华为汽车、BC电池、AI 手机等),
+    而非 ?param=concept(那是国民经济分类,不是市场概念)。
+    字段同 industry: [code, name, count, avg_price, price_change,
+    change_pct, volume, amount, lead_code, lead_price, lead_change,
+    lead_change_pct, lead_name]。
+    """
+    s = _requests.Session()
+    s.trust_env = False
+    try:
+        r = s.get(
+            "https://money.finance.sina.com.cn/q/view/newFLJK.php?param=class",
+            timeout=10,
+        )
+        # 返回 GBK 编码,需要先 decode
+        text = r.content.decode("gbk", errors="replace") if r.encoding else r.text
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start == -1 or end <= start:
+            return []
+        import json
+        data = json.loads(text[start:end])
+        result = []
+        for key, val in data.items():
+            parts = val.split(",")
+            if len(parts) < 10:
+                continue
+            try:
+                cp = float(parts[5])
+            except (ValueError, IndexError):
+                cp = None
+            result.append({
+                "code": parts[0],
+                "name": parts[1],
+                "change_pct": cp,
+                "lead_stock": parts[12] if len(parts) > 12 else "",
+                "lead_stock_pct": parts[11] if len(parts) > 11 else "",
+            })
+        result.sort(key=lambda x: x["change_pct"] if x["change_pct"] is not None else -999, reverse=True)
+        return result
+    finally:
+        s.close()
+
+
+def _fetch_em_concept_rank(limit: int = 30) -> list[dict]:
+    """从东方财富 push2 获取概念板块排行（按涨跌幅降序，绕过代理）。"""
+    s = _requests.Session()
+    s.trust_env = False
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "Referer": "https://quote.eastmoney.com/",
+    }
+    url = "https://push2.eastmoney.com/api/qt/clist/get"
+    params = {
+        "pn": 1, "pz": max(limit, 1), "po": 1, "np": 1,
+        "fltt": 2, "invt": 2, "fid": "f3",
+        "fs": "m:90 t:3 f:!50",
+        "fields": "f3,f12,f14,f128,f136",
+    }
+    # 东财 push2 偶发反爬式断连，重试若干次
+    last_exc = None
+    try:
+        for attempt in range(5):
+            try:
+                r = s.get(url, params=params, timeout=10, headers=headers)
+                diff = r.json().get("data", {}).get("diff") or []
+                return [
+                    {
+                        "name": it.get("f14"),
+                        "code": it.get("f12"),
+                        "change_pct": it.get("f3"),
+                        "lead_stock": it.get("f128"),
+                        "lead_stock_pct": it.get("f136"),
+                    }
+                    for it in diff
+                ]
+            except Exception as e:
+                last_exc = e
+                _time.sleep(0.6 * (attempt + 1))
+        if last_exc:
+            raise last_exc
+        return []
+    finally:
+        s.close()
+
+
+async def get_concept_ranking(limit: int = 30) -> dict:
+    """概念板块涨跌排行（东方财富 push2，绕过代理），TTL=30s。"""
+    cache_key = f"signal:concept_rank:{limit}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
-    try:
-        items = await asyncio.wait_for(
-            asyncio.to_thread(_fetch_sina_industry_rank),
-            timeout=15,
-        )
-        if not items:
-            return {"success": False, "error": "行业排名数据为空"}
+    # 走统一 DataRouter:多源 race + EWMA 排序 + stale 兜底 + 统计
+    from services.data_router import get_router
+    r = await get_router().fetch(
+        "concept_rank",
+        cache_key=cache_key,
+        ttl=TTL_REALTIME,
+        validate=lambda x: bool(x),
+        limit=limit,
+    )
+    if not r["success"]:
+        return {"success": False, "error": r["error"]}
+    items = r["data"] or []
+    records = [{"rank": i + 1, **item} for i, item in enumerate(items[:limit])]
+    return {"success": True, "data": records, "source": r["source"], "stale": r["stale"]}
 
-        records = []
-        for i, item in enumerate(items[:limit]):
-            records.append({
-                "rank": i + 1,
-                "name": item["name"],
-                "code": item["code"],
-                "change_pct": item["change_pct"],
-                "lead_stock": item["lead_stock"],
-                "lead_stock_pct": item["lead_stock_pct"],
-            })
 
-        resp = {"success": True, "data": records}
-        cache.set(cache_key, resp, TTL_REALTIME)
-        return resp
-    except asyncio.TimeoutError:
-        return {"success": False, "error": "行业排名请求超时"}
-    except Exception as e:
-        logger.error(f"获取行业排名失败: {e}")
-        return {"success": False, "error": f"行业排名获取失败: {e}"}
+async def get_industry_ranking(limit: int = 30) -> dict:
+    """行业板块涨跌排行,经统一 DataRouter:新浪(主)+ 同花顺汇总(备)。"""
+    cache_key = f"signal:industry_rank:{limit}"
+    from services.data_router import get_router
+    r = await get_router().fetch(
+        "industry_rank",
+        cache_key=cache_key,
+        ttl=TTL_REALTIME,
+        validate=lambda x: bool(x),
+        limit=limit,
+    )
+    if not r["success"]:
+        return {"success": False, "error": r["error"]}
+    items = r["data"] or []
+    records = [{
+        "rank": i + 1,
+        "name": item.get("name"),
+        "code": item.get("code"),
+        "change_pct": item.get("change_pct"),
+        "lead_stock": item.get("lead_stock"),
+        "lead_stock_pct": item.get("lead_stock_pct"),
+    } for i, item in enumerate(items[:limit])]
+    return {"success": True, "data": records, "source": r["source"], "stale": r["stale"]}

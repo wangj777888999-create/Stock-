@@ -154,6 +154,31 @@ def cache_get(key: str):
     return _deserialize(raw)
 
 
+def cache_get_stale(key: str, max_stale_seconds: int = 7 * 86400):
+    """陈旧兜底:即使过期也返回旧值,只要在 max_stale_seconds 内。
+
+    返回 (value, is_fresh):
+        - is_fresh=True : 命中新鲜缓存,等同 cache_get
+        - is_fresh=False: 缓存已过期但仍在陈旧期内,作为降级兜底
+        - 返回 (None, False) 表示无缓存或陈旧太久
+
+    用法:数据源临时挂掉时,先返回上次成功结果给用户,不让前端报错。
+    """
+    db = get_db()
+    row = db.execute(
+        "SELECT value, expires_at FROM cache WHERE key = ?", (key,)
+    ).fetchone()
+    if not row:
+        return None, False
+    raw, expires_at = row
+    now = time.time()
+    if now < expires_at:
+        return _deserialize(raw), True
+    if now - expires_at > max_stale_seconds:
+        return None, False
+    return _deserialize(raw), False
+
+
 def cache_set(key: str, value: Any, ttl: int = TTL_DAILY) -> None:
     """写入 cache 表，自动处理 DataFrame 序列化。"""
     db = get_db()

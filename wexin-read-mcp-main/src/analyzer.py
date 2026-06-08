@@ -1,11 +1,9 @@
 """文章内容分析模块 - 整合多篇文章并生成投资分析报告"""
 
-import asyncio
 import json
 import logging
 from datetime import datetime
 
-from agents import PERSONAS, Persona
 from config import AppConfig
 from http_client import get_async_proxy_client
 
@@ -77,97 +75,6 @@ class ArticleAnalyzer:
 
         # 未配置AI时，返回简单的文本拼接报告
         return self._fallback_report(articles, today)
-
-    async def analyze_with_personas(
-        self, articles: list[dict], persona_ids: list[str]
-    ) -> dict:
-        """用多个投资人格视角并行分析文章，最终聚合成一份多视角报告。
-
-        Args:
-            articles: 文章列表
-            persona_ids: 选中的人格 ID 列表（来自 agents.PERSONAS 的 key）
-
-        Returns:
-            {"success": bool, "report": str, "error": str|None}
-        """
-        if not articles:
-            return {"success": False, "report": "", "error": "没有可分析的文章"}
-        if not persona_ids:
-            return {"success": False, "report": "", "error": "未选择任何分析视角"}
-        if not self.config.ai.api_key:
-            today = datetime.now().strftime("%Y年%m月%d日")
-            return self._fallback_report(articles, today)
-
-        # 过滤出有效 persona
-        personas: list[Persona] = [PERSONAS[pid] for pid in persona_ids if pid in PERSONAS]
-        if not personas:
-            return {"success": False, "report": "", "error": "选中的视角均无效"}
-
-        articles_text = self._build_articles_text(articles)
-        today = datetime.now().strftime("%Y年%m月%d日")
-
-        # 并行调用多个 persona
-        tasks = [self._run_persona(p, articles_text, today) for p in personas]
-        raw_results = await asyncio.gather(*tasks, return_exceptions=True)
-        # 将异常转为错误结构，避免单个 persona 失败导致全部丢失
-        results = []
-        for i, r in enumerate(raw_results):
-            if isinstance(r, Exception):
-                logger.error(f"Persona {personas[i].name} 分析失败: {r}")
-                results.append({"success": False, "report": "", "error": str(r)})
-            else:
-                results.append(r)
-
-        # 拼装为单份多视角报告
-        return self._assemble_report(personas, results, today, len(articles))
-
-    async def _run_persona(
-        self, persona: Persona, articles_text: str, today: str
-    ) -> dict:
-        """单个 persona 的 LLM 调用，失败时返回错误结构而不抛出。"""
-        prompt = persona.user_template.format(articles_text=articles_text, today=today)
-        return await self._call_ai(prompt, system=persona.system_prompt)
-
-    def _assemble_report(
-        self,
-        personas: list[Persona],
-        results: list[dict],
-        today: str,
-        article_count: int,
-    ) -> dict:
-        """把多个 persona 的输出拼成一份 Markdown 多视角报告。"""
-        lines = [
-            f"# 多视角投资分析报告 ({today})",
-            "",
-            f"基于 **{article_count}** 篇博主文章，从 **{len(personas)}** 个视角独立分析。",
-            "",
-        ]
-        any_success = False
-        errors: list[str] = []
-        for persona, result in zip(personas, results):
-            lines.append("---")
-            lines.append("")
-            lines.append(f"## {persona.icon} {persona.name}视角")
-            lines.append(f"> {persona.tagline}")
-            lines.append("")
-            if result.get("success"):
-                any_success = True
-                lines.append(result["report"].strip())
-            else:
-                err = result.get("error") or "未知错误"
-                errors.append(f"{persona.name}: {err}")
-                lines.append(f"⚠️ 该视角分析失败：{err}")
-            lines.append("")
-
-        report = "\n".join(lines)
-        if not any_success:
-            return {
-                "success": False,
-                "report": report,
-                "error": "所有视角均失败：" + " | ".join(errors),
-            }
-        # 即使部分视角失败也返回成功（报告里会标注失败的）
-        return {"success": True, "report": report, "error": None}
 
     async def _call_ai(self, prompt: str, system: str) -> dict:
         """调用AI API进行分析（system prompt 由调用方决定）。"""
