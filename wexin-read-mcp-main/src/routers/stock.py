@@ -44,12 +44,13 @@ async def api_stock_kline(
     count: int = Query(default=120, ge=1, le=1000),
     all_history: bool = False,
     indicators: str = "",
+    bypass_cache: bool = False,
 ):
     effective_count = 99999 if all_history else count
     market = detect_market(symbol)
     if market in ("kr", "jp"):
         return await global_stock_service.get_kline(symbol, market, period, effective_count)
-    return await stock_service.get_kline(symbol, period, effective_count, indicators=indicators)
+    return await stock_service.get_kline(symbol, period, effective_count, indicators=indicators, bypass_cache=bypass_cache)
 
 
 @router.get("/api/stock/profile/{symbol}")

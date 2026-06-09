@@ -3,6 +3,7 @@ import asyncio
 import sys
 import json
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 # Windows 上 Playwright 需要 ProactorEventLoop 来创建子进程
@@ -20,7 +21,20 @@ from state import config, CONFIG_FILE, blogger_mgr, scraper
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="交易感知系统")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期：启动时预加载数据 + 启动调度器，关闭时清理资源。
+
+    取代已弃用的 @app.on_event。具体逻辑见 _startup() / _shutdown()。
+    """
+    await _startup()
+    try:
+        yield
+    finally:
+        await _shutdown()
+
+
+app = FastAPI(title="交易感知系统", lifespan=lifespan)
 
 
 def load_saved_config():
@@ -122,7 +136,6 @@ async def index():
     return HTMLResponse(html_path.read_text(encoding="utf-8"))
 
 
-@app.on_event("startup")
 async def _startup():
     """启动时预加载数据。"""
     init_db()
@@ -189,7 +202,6 @@ async def _startup():
         logger.warning(f"定时调度器启动失败: {e}")
 
 
-@app.on_event("shutdown")
 async def _shutdown():
     """关闭时清理资源。"""
     try:

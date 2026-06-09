@@ -8,3 +8,7 @@ data.db-shm
 data.db-wal
 .obsidian/
 .worktrees/
+# 原始归档包 / Obsidian 误建文件 / 杂物
+wexin-read-mcp-main.zip
+*.base
+未命名*

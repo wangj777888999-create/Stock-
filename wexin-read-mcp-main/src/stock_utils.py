@@ -1,21 +1,18 @@
 """
 股票数据工具函数 — 来自 cn-financial-mcp 项目，本地化副本。
 
-包含：股票代码规范化、持久化缓存（SQLite）、多源降级调用。
+包含：股票代码规范化、持久化缓存（SQLite + 进程内 L1）、市场识别。
 """
 
 from __future__ import annotations
 
 import json
-import logging
 import sqlite3
 import threading
 import time
-from typing import Any, Callable
+from typing import Any
 
 import pandas as pd
-
-logger = logging.getLogger("stock-service")
 
 # ─── 股票代码工具 ───
 
@@ -121,6 +118,45 @@ def _clean(v):
         except (ValueError, TypeError):
             pass
     return v
+
+
+def _fmt_pct(v) -> str | None:
+    """格式化百分比数值，保留 2 位小数 + '%'。"""
+    v = _clean(v)
+    if v is None:
+        return None
+    try:
+        return f"{float(v):.2f}%"
+    except (TypeError, ValueError):
+        return str(v)
+
+
+def _to_float(v):
+    """容错转 float,失败/空返回 None。供直连东财 API 的字段解析使用。"""
+    if v is None or v == "" or v == "-":
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _fmt_amount(v) -> str | None:
+    """将金额统一格式化为 X.XX亿 / X.XX万，保持正负号。"""
+    v = _clean(v)
+    if v is None:
+        return None
+    try:
+        n = float(v)
+    except (TypeError, ValueError):
+        return str(v)
+    sign = "-" if n < 0 else ""
+    a = abs(n)
+    if a >= 1e8:
+        return f"{sign}{a / 1e8:.2f}亿"
+    if a >= 1e4:
+        return f"{sign}{a / 1e4:.2f}万"
+    return f"{sign}{a:.2f}"
 
 
 # ─── TTL 缓存 ───
@@ -268,24 +304,3 @@ class _CacheCompat:
 
 
 cache = _CacheCompat()
-
-
-# ─── 多源降级调用 ───
-
-def call_with_fallback(
-    *sources: tuple[str, Callable, dict[str, Any]],
-) -> pd.DataFrame:
-    """依次尝试多个数据源，返回第一个成功的 DataFrame。"""
-    last_error: Exception | None = None
-    for name, func, kwargs in sources:
-        try:
-            df = func(**kwargs)
-            if df is not None and not df.empty:
-                logger.debug(f"[{name}] 成功, {len(df)} 行")
-                return df
-        except Exception as e:
-            last_error = e
-            logger.debug(f"[{name}] 失败: {e}")
-    if last_error:
-        raise last_error
-    return pd.DataFrame()

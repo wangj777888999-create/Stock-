@@ -99,7 +99,7 @@ async def preload_breadth_fallback():
 
 # ─── 情绪聚合 ───
 
-async def get_sentiment() -> dict:
+async def get_sentiment(bypass_cache: bool = False) -> dict:
     """聚合市场情绪：涨跌家数、涨停/炸板、两市成交额、主力资金流向。
 
     数据源：
@@ -111,9 +111,10 @@ async def get_sentiment() -> dict:
     from datetime import date
 
     cache_key = "cockpit:sentiment"
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached
+    if not bypass_cache:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
 
     try:
         today_str = date.today().strftime("%Y%m%d")
@@ -307,13 +308,15 @@ async def _fetch_prev_index_volume() -> tuple[float | None, float | None]:
         if not common:
             return None, None
         totals = [sh_map[d] + sz_map[d] for d in common]
-        # 昨日:最近一根
-        prev_total = totals[-1]
-        # 近5日均量:倒数第 2-6 根的均值,排除"最新"
-        if len(totals) >= 6:
-            avg5 = sum(totals[-6:-1]) / 5
+        # 昨日: totals[-2]（totals[-1] 是今天盘中未完结的日K，不能用来做"昨日"比较）
+        prev_total = totals[-2] if len(totals) >= 2 else totals[-1]
+        # 近5日均量:前 5 根的均值,排除最新一根(今天)
+        if len(totals) >= 7:
+            avg5 = sum(totals[-7:-2]) / 5
+        elif len(totals) >= 3:
+            avg5 = sum(totals[:-2]) / (len(totals) - 2)
         else:
-            avg5 = sum(totals[:-1]) / max(1, len(totals) - 1) if len(totals) > 1 else prev_total
+            avg5 = prev_total
         return prev_total, avg5
     except Exception as e:
         logger.debug(f"取指数日K成交量失败: {e}")

@@ -1317,6 +1317,10 @@ textarea.form-input {
         <div class="ck-market-tabs">
           <button class="ck-market-tab active" data-market="a" onclick="switchCkMarket('a')">A股</button>
           <button class="ck-market-tab" data-market="us" onclick="switchCkMarket('us')">美股</button>
+          <button class="btn btn-ghost btn-sm" onclick="refreshCockpit()" title="强制刷新，绕过缓存" style="margin-left:auto;">
+            <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M17 10a7 7 0 11-2.05-4.95M17 4v6h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            刷新
+          </button>
         </div>
 
         <!-- ── A股面板 ── -->
@@ -1848,7 +1852,7 @@ textarea.form-input {
                 <svg width="16" height="16" viewBox="0 0 20 20" fill="none"><path d="M3 17V7l4-4 3 5 4-5 3 7v7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span id="quoteStockTitle">实时行情</span>
               </div>
-              <button class="btn btn-ghost btn-sm" onclick="refreshQuote()">
+              <button class="btn btn-ghost btn-sm" onclick="refreshQuote(true)">
                 <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M17 10a7 7 0 11-2.05-4.95M17 4v6h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 刷新
               </button>
@@ -1876,6 +1880,11 @@ textarea.form-input {
                 <button class="btn btn-ghost btn-sm active" onclick="switchKlinePeriod('day',this)">日K</button>
                 <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('week',this)">周K</button>
                 <button class="btn btn-ghost btn-sm" onclick="switchKlinePeriod('month',this)">月K</button>
+                <span style="width:1px;height:16px;background:var(--border);margin:0 4px;"></span>
+                <button class="btn btn-ghost btn-sm" onclick="refreshKline()" title="强制刷新，绕过缓存获取最新数据">
+                  <svg width="13" height="13" viewBox="0 0 20 20" fill="none"><path d="M17 10a7 7 0 11-2.05-4.95M17 4v6h-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  刷新
+                </button>
               </div>
             </div>
             <div style="display:flex;gap:6px;padding:6px 12px 0;" id="maToggles"></div>
@@ -3492,9 +3501,10 @@ function _flowColor(n) {
   return n > 0 ? 'text-red' : n < 0 ? 'text-green' : '';
 }
 
-async function fetchSentiment() {
+async function fetchSentiment(bypass) {
   try {
-    const r = await fetch('/api/cockpit/sentiment');
+    const url = '/api/cockpit/sentiment' + (bypass ? '?bypass_cache=1' : '');
+    const r = await fetch(url);
     const j = await r.json();
     if (!j.success || !j.data) return;
     const d = j.data;
@@ -3797,6 +3807,13 @@ function cleanupCockpit() {
   });
   _usCharts = {};
   _usSeries = {};
+}
+
+async function refreshCockpit() {
+  await fetchIndices();
+  await fetchSentiment(true);
+  fetchHotStocks();
+  fetchIndustryRank();
 }
 
 /* ── 美股面板函数 ── */
@@ -5023,6 +5040,7 @@ let _taMouseDown = false; // canvas 鼠标按下状态
    STOCK — 搜索、行情、K线、公司简介、财务、资金流向、新闻
    ============================================================ */
 let _stockCode = '';
+let _klineCurPeriod = 'day';
 let _stockName = '';
 let _klineChart = null;
 let _quoteInterval = null;
@@ -5140,12 +5158,13 @@ async function selectStock(code, name, market) {
 }
 
 /* --- 行情 --- */
-async function refreshQuote() {
+async function refreshQuote(bypass) {
   if (!_stockCode) return;
   const body = document.getElementById('stockQuoteBody');
   body.innerHTML = '<div style="text-align:center;padding:20px;color:var(--ink-3);"><span class="spinner dark"></span> 加载中...</div>';
   try {
-    const json = await (await fetch('/api/stock/quote/' + _stockCode)).json();
+    const url = '/api/stock/quote/' + _stockCode + (bypass ? '?auto=1' : '');
+    const json = await (await fetch(url)).json();
     if (!json.success) { body.innerHTML = '<div class="empty-state">' + escapeHtml(json.error || '获取行情失败') + '</div>'; return; }
     const d = json.data;
     const price = d['最新价'] ?? '-', change = d['涨跌额'] ?? 0, pct = d['涨跌幅'] ?? 0;
@@ -5351,9 +5370,127 @@ async function loadKline(period) {
   } catch (e) { container.innerHTML = '<div class="empty-state" style="padding:40px;">K线加载失败</div>'; }
 }
 
+async function refreshKline() {
+  if (!_stockCode) return;
+  const container = document.getElementById('klineChart');
+  container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ink-3);"><span class="spinner dark"></span> 刷新中...</div>';
+  const period = _klineCurPeriod;
+  const isIntraday = ['1min','5min','15min','30min','60min'].includes(period);
+  const showIndicators = ['day','week','month'].includes(period);
+  _disposeMainChart();
+  _disposeKlineSubCharts();
+  try {
+    const url = isIntraday
+      ? `/api/stock/kline/${_stockCode}?period=${period}&count=480&bypass_cache=1`
+      : `/api/stock/kline/${_stockCode}?period=${period}&all_history=true&bypass_cache=1` + (showIndicators ? '&indicators=rsi,macd' : '');
+    const json = await (await fetch(url)).json();
+    if (!json.success || !json.data?.length) { container.innerHTML = '<div class="empty-state" style="padding:40px;">暂无K线数据</div>'; return; }
+    container.innerHTML = '';
+    _klineChart = LightweightCharts.createChart(container, {
+      width: container.clientWidth, height: 360,
+      layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 11 },
+      grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+      crosshair: { mode: 0 },
+      rightPriceScale: { borderVisible: false },
+      timeScale: { borderVisible: false, timeVisible: isIntraday },
+    });
+    if (period === '1min') {
+      _klineSeries = _klineChart.addAreaSeries({
+        lineColor: '#2563EB', topColor: 'rgba(37,99,235,0.15)', bottomColor: 'rgba(37,99,235,0.01)',
+        lineWidth: 1.5,
+      });
+      _klineSeries.setData(json.data.map(k => ({ time: Math.floor(new Date(k.date).getTime()/1000), value: k.close })));
+      document.getElementById('maToggles').innerHTML = '';
+    } else {
+      _klineSeries = _klineChart.addCandlestickSeries({
+        upColor: '#ef4444', downColor: '#22c55e',
+        borderUpColor: '#ef4444', borderDownColor: '#22c55e',
+        wickUpColor: '#ef4444', wickDownColor: '#22c55e',
+      });
+      _klineSeries.setData(json.data.map(k => ({ time: isIntraday ? Math.floor(new Date(k.date).getTime()/1000) : k.date, open: k.open, high: k.high, low: k.low, close: k.close })));
+      if (showIndicators) {
+        const _candleData = json.data.map(k => ({ time: k.date, open: k.open, high: k.high, low: k.low, close: k.close }));
+        addMALines(_klineChart, _candleData, 'maToggles');
+      } else {
+        document.getElementById('maToggles').innerHTML = '';
+      }
+    }
+    if (period !== '1min') {
+      _klineVolSeries = _klineChart.addHistogramSeries({
+        priceFormat: { type: 'volume' },
+        priceScaleId: 'vol',
+      });
+      _klineChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+      _klineVolSeries.setData(json.data.map(k => ({ time: isIntraday ? Math.floor(new Date(k.date).getTime()/1000) : k.date, value: k.volume, color: k.close >= k.open ? 'rgba(239,68,68,0.3)' : 'rgba(34,197,94,0.3)' })));
+    }
+    const ts = _klineChart.timeScale();
+    ts.fitContent();
+    ts.applyOptions({ rightOffset: 5, minBarSpacing: 2, fixRightEdge: true });
+    _klineResizeObserver = new ResizeObserver(() => { if (_klineChart) _klineChart.applyOptions({ width: container.clientWidth }); });
+    _klineResizeObserver.observe(container);
+    if (showIndicators && json.indicators) {
+      const mainTs = _klineChart.timeScale();
+      const timeFormat = isIntraday ? (t => Math.floor(new Date(t).getTime()/1000)) : (t => t);
+      const dates = json.data.map(d => d.date);
+      if (json.indicators.macd) {
+        const macdWrap = document.getElementById('klineMacdChartWrap');
+        const macdEl = document.getElementById('klineMacdChart');
+        macdWrap.style.display = '';
+        macdEl.innerHTML = '';
+        _klineMacdChart = LightweightCharts.createChart(macdEl, {
+          width: macdEl.clientWidth, height: 120,
+          layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 10 },
+          grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+          crosshair: { mode: 0 },
+          rightPriceScale: { borderVisible: false },
+          timeScale: { borderVisible: false, visible: false },
+        });
+        const macdData = json.indicators.macd;
+        const difSeries = _klineMacdChart.addLineSeries({ color: '#f5d547', lineWidth: 1, lastValueVisible: false });
+        difSeries.setData(macdData.dif.map((v, i) => ({ time: timeFormat(dates[i]), value: v })).filter(k => k.value != null));
+        const deaSeries = _klineMacdChart.addLineSeries({ color: '#ef4444', lineWidth: 1, lastValueVisible: false });
+        deaSeries.setData(macdData.dea.map((v, i) => ({ time: timeFormat(dates[i]), value: v })).filter(k => k.value != null));
+        const histSeries = _klineMacdChart.addHistogramSeries({ priceFormat: { type: 'volume' } });
+        histSeries.setData(macdData.macd.map((v, i) => ({ time: timeFormat(dates[i]), value: v, color: v != null && v >= 0 ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)' })).filter(k => k.value != null));
+        _klineMacdChart.timeScale().fitContent();
+        _klineMacdChart.timeScale().applyOptions({ rightOffset: 5, minBarSpacing: 2, fixRightEdge: true });
+        mainTs.subscribeVisibleTimeRangeChange(() => {
+          if (!_klineMacdChart) return;
+          const range = mainTs.getVisibleRange();
+          if (range) _klineMacdChart.timeScale().setVisibleRange(range);
+        });
+      }
+      if (json.indicators.rsi) {
+        const rsiWrap = document.getElementById('klineRsiChartWrap');
+        const rsiEl = document.getElementById('klineRsiChart');
+        rsiWrap.style.display = '';
+        rsiEl.innerHTML = '';
+        _klineRsiChart = LightweightCharts.createChart(rsiEl, {
+          width: rsiEl.clientWidth, height: 120,
+          layout: { background: { color: '#ffffff' }, textColor: '#64748B', fontSize: 10 },
+          grid: { vertLines: { color: '#f1f5f9' }, horzLines: { color: '#f1f5f9' } },
+          crosshair: { mode: 0 },
+          rightPriceScale: { borderVisible: false, autoScale: true, minimum: 0, maximum: 100 },
+          timeScale: { borderVisible: false, visible: false },
+        });
+        const rsiSeries = _klineRsiChart.addLineSeries({ color: '#06b6d4', lineWidth: 1, lastValueVisible: false });
+        rsiSeries.setData(json.indicators.rsi.map((v, i) => ({ time: timeFormat(dates[i]), value: v })).filter(k => k.value != null));
+        _klineRsiChart.timeScale().fitContent();
+        _klineRsiChart.timeScale().applyOptions({ rightOffset: 5, minBarSpacing: 2, fixRightEdge: true });
+        mainTs.subscribeVisibleTimeRangeChange(() => {
+          if (!_klineRsiChart) return;
+          const range = mainTs.getVisibleRange();
+          if (range) _klineRsiChart.timeScale().setVisibleRange(range);
+        });
+      }
+    }
+  } catch (e) { container.innerHTML = '<div class="empty-state" style="padding:40px;">刷新失败</div>'; }
+}
+
 function switchKlinePeriod(period, btn) {
   document.querySelectorAll('#klinePeriodBtns .btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  _klineCurPeriod = period;
   loadKline(period);
 }
 

@@ -10,9 +10,9 @@ _US_CODE_RE = re.compile(r"^[A-Z]{1,6}$")
 
 
 @router.get("/sentiment")
-async def api_cockpit_sentiment():
+async def api_cockpit_sentiment(bypass_cache: bool = False):
     """获取市场情绪聚合数据。"""
-    return await cockpit_service.get_sentiment()
+    return await cockpit_service.get_sentiment(bypass_cache=bypass_cache)
 
 
 @router.get("/indices")

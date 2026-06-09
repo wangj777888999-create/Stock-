@@ -16,6 +16,8 @@ import pandas as pd
 
 from http_client import get_async_client, patch_requests
 from services.data_router import get_router
+from services.quote_parser import _parse_tencent_quote, _QT_URL
+from stock_utils import _clean
 
 logger = logging.getLogger("providers")
 
@@ -76,6 +78,18 @@ router.register_contract(
     "stock_announcement",
     default_ttl=3600, default_timeout=10.0,
     description="A股公司公告(返回 list[{title, time, url, type}])",
+)
+
+router.register_contract(
+    "company_profile",
+    default_ttl=86400, default_timeout=30.0,
+    description="A股公司基本信息(返回 dict[公司名称, 所属行业, 主营业务, ...])",
+)
+
+router.register_contract(
+    "financial",
+    default_ttl=300, default_timeout=30.0,
+    description="A股核心财务指标(返回 list[{报告期, 净利润, 营业总收入, ...}])",
 )
 
 
@@ -160,7 +174,8 @@ async def _breadth_em_legu(**_) -> dict | None:
                 "approx": False,
             },
         }
-    except Exception:
+    except Exception as e:
+        logger.debug("[market_breadth em_legu] 取数失败: %s", e)
         return None
 
 
@@ -183,7 +198,8 @@ async def _breadth_sina_spot(**_) -> dict | None:
                           "source_kind": "estimate"},
             "limit": {"up_limit": zt, "down_limit": dt, "approx": True},
         }
-    except Exception:
+    except Exception as e:
+        logger.debug("[market_breadth sina_spot] 取数失败: %s", e)
         return None
 
 
@@ -251,7 +267,8 @@ async def _flow_em_direct(symbol: str, exchange: str, **_) -> list[dict] | None:
             })
         recs.reverse()
         return recs if recs else None
-    except Exception:
+    except Exception as e:
+        logger.debug("[money_flow em_direct] 取数失败: %s", e)
         return None
 
 
@@ -282,7 +299,8 @@ async def _flow_akshare(symbol: str, exchange: str, **_) -> list[dict] | None:
                 elif k in amount_cols:
                     r[k] = _fmt_amount(v)
         return recs
-    except Exception:
+    except Exception as e:
+        logger.debug("[money_flow akshare] 取数失败: %s", e)
         return None
 
 
@@ -322,7 +340,8 @@ async def _flow_sina_today(symbol: str, exchange: str, **_) -> list[dict] | None
             "中单净流入-净额": _fmt_amount(r2_net),
             "小单净流入-净额": _fmt_amount(r3_net),
         }]
-    except Exception:
+    except Exception as e:
+        logger.debug("[money_flow sina_today] 取数失败: %s", e)
         return None
 
 
@@ -339,7 +358,6 @@ _TENCENT_QT_FMT = "https://qt.gtimg.cn/q={exchange}{code}"
 async def _quote_tencent(symbol: str, market: str, original: str, **_) -> dict | None:
     """腾讯 qt.gtimg.cn — 报价主源,字段最全(PE/PB/市值/换手率)。"""
     try:
-        from stock_service import _parse_tencent_quote, _QT_URL
         if market == "a":
             from stock_utils import get_exchange
             exchange = get_exchange(symbol)
@@ -358,7 +376,8 @@ async def _quote_tencent(symbol: str, market: str, original: str, **_) -> dict |
             return None
         record["市场"] = {"a": "A股", "hk": "港股", "us": "美股"}[market]
         return record
-    except Exception:
+    except Exception as e:
+        logger.debug("[stock_quote tencent] 取数失败: %s", e)
         return None
 
 
@@ -416,7 +435,8 @@ async def _quote_sina(symbol: str, market: str, original: str, **_) -> dict | No
             "流通市值": None,
             "市场": "A股",
         }
-    except Exception:
+    except Exception as e:
+        logger.debug("[stock_quote sina_hq] 取数失败: %s", e)
         return None
 
 
@@ -442,7 +462,8 @@ async def _news_em(symbol: str, **_) -> list[dict] | None:
                 "source": str(row.get("文章来源", "")),
             })
         return out if out else None
-    except Exception:
+    except Exception as e:
+        logger.debug("[stock_news em] 取数失败: %s", e)
         return None
 
 
@@ -483,7 +504,8 @@ async def _kline_tencent(symbol: str, period: str, count: int, exchange_prefix: 
                 "volume": float(item[5]) if len(item) > 5 and item[5] else None,
             })
         return recs if recs else None
-    except Exception:
+    except Exception as e:
+        logger.debug("[stock_kline_a tencent] 取数失败: %s", e)
         return None
 
 
@@ -514,7 +536,8 @@ async def _kline_akshare(symbol: str, period: str, count: int, **_) -> list[dict
             except (ValueError, TypeError):
                 continue
         return recs if recs else None
-    except Exception:
+    except Exception as e:
+        logger.debug("[stock_kline_a akshare] 取数失败: %s", e)
         return None
 
 
@@ -548,7 +571,8 @@ async def _hot_em(limit: int = 20, **_) -> list[dict] | None:
                 "turnover_rate": q.get("turnover_rate"),
             })
         return records if records else None
-    except Exception:
+    except Exception as e:
+        logger.debug("[hot_stocks em_emappdata] 取数失败: %s", e)
         return None
 
 
@@ -578,11 +602,77 @@ async def _announcement_cninfo(symbol: str, **_) -> list[dict] | None:
                 "type": str(row.get("公告类别", "")),
             })
         return recs if recs else None
-    except Exception:
+    except Exception as e:
+        logger.debug("[stock_announcement cninfo] 取数失败: %s", e)
         return None
 
 
 router.register_provider("stock_announcement", "cninfo", _announcement_cninfo, weight=10.0)
+
+
+# ─────────────────────────── 公司基本信息 Providers ───────────────────────────
+
+async def _profile_akshare_cninfo(symbol: str, **_) -> dict | None:
+    """AKShare stock_profile_cninfo(巨潮资讯) — A股公司基本信息主源。"""
+    df = await asyncio.wait_for(
+        asyncio.to_thread(patch_requests, ak.stock_profile_cninfo, symbol=symbol),
+        timeout=12,
+    )
+    if df is None or df.empty:
+        return None
+    row = df.iloc[0]
+    return {k: _clean(row.get(k)) for k in [
+        "公司名称", "A股简称", "所属行业", "上市日期",
+        "注册资金", "法人代表", "官方网站", "主营业务",
+        "经营范围", "注册地址",
+    ]}
+
+
+async def _profile_emweb(symbol: str, market: str, **_) -> dict | None:
+    """东财 emweb — A股公司基本信息备源。"""
+    from services.eastmoney import get_company_profile as em_profile
+    return await em_profile(symbol, market)
+
+
+router.register_provider("company_profile", "akshare_cninfo", _profile_akshare_cninfo, weight=10.0)
+router.register_provider("company_profile", "emweb_profile", _profile_emweb, weight=8.0)
+
+
+# ─────────────────────────── 财务指标 Providers ───────────────────────────
+
+async def _financial_akshare_ths(symbol: str, **_) -> list[dict] | None:
+    """AKShare stock_financial_abstract_ths(同花顺) — A股财务指标主源。"""
+    df = await asyncio.wait_for(
+        asyncio.to_thread(
+            patch_requests, ak.stock_financial_abstract_ths,
+            symbol=symbol, indicator="按报告期",
+        ),
+        timeout=12,
+    )
+    if df is None or df.empty:
+        return None
+    df = df.sort_values("报告期", ascending=False).head(16)
+    pick_cols = [
+        "报告期", "净利润", "净利润同比增长率", "营业总收入", "营业总收入同比增长率",
+        "基本每股收益", "每股净资产", "每股经营现金流",
+        "销售净利率", "销售毛利率", "净资产收益率", "资产负债率", "流动比率",
+    ]
+    existing = [c for c in pick_cols if c in df.columns]
+    rows = df[existing].to_dict(orient="records")
+    for r in rows:
+        for k, v in r.items():
+            r[k] = None if v in (False, "False", "false") else _clean(v)
+    return rows
+
+
+async def _financial_emweb(symbol: str, market: str, **_) -> list[dict] | None:
+    """东财 emweb — A股财务指标备源。"""
+    from services.eastmoney import get_financial as em_financial
+    return await em_financial(symbol, market)
+
+
+router.register_provider("financial", "akshare_ths", _financial_akshare_ths, weight=10.0)
+router.register_provider("financial", "emweb_financial", _financial_emweb, weight=8.0)
 
 
 # ─────────────────────────── 初始化标志 ───────────────────────────

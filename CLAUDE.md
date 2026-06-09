@@ -36,36 +36,51 @@ python benchmark_all_modules.py
 
 ### 请求链路
 ```
-前端 SPA (templates/index.html，单文件 220K+ 字节，9 个页面)
-  → FastAPI app.py → routers/ 下 10 个路由模块
-    → 业务服务模块 (stock_service, blogger, analyzer 等)
-      → SQLite database.py (WAL 模式，单连接，9 张表)
+前端 SPA (templates/index.html，单文件 437K 字节 / 8923 行，9+ 页面)
+  → FastAPI app.py → routers/ 下 22 个路由模块
+    → 业务服务模块 (stock_service, cockpit_service, blogger, analyzer 等)
+      → services/ 数据路由层 (DataRouter 契约 + 多源 race + stale 兜底)
+        → SQLite database.py (WAL 模式，单连接，21 张表)
 ```
 
 ### 核心模块
 | 模块 | 职责 |
 |------|------|
-| `stock_service.py` | A 股/港股/美股行情（腾讯 API + AKShare） |
+| `stock_service.py` | **Facade**（~33 行）：聚合 `stock/` 子包的 4 个 Mixin 为 `StockService`，保持 `from stock_service import StockService` 向后兼容 |
+| `stock/` | A 股/港股/美股数据服务子包：`quote`（搜索/实时报价/股票列表）、`kline`（K线+聚合）、`fundamental`（公司信息/财务/公告/股东）、`flow`（资金流/新闻） |
+| `services/quote_parser.py` | 腾讯报价解析纯函数（`_QT_URL`/`_parse_tencent_quote`，零依赖底层模块，斩断 providers↔stock_service 循环依赖） |
+| `cockpit_service.py` | 大盘驾驶舱（A股/美股指数、涨跌家数、资金流、热门股聚合） |
+| `sector_service.py` | A 股板块（行业/概念排名、成分股，多级缓存预热） |
+| `signal_service.py` | 信号层（强势股、热门榜、概念/行业排名底层抓取） |
+| `industry_service.py` | 行业调研（AI 流式分析 + 报告存档） |
 | `global_stock_service.py` | 韩国/日本股票行情（yfinance） |
 | `iwencai_service.py` | 自然语言选股查询（同花顺问财） |
 | `blogger.py` | 微信博主管理 + 文章获取 |
 | `scraper.py` | 基于 Playwright 的文章抓取 |
-| `analyzer.py` | AI 文章分析引擎（综合多篇博主文章 → 结构化投资分析报告 + 提及股票抽取） |
+| `scheduler.py` | 定时采集调度器（启动时挂起，后台抓取博主文章） |
+| `article_storage.py` | 抓取文章持久化（scraped_articles 表） |
+| `analyzer.py` | AI 文章分析引擎（多篇博主文章 → 结构化投资分析报告 + 提及股票抽取） |
 | `financial_service.py` | 财报分析（A/美股关键指标 → AI 四维度解读） |
 | `sentiment_service.py` | 个股情绪雷达（价量/资金/热度/博主/舆情 五维评分） |
-| `services/data_router.py` | 数据源统一路由层（多源契约 + EWMA 排序 + 降级兜底 + 健康面板） |
+| `emailer.py` | SMTP 邮件推送 |
+| `services/data_router.py` | **数据路由内核**：契约注册 + EWMA 延迟排序 + 并发 race + stale 兜底 + 健康面板 |
+| `services/providers.py` | 数据源注册中心（所有契约的候选源在此集中注册） |
+| `services/eastmoney.py` | 东财公司信息/财务取数（作为 DataRouter `company_profile`/`financial` 契约的备用源） |
+| `services/mootdx_provider.py` | mootdx 行情源 |
 | `services/indicators.py` | 技术指标计算（RSI、MACD、KDJ、Bollinger） |
 | `market/` | Provider 模式：基金 (AKShare)、加密货币 (CoinGecko)、期货 (AKShare) |
 | `database.py` | SQLite 建表、初始化、增量迁移（`_migrate()`） |
-| `state.py` | 全局单例状态（config、scraper、blogger_mgr） |
-| `stock_utils.py` | TTL 缓存（SQLite 持久化）、股票代码解析、市场识别 |
+| `state.py` | 全局单例状态（config、scraper、blogger_mgr、sector_svc） |
+| `stock_utils.py` | 两层缓存（L1 内存 + L2 SQLite）、股票代码解析、市场识别 |
 | `http_client.py` | 共享 httpx/requests 会话，支持绕过代理 |
 
-### 路由层 (routers/)
-`stock.py`、`market.py`、`iwencai.py`、`blogger.py`、`config.py`、`watchlist.py`、`sim.py`、`journal.py`、`verify.py`、`stats.py`
+### 路由层 (routers/，22 个)
+`stock`、`market`、`iwencai`、`blogger`、`config`、`watchlist`、`sim`、`journal`、`verify`、`stats`、`articles`、`roles`、`sector`、`analysis`、`cockpit`、`signal`、`industry`、`flow_category`、`review`、`financial`、`sentiment`、`health`
 
-### 数据库 (SQLite, data.db, 9 张表)
-`cache`、`watchlist`、`portfolios`、`positions`、`backtests`、`trade_journal`、`sim_trades`、`blogger_calls`、`real_trades`。启动时自动建表，增量迁移在 `database.py:_migrate()` 中。
+### 数据库 (SQLite, data.db, 21 张表)
+`database.py` 建表（16）：`cache`、`watchlist`、`portfolios`、`positions`、`backtests`、`trade_journal`、`sim_trades`、`blogger_calls`、`real_trades`、`recommendation_scores`、`scraped_articles`、`chart_drawings`、`stock_notes`、`custom_pattern_rules`、`roles`、`industry_reports`。
+`_migrate()` 增量建表（5）：`flow_categories`、`flow_category_stocks`、`review_notes`、`review_drawings`、`financial_reports`。
+启动时自动建表，增量迁移在 `database.py:_migrate()` 中。
 
 ### 市场覆盖
 A 股（腾讯 + AKShare）、港股（腾讯，30 只）、美股（腾讯，100+ 只）、韩/日（yfinance）、期货（AKShare）、ETF/基金（AKShare）、加密货币（CoinGecko Top 50）。
@@ -99,13 +114,16 @@ A 股（腾讯 + AKShare）、港股（腾讯，30 只）、美股（腾讯，10
 
 ## 关键设计模式
 
+- **DataRouter 契约路由**（`services/data_router.py` + `providers.py`，**推荐**）：业务调用 `router.fetch("契约名", **params)`，内部并发跑所有注册源、按 EWMA 历史延迟排序、首个成功即返回、自动缓存 + stale 兜底 + 健康面板（`/api/health/sources`）。新增源只需在 `providers.py` 加函数 + `register_provider`。
 - **Provider 模式**（`market/`）：`base.py` 定义 `MarketProvider` 抽象类，各 provider 通过 `market/__init__.py` 注册。
-- **多源降级**：`call_with_fallback()` 依次尝试多个数据源。
-- **TTL 缓存**：基于 SQLite，定义在 `stock_utils.py`（实时刷新 5s、实时 30s、日线 300s、公司信息 86400s）。
+- **TTL 缓存**：两层（L1 进程内 dict + L2 SQLite 持久化），定义在 `stock_utils.py`（实时刷新 5s、实时 30s、日线 300s、公司信息 86400s）。
 - **单例状态**：`state.py` 持有全局共享实例。
+- **降级机制**：已统一为 `DataRouter.fetch`（旧的 `source_racer`、`call_with_fallback` 均已移除）。数据取数一律走 DataRouter 契约。详见 `docs/项目计划/12-全项目架构审查与调优报告.md`。
 
 ## 注意事项
 
-- 整个前端是一个单独的 `index.html` 文件（220K+ 字节），正在重构中 — 参见 `docs/项目计划/09-前端重构改进方案.md`。
+- 整个前端是一个单独的 `index.html` 文件（437K 字节 / 8923 行），正在重构中 — 参见 `docs/项目计划/09-前端重构改进方案.md`。
+- 配置安全：敏感字段（邮箱密码、微信 Cookie/Token、AI api_key）**只从环境变量读取，永不写入 JSON 文件**。
 - `planning-with-files/` 是外部工具（独立 git 仓库），不属于本应用。
+- `docs/文档/`、`docs/superpowers/`、`docs/learning/` 为历史游离/工具产物目录，不属于"调研/项目计划/功能模块"三目录体系，新文档勿入。
 - 虚拟环境位于 `.venv/`（仓库根目录）。
